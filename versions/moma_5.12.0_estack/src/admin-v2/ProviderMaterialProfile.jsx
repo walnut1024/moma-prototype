@@ -65,7 +65,7 @@ export default function ProviderMaterialProfile({ provider, editing, ops, edit, 
       {!editing && <Button disabled={!ops.can} onClick={edit}>{translateLabel("编辑")}</Button>}
     </div>
     <div className="materials-field-grid">
-      {text('name', '服务商名称', { required: true })}
+      {text('name', '服务商名称', { required: true, readOnly: provider?.builtinCatalogue === 'inference' })}
       {text('code', '服务商编码', { required: true, readOnly: Boolean(provider), maxLength: 32, hint: '2–32 位小写字母、数字或连字符，字母开头。' })}
       <Field label="供给类型" required={editing}>{editing
         ? <Choice label="供给类型" disabled={disabled || Boolean(provider)} value={values.sourceType} options={Object.entries(PROVIDER_TYPES)} onChange={value => set('sourceType', value)}/>

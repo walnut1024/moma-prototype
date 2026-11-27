@@ -18,6 +18,13 @@ export const deploymentRequiresRecreation = (before,after) => deploymentConfigKe
 export const runnableArtifact = (item, type) => item?.type === type && item.validation === '通过' && item.status === '可运行';
 const integer = (value, label, max = 1000000) => { const number = Number(value); if (!Number.isInteger(number) || number < 1 || number > max) throw new Error(`${label}必须为 1–${max} 的整数`); return number; };
 
+function replicaCount(value, roles) {
+  const minimum = roles ? 1 : 0;
+  const count = typeof value==='number' || typeof value==='string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!Number.isInteger(count) || count<minimum || count>100) throw Error(`副本数必须为 ${minimum}–100 的整数`);
+  return count;
+}
+
 export const instanceFilterStates = [
   ['running', '运行中'], ['error', '错误'], ['pending', '待调度'], ['starting', '启动中'],
 ];
@@ -139,8 +146,7 @@ export function deploymentPreflight(state, values, existing, { checkCapacity = t
   const gatherLayer = options.pdSettings?.gather?.layer;
   if (gatherLayer && !gatherLayerAvailable(cluster.topologyLayers, gatherLayer)) throw Error('所选聚集层级在目标集群中不可用');
   const requested = (evaluatedAt ? evaluateDeploymentSchedule(options.scalingSchedule,{now:evaluatedAt})?.replicas : undefined) ?? values.replicas;
-  const replicas = options.scalingSchedule?.enabled && !options.roles && requested!=null && requested!=='' && Number(requested)===0
-    ? 0 : integer(requested, '副本数', 100);
+  const replicas = replicaCount(requested,options.roles);
   const gpuPerReplica = integer(values.gpuPerReplica, '每副本 GPU', 64);
   const tensorParallel = integer(values.tensorParallel, '张量并行', 64), pipelineParallel = integer(values.pipelineParallel, '流水线并行', 64);
   if (tensorParallel * pipelineParallel !== gpuPerReplica) throw new Error('每副本 GPU 必须等于张量并行 × 流水线并行');
@@ -153,8 +159,13 @@ export function deploymentPreflight(state, values, existing, { checkCapacity = t
   const available = cluster.totalGpu - cluster.allocatedGpu + (existing?.clusterId === cluster.id ? deploymentGpu(existing) : 0);
   const required = requestedDeploymentGpu({ ...options,replicas,gpuPerReplica });
   if (checkCapacity && required > available) throw new Error(`GPU 容量不足：需要 ${required} 张，可用 ${available} 张`);
-  if (values.modelFileId && (typeof values.modelFileId !== 'string' || !/^[\w.:-]{1,127}$/.test(values.modelFileId) ||
-    values.weightId || options.placement !== '指定节点' || options.placementTargets.length !== 1)) throw Error('模型文件须关联唯一的所在节点和权重路径');
+  if (values.modelFileId) {
+    const bound = options.placement === '指定节点' && options.placementTargets.length === 1 ||
+      options.placement === '指定 GPU' && options.placementTargets.length > 0;
+    if (typeof values.modelFileId !== 'string' || !/^[\w.:-]{1,127}$/.test(values.modelFileId) || values.weightId || !bound) {
+      throw Error('模型文件须关联所在节点或该节点的 GPU，并使用文件权重路径');
+    }
+  }
   return { modelId: model.id, modelFileId: values.modelFileId || undefined, runtimeId: options.runtimeMode === '已登记运行时镜像' ? runtime.id : '',
     weightId: values.weightId || '', weightPath: values.weightId ? '' : values.weightPath.trim(), clusterId: cluster.id, namespace: values.namespace, replicas, gpuPerReplica, tensorParallel, pipelineParallel, maxModelLen, gpuMemoryUtilization, startupTimeout, available, required, ...options };
 }
@@ -248,9 +259,11 @@ export function deploymentTransaction(state, action, importing = false) {
   if (operation === 'create') {
     validateDeploymentIdentity(state, data);
     const checked = deploymentPreflight(state, data, undefined, {checkCapacity:!importStopped,evaluatedAt:importStopped ? undefined : new Date(timestamp)});
+    const zeroWithoutSchedule = !checked.replicas && !checked.scalingSchedule?.enabled;
     target = { id: resourceId('deployment'), deploymentId: data.deploymentId, name: data.name.trim(), ...deploymentConfig(checked),
-      status:importStopped ? '停止' : checked.replicas ? '部署中' : '等待定时计划',readyReplicas:0,endpointId:null,configRevision:1,configChangedAt:timestamp,
-      events:[event(importStopped ? '部署配置已导入，状态为已停止' : checked.replicas ? '部署已提交，GPU 资源已预留；等待启动检查' : '部署已提交，正在等待定时计划')] };
+      status:importStopped || zeroWithoutSchedule ? '停止' : checked.replicas ? '部署中' : '等待定时计划',readyReplicas:0,endpointId:null,configRevision:1,configChangedAt:timestamp,
+      events:[event(importStopped ? '部署配置已导入，状态为已停止' : zeroWithoutSchedule ? '已保存 0 副本的部署，状态为已停止'
+        : checked.replicas ? '部署已提交，GPU 资源已预留；等待启动检查' : '部署已提交，正在等待定时计划')] };
     changes.push({ type: 'add', collection: 'deployments', record: target });
     const cluster = state.clusters.find(row => row.id === checked.clusterId);
     if (!importStopped && checked.required) changes.push({ type: 'update', collection: 'clusters', id: cluster.id, changes: { allocatedGpu: cluster.allocatedGpu + checked.required } });
@@ -317,15 +330,19 @@ export function deploymentTransaction(state, action, importing = false) {
       if (item.scalingSchedule?.enabled) throw Error('请先关闭定时伸缩再手工调整副本数');
       if (item.status !== '运行中') throw new Error('仅运行中的部署可扩缩容');
       const roles = item.roles ? validateDeploymentOptions({ ...item, replicas: data.replicas, roles: data.roles }).roles : null;
-      const replicas = integer(data.replicas, '副本数', 100);
+      const replicas = replicaCount(data.replicas,roles);
       if (replicas === item.replicas && JSON.stringify(item.roles || null) === JSON.stringify(roles)) throw new Error('副本数未变化');
       const delta = requestedDeploymentGpu({...item,roles,replicas}) - deploymentGpu(item);
       if (!cluster || (delta > 0 && cluster.status !== '运行中')) throw new Error('目标集群不可用于扩容');
       if (delta > cluster.totalGpu - cluster.allocatedGpu || cluster.allocatedGpu + delta < 0) throw new Error('GPU 容量不足或资源记录不一致');
-      changes.push({ type: 'update', collection: 'clusters', id: cluster.id, changes: { allocatedGpu: cluster.allocatedGpu + delta } });
+      if (delta) changes.push({ type: 'update', collection: 'clusters', id: cluster.id, changes: { allocatedGpu: cluster.allocatedGpu + delta } });
+      if (!replicas) updateEndpoint('停用');
       patch = { replicas, ...(roles ? { roles } : {}), instanceReplacements:scaleInstanceIdentities(item,replicas,timestamp),
-        readyReplicas: item.readyReplicas == null ? null : Math.min(item.readyReplicas, replicas), status: '扩缩容中',
-        events: [...(item.events || []), event(`目标副本由 ${item.replicas} 调整为 ${replicas}；等待就绪检查`)] };
+        readyReplicas: replicas && item.readyReplicas == null ? null : Math.min(item.readyReplicas ?? 0,replicas),
+        status: replicas ? '扩缩容中' : '停止',
+        ...(!replicas ? {failureReason:'',rebuildingInstance:null,rebuildingInstances:[]} : {}),
+        events: [...(item.events || []), event(replicas ? `目标副本由 ${item.replicas} 调整为 ${replicas}；等待就绪检查` :
+          '副本数已设为 0，部署已停止')] };
       label = '调整部署副本';
     } else if (['update', 'rollback', 'start', 'restart'].includes(operation)) {
       if (operation === 'start' && !['停止', '失败'].includes(item.status)) throw new Error('当前部署不能重新启动');
@@ -335,11 +352,14 @@ export function deploymentTransaction(state, action, importing = false) {
       if (operation === 'restart' && item.status !== '运行中') throw Error('仅运行中的部署可重新启动');
       const rollback = data.revision ? deploymentHistory(item).find(row => row.revision === Number(data.revision) && row.revision !== item.configRevision)?.config : item.previousConfig;
       if (operation === 'rollback' && !rollback) throw Error('所选配置版本不存在');
-      const values = operation === 'rollback' ? rollback : operation==='start' && item.scalingSchedule?.enabled ?
-        {...item,scalingSchedule:{...item.scalingSchedule,paused:false}} : ['start','restart'].includes(operation) ? item : { ...item, ...data };
+      const values = operation==='rollback' ? rollback : operation==='start'
+        ? item.scalingSchedule?.enabled ? {...item,scalingSchedule:{...item.scalingSchedule,paused:false}}
+          : {...item,replicas:item.replicas===0 ? 1 : item.replicas}
+        : operation==='restart' ? item : {...item,...data};
       if (values.modelId !== item.modelId || values.clusterId !== item.clusterId && !importing) throw new Error('更换模型或集群请新建部署');
       const checked = deploymentPreflight(state, values, item,{checkCapacity:!importStopped,evaluatedAt:importStopped ? undefined : new Date(timestamp)}), config = deploymentConfig(checked);
       const targetCluster = state.clusters.find(row=>row.id===config.clusterId);
+      const zeroWithoutSchedule = !checked.replicas && !checked.scalingSchedule?.enabled;
       if (checked.enableInternalRoute===false && endpoint && state.modelSupplies?.some(supply=>supply.endpointId===endpoint.id && supply.status!=='已移除')) {
         throw Error('部署端点仍被模型供给引用，请先解除关联');
       }
@@ -348,11 +368,15 @@ export function deploymentTransaction(state, action, importing = false) {
       const configUpdate = operation === 'update' || operation === 'rollback';
       const applyLive = operation === 'update' && !startImported && !deploymentRequiresRecreation(item,config);
       const scaleLive = applyLive && ['运行中','等待定时计划'].includes(item.status) && item.replicas!==config.replicas;
-      const delta = importStopped || applyLive && !scaleLive && item.status!=='运行中' ? 0 : checked.required - deploymentGpu(item);
+      const editStoppedZero = operation === 'update' && !startImported && item.status === '停止' &&
+        item.replicas === 0 && !item.scalingSchedule?.enabled;
+      const delta = importStopped || editStoppedZero || applyLive && !scaleLive && item.status!=='运行中' ? 0 : checked.required - deploymentGpu(item);
       if (targetCluster.allocatedGpu + delta < 0) throw new Error('集群资源记录不一致');
       if (delta) changes.push({ type:'update',collection:'clusters',id:targetCluster.id,changes:{ allocatedGpu:targetCluster.allocatedGpu + delta } });
-      if (!applyLive || scaleLive && !config.replicas) updateEndpoint('停用');
-      const lifecycle = importStopped ? {status:'停止',readyReplicas:0} : applyLive ? scaleLive ? { status:config.replicas ? '扩缩容中' : '等待定时计划',readyReplicas:Math.min(item.readyReplicas ?? 0,config.replicas),
+      if (!applyLive || scaleLive && !config.replicas || zeroWithoutSchedule && item.status!=='停止') updateEndpoint('停用');
+      const lifecycle = zeroWithoutSchedule ? {status:'停止',readyReplicas:0,failureReason:'',rebuildingInstance:null,rebuildingInstances:[]}
+        : importStopped || editStoppedZero ? {status:'停止',readyReplicas:0}
+        : applyLive ? scaleLive ? { status:config.replicas ? '扩缩容中' : '等待定时计划',readyReplicas:Math.min(item.readyReplicas ?? 0,config.replicas),
         instanceReplacements:scaleInstanceIdentities(item,config.replicas,timestamp) } : {} : {
         status:!config.replicas ? '等待定时计划' : operation==='start' ? '部署中' : '更新中',readyReplicas:0,failureReason:'',
         instanceGeneration:(item.instanceGeneration || 0)+1,instanceGenerationAt:timestamp,instanceReplacements:{},
@@ -361,7 +385,9 @@ export function deploymentTransaction(state, action, importing = false) {
         configRevision: (item.configRevision || 1) + (configUpdate ? 1 : 0),
         ...(configUpdate ? { configHistory: deploymentHistory(item), configChangedAt: timestamp,
           previousConfig: (item.runtimeId || item.runtimeMode) && (item.weightId || item.weightPath) && item.tensorParallel ? deploymentConfig(item) : null } : {}),
-        events: [...(item.events || []), event(importStopped ? '部署配置已覆盖，状态为已停止' : applyLive ? '部署配置已更新' : !configUpdate ? '重新启动已提交，GPU 资源已预留' : operation === 'rollback' ? '已提交所选版本配置，等待重新启动' : '重建更新已提交，端点暂时停用；等待重新启动')] };
+        events: [...(item.events || []), event(importStopped ? '部署配置已覆盖，状态为已停止' : zeroWithoutSchedule ? '副本数已设为 0，部署已停止'
+          : editStoppedZero || applyLive ? '部署配置已更新' : !configUpdate ? '重新启动已提交，GPU 资源已预留'
+          : operation === 'rollback' ? '已提交所选版本配置，等待重新启动' : '重建更新已提交，端点暂时停用；等待重新启动')] };
       label = operation === 'start' ? '重新启动部署' : operation === 'rollback' ? '回滚部署配置' : '更新部署配置';
     } else if (operation === 'check') {
       if (!['部署中', '扩缩容中', '更新中'].includes(item.status)) throw new Error('当前部署没有待检查的任务');

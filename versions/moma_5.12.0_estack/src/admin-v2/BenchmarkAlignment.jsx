@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Banner, Button, Card, Cascader, Input, InputNumber, Select, Space, Switch, Tabs, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconMinus, IconPlus } from '@douyinfe/semi-icons';
+import { IconMinus, IconPlus, IconRefresh } from '@douyinfe/semi-icons';
 import AdminDescriptions from './AdminDescriptions';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import { serviceOperationsUi } from './ServiceUI';
 import { useChannelText } from './channel-language';
 import {
-  BENCHMARK_LOAD_PATTERNS, BENCHMARK_LOAD_TYPES, BENCHMARK_PROFILES, BENCHMARK_SLO, BENCHMARK_TARGETS,
+  BENCHMARK_LOAD_PATTERNS, BENCHMARK_LOAD_TYPES, BENCHMARK_PROFILES, BENCHMARK_SEED_MAX, BENCHMARK_SLO, BENCHMARK_TARGETS,
   benchmarkArchiveCapacity, benchmarkArchiveStorageKey, benchmarkArchiveUsage, benchmarkBytesToGiB, benchmarkInstanceTree, benchmarkProfilePatch,
-  benchmarkTargets, benchmarkTargetValue, initialBenchmarkDraft, MAX_BENCHMARK_STAGES, saveAlignedBenchmark, updateBenchmarkDraft,
+  benchmarkNameIssue, benchmarkTargets, benchmarkTargetValue, initialBenchmarkDraft, MAX_BENCHMARK_STAGES, newBenchmarkSeed, saveAlignedBenchmark, updateBenchmarkDraft,
 } from './benchmark-alignment';
 import './benchmark-alignment.css';
 
@@ -16,11 +16,15 @@ const { Text } = Typography;
 const options = (items, t = value => value) => items.map(value => ({ value, label: t(value) }));
 const isSet = value => value != null && value !== '';
 
-function Field({ label, required, children }) {
+function Field({ label, required, error, children }) {
   const id = useId();
   return <div className="benchmark-field"><label id={`${id}-label`} htmlFor={id}>{label}
     {required && <span aria-hidden="true" className="benchmark-required"> *</span>}
-  </label>{children({ id, 'aria-labelledby': `${id}-label`, 'aria-required': required })}</div>;
+  </label>{children({ id, 'aria-labelledby': `${id}-label`, 'aria-required': required,
+    'aria-invalid': Boolean(error), 'aria-describedby': error ? `${id}-error` : undefined,
+    ...(error ? { validateStatus: 'error' } : {}) })}
+    {error && <Text id={`${id}-error`} type="danger" size="small" role="alert">{error}</Text>}
+  </div>;
 }
 
 function NumberField({ label, value, onChange, min = 1, max, step = 1, required, disabled, suffix }) {
@@ -53,6 +57,8 @@ function EditorRows({ label, addLabel, rows, update, blank, limit, disabled, chi
 
 function BenchmarkBasic({ records, draft, row, update }) {
   const t = useChannelText();
+  const [nameTouched, setNameTouched] = useState(false);
+  const [nameError, setNameError] = useState('');
   const current = Boolean(row);
   const targets = current ? [] : benchmarkTargets(records, draft.clusterId, draft.targetMode);
   const isRoute = draft.targetMode === '路由';
@@ -89,7 +95,9 @@ function BenchmarkBasic({ records, draft, row, update }) {
   };
   const labels = Array.isArray(draft.labels) ? draft.labels : Object.entries(draft.labels || {}).map(([key,value]) => ({ key,value }));
   return <div className="benchmark-fields">
-    <Field label={t('名称')} required>{props => <Input {...props} value={draft.name} onChange={name => update({ name })}/>}</Field>
+    <Field label={t('名称')} error={nameError && t(nameError)} required>{props => <Input {...props} value={draft.name}
+      onBlur={() => { if (nameTouched) setNameError(benchmarkNameIssue(draft.name, row?.name)); }}
+      onChange={name => { setNameTouched(true); setNameError(''); update({ name }); }}/>}</Field>
     <Field label={t('集群')} required>{props => <Select {...props} optionList={clusterOptions} value={draft.clusterId || undefined}
       disabled={current} filter onChange={clusterId => changeContext(clusterId, draft.targetMode)}/>}</Field>
     <Field label={t('测试目标类型')}>{props => <Select {...props} optionList={options(BENCHMARK_TARGETS, t)} value={draft.targetMode} disabled={current}
@@ -132,10 +140,17 @@ function BenchmarkWorkload({ draft, update, disabled }) {
         {token('inputTokens', '输入 Token 长度', { required: true })}
         {token('outputTokens', '输出 Token 长度', { required: true })}
       </div>
-      <Toggle label={t('固定随机种子')} checked={draft.pinSeed} onChange={pinSeed => update({ pinSeed })} disabled={disabled}/>
-      {draft.pinSeed && token('randomSeed', '随机种子', { required: true, max: 2147483647 })}
-      {draft.loadPattern !== '单次' && <Toggle label={t('每个阶段递增种子')} checked={draft.incrementSeed}
-        onChange={incrementSeed => update({ incrementSeed })} disabled={disabled}/>}
+      <Toggle label={t('固定随机种子')} checked={draft.pinSeed}
+        onChange={pinSeed => update({ pinSeed, randomSeed: pinSeed ? newBenchmarkSeed() : undefined })} disabled={disabled}/>
+      {draft.pinSeed && <>
+        <div className="benchmark-editor-row">
+          {token('randomSeed', '随机种子', { required: true, max: BENCHMARK_SEED_MAX })}
+          <Button htmlType="button" aria-label={t('重新生成随机种子')} title={t('重新生成随机种子')} disabled={disabled}
+            icon={<IconRefresh aria-hidden="true"/>} onClick={() => update({ randomSeed: newBenchmarkSeed() })}/>
+        </div>
+        <Toggle label={t('每个阶段递增种子')} checked={draft.incrementSeed}
+          onChange={incrementSeed => update({ incrementSeed })} disabled={disabled}/>
+      </>}
       <Toggle label={t('Token 长度分布')} checked={draft.tokenDistribution}
         onChange={tokenDistribution => update({ tokenDistribution })} disabled={disabled}/>
       {draft.tokenDistribution && <div className="benchmark-field-grid">
@@ -167,14 +182,15 @@ function BenchmarkSloFields({ draft, update, disabled }) {
   const remaining = BENCHMARK_SLO.filter(([key]) => !Object.hasOwn(draft.sloTargets || {}, key));
   return <div className="benchmark-fields">
     {selected.map(([key,value]) => <div className="benchmark-editor-row" key={key}>
-      <NumberField label={t(BENCHMARK_SLO.find(([name]) => name === key)[1])} value={value} min={0.001} step={0.1} suffix="ms"
+      <NumberField label={t(BENCHMARK_SLO.find(([name]) => name === key)[1])} value={value} min={0} step={0.1} suffix="ms" required
         onChange={next => update({ sloTargets: { ...draft.sloTargets, [key]: next } })} disabled={disabled}/>
       {!disabled && <Button htmlType="button" theme="borderless" aria-label={`${t('移除')} ${BENCHMARK_SLO.find(([name]) => name === key)[1]}`}
         icon={<IconMinus aria-hidden="true"/>} onClick={() => update({ sloTargets: Object.fromEntries(selected.filter(([name]) => name !== key)) })}/>}
     </div>)}
-    {!disabled && remaining.length > 0 && <Select aria-label={t('添加 SLO 目标')} placeholder={t('添加 SLO 目标')}
-      value={undefined} optionList={remaining.map(([value,label]) => ({ value,label:t(label) }))}
-      onChange={key => update({ sloTargets: { ...draft.sloTargets, [key]: '' } })}/>}
+    {!disabled && remaining.length > 0 && <Field label={t('添加 SLO 目标')}>{props =>
+      <Select {...props} value={undefined} optionList={remaining.map(([value,label]) => ({ value,label:t(label) }))}
+        onChange={key => update({ sloTargets: { ...draft.sloTargets, [key]: '' } })}/>
+    }</Field>}
   </div>;
 }
 
@@ -197,9 +213,9 @@ function BenchmarkLoadFields({ draft, update, disabled }) {
         disabled={disabled || presetLocked} onChange={loadPattern => update({ loadPattern })}/>}</Field>
     </div>
     {budgets && <div className="benchmark-field-grid">
-      {number('minLoad', fixed ? '起始速率（req/s）' : '起始并发数', loadUnits)}
-      {number('maxLoad', fixed ? '结束速率（req/s）' : '结束并发数', loadUnits)}
-      {number('maxPoints', '最大测量点数', { max: MAX_BENCHMARK_STAGES })}
+      {number('minLoad', fixed ? '起始速率（req/s）' : '起始并发数')}
+      {number('maxLoad', fixed ? '结束速率（req/s）' : '结束并发数')}
+      {number('maxPoints', '最大测量点数', { min: 2, max: MAX_BENCHMARK_STAGES })}
       {number('maxTotalSeconds', '最大总耗时（秒）')}
     </div>}
     {!stages && !budgets && <div className="benchmark-field-grid">
@@ -215,6 +231,10 @@ function BenchmarkLoadFields({ draft, update, disabled }) {
         <NumberField label={t('最大耗时（秒）')} value={item.duration} disabled={disabled} onChange={duration => patch({ duration })}/>
       </>}
     </EditorRows>}
+    <div className="benchmark-field-grid">
+      {number('executionWarmup', '预热（%）', { min: 0, max: 99, step: 0.1 })}
+      {number('executionCooldown', '冷却（%）', { min: 0, max: 99, step: 0.1 })}
+    </div>
   </div>;
 }
 
@@ -222,8 +242,7 @@ function BenchmarkStopFields({ draft, update, disabled }) {
   const t = useChannelText();
   return <div className="benchmark-fields">
     <div className="benchmark-field-grid">
-      {[['executionWarmup', '预热（%）', 0, 100, 0.1], ['executionCooldown', '冷却（%）', 0, 100, 0.1],
-        ['maxErrors', '错误数上限', 0], ['maxErrorPercent', '错误率上限（%）', 1, 99, 0.1]].map(([key,label,min,max,step]) =>
+      {[['maxErrors', '错误数上限', 0], ['maxErrorPercent', '错误率上限（%）', 1, 99, 0.1]].map(([key,label,min,max,step]) =>
         <NumberField key={key} label={t(label)} value={draft[key]} min={min} max={max} step={step} disabled={disabled}
           onChange={value => update({ [key]: value })}/>)}
     </div>
@@ -264,7 +283,10 @@ function BenchmarkEditor({ editor, records, commit, busy, onClose, dirtyRef }) {
     try {
       await commit((latest, all) => saveAlignedBenchmark(latest, all, draft, row), '已保存');
       onClose();
-    } catch (issue) { setError(issue.message); }
+    } catch (issue) {
+      if (issue.benchmarkSection) setSection(issue.benchmarkSection);
+      setError(issue.message);
+    }
     finally { pending.current = false; }
   };
   const shared = { draft, update, disabled: Boolean(row) };
@@ -320,7 +342,7 @@ function capacityText(bytes) {
   return `${benchmarkBytesToGiB(bytes).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} GiB`;
 }
 
-export function BenchmarkArchiveSettings({ records }) {
+export function BenchmarkArchiveSettings({ records, writable }) {
   const t = useChannelText();
   const [draft,setDraft] = useState(null);
   const [error,setError] = useState('');
@@ -357,8 +379,8 @@ export function BenchmarkArchiveSettings({ records }) {
     catch { invalidLimit = true; }
   }
   const remaining = capacity == null ? null : Math.max(0, capacity - used);
-  return <><Button onClick={load}>{t('归档空间')}</Button>
-    {draft && <AdminModal title={t('基准测试归档空间')} visible onCancel={() => setDraft(null)} okText={t('保存')}
+  return <><Button disabled={!writable} onClick={load}>{t('归档空间')}</Button>
+    {draft && writable && <AdminModal title={t('基准测试归档空间')} visible onCancel={() => setDraft(null)} okText={t('保存')}
       onOk={save} okButtonProps={{ disabled: readFailed || invalidLimit }}>
       <Space vertical align="start" style={{ width:'100%' }}>
         {error && <Banner type="danger" closeIcon={null} description={t(error)}/>}

@@ -79,6 +79,14 @@ export function compatibleDeploymentVersions(versions, devices) {
   return selectable.filter(version=>!version.frameworks.length || version.frameworks.some(framework=>frameworks.has(framework.toLowerCase())));
 }
 
+// GPUStack's backend version select sends null for Auto. Resolve it against
+// the current scoped options before saving a concrete MoMA deployment.
+export function deploymentBackendVersion(backend, selected) {
+  const versions = backend?.compatibleVersions || [];
+  if (selected) return versions.find(entry=>entry.version===selected);
+  return versions.find(entry=>entry.version===backend?.version) || versions[0];
+}
+
 const parameterLines = value => (Array.isArray(value) ? value : String(value ?? '').split(/\r?\n/)).map(line=>line.trim()).filter(Boolean);
 const parameterKey = line => line.split(/[=\s]/,1)[0];
 
@@ -99,6 +107,61 @@ const text = (value, limit) => typeof value === 'string' && value.length <= limi
 const idList = value => Array.isArray(value) && value.length <= 64 && value.every(id => /^[\w.:-]{1,127}$/.test(id))
   ? [...new Set(value)] : [];
 const validImage = value => /^[\w][\w.-]*(?::\d{1,5})?(?:\/[\w.-]+)*(?::[\w.-]+|@sha256:[a-f\d]{64})?$/i.test(value);
+const repositorySources = ['Hugging Face', 'ModelScope'];
+const validRepository = value => /^[\w.-]+\/[\w.-]+$/.test(value);
+const validModelFileDeploymentName = name => typeof name === 'string' && /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$/.test(name);
+
+export function modelFileDeploymentCode(name) {
+  return validModelFileDeploymentName(name) ? name.toLowerCase().replace(/[._]/g, '-') : '';
+}
+
+export function deploymentImageErrors(values) {
+  const errors = {};
+  if (values.runtimeMode!=='自定义镜像') return errors;
+  if (!validImage(text(values.containerImage,255))) errors.containerImage = '请填写有效的容器镜像地址。';
+  if (values.containerCommand && String(values.containerCommand).length>2000) {
+    errors.containerCommand = '执行命令不得超过 2000 字。';
+  } else if ((!text(values.backend,100) || values.backend==='Custom') && !text(values.containerCommand,2000)) {
+    errors.containerCommand = '请填写执行命令。';
+  }
+  return errors;
+}
+
+export function modelFileDeploymentFieldErrors(values) {
+  const errors = {};
+  if (!validModelFileDeploymentName(values.name)) {
+    errors.name = '请输入 1–63 位字母、数字、点、下划线或连字符，首尾须为字母或数字。';
+  } else if (values.enableInternalRoute !== false && !/^[A-Za-z]/.test(values.name)) {
+    errors.name = '启用模型路由时，名称须以字母开头。';
+  }
+
+  if (repositorySources.includes(values.source)) {
+    if (!validRepository(text(values.repository, 200))) errors.repository = '请填写组织名/模型名格式的仓库。';
+  } else if (values.source === '本地路径') {
+    if (typeof values.weightPath !== 'string' || !/^\/[\w./-]+$/.test(values.weightPath) || values.weightPath.split('/').includes('..')) {
+      errors.weightPath = '请填写集群已挂载的绝对权重路径，不允许上级目录或命令参数。';
+    }
+  } else {
+    errors.source = '请选择模型文件来源。';
+  }
+
+  if (!text(values.clusterId, 127)) errors.clusterId = '请选择集群。';
+  if (!text(values.modelId, 127)) errors.modelId = '请选择已登记的模型。';
+
+  if (values.runtimeMode === '自定义镜像') {
+    Object.assign(errors,deploymentImageErrors(values));
+  } else if (!text(values.backend,100)) {
+    errors.backend = '请选择推理后端。';
+  }
+
+  const replicaInput = values.replicas;
+  const replicas = typeof replicaInput === 'number' || typeof replicaInput === 'string' && /^\d+$/.test(replicaInput)
+    ? Number(replicaInput) : NaN;
+  if (!Number.isInteger(replicas) || replicas < 0 || replicas > 100) errors.replicas = '副本数须为 0–100 的整数。';
+  if (values.placement === '指定 GPU' && !idList(values.placementTargets).length) errors.placementTargets = '请选择 GPU。';
+  return errors;
+}
+
 const pdShared = {
   'vllm-nixl':{ LMCache:['0.26.0','prefill'] },
   'vllm-mooncake':{ Mooncake:['0.29.0','prefill','decode'] },
@@ -169,7 +232,7 @@ export function validateDeploymentOptions(values, { originalSchedule, enforceUni
   const source = values.source || '本地路径';
   if (!deploymentSources.includes(source)) throw Error('请选择模型来源');
   const repository = text(values.repository, 200);
-  if (['Hugging Face', 'ModelScope'].includes(source) && !/^[\w.-]+\/[\w.-]+$/.test(repository)) {
+  if (repositorySources.includes(source) && !validRepository(repository)) {
     throw Error('请填写组织名/模型名格式的仓库');
   }
   const filename = text(values.filename, 180);

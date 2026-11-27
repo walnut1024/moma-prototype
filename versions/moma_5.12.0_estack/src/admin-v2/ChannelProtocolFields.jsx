@@ -8,6 +8,20 @@ import { connectionRequestUrl } from './channel-interface';
 
 const options = CHANNEL_LIST_TYPES.map(({ id, label }) => [id, workbenchProtocolLabel(label)]);
 
+export function ReadOnlyChannelProtocolFields({ interfaceType, endpointPath, baseUrl }) {
+  const t = useChannelText();
+  const format = options.find(([id]) => id === interfaceType)?.[1] ?? '';
+  return <>
+    {[
+      ['接口格式', format],
+      ['接口端点', endpointPath],
+      ['服务地址', baseUrl],
+    ].map(([name, value]) => <Field key={name} label={t(name)}>
+      <Input aria-label={t(name)} value={value ?? ''} readonly/>
+    </Field>)}
+  </>;
+}
+
 export default function ChannelProtocolFields({
   protocol, baseUrl, allowHttp, disabled, current, root, allowCustom, endpointPath, onProtocolChange, onBaseUrlChange, onEndpointPathChange,
   readOnlyEndpoint = false, showHelp, showPaths,

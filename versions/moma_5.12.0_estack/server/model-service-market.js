@@ -8,7 +8,7 @@ import { marketCardsForService, marketCardModelId, marketCardVisible } from '../
 import { diagnosticCall, mockTextUsage, projectAccessError, projectCallError, projectCallErrors } from '../src/project-call.mjs';
 import { tenantModelAllowed, tenantQuotaEnabled, tenantQuotaError } from '../src/tenant-service-policy.mjs';
 import { resourceId } from '../src/resource-id.mjs';
-import { loadModelWorkspace } from './model-repository.js';
+import { independentModelServiceSql, loadModelWorkspace } from './model-repository.js';
 import { modelServiceSupply } from './model-service-sales.js';
 import { marketProjectFact, projectChargeWrites, projectFactWrite, readProjectFact } from './project-facts.js';
 import { trafficAdmission } from './traffic-calls.js';
@@ -20,8 +20,7 @@ const selectServices = `SELECT n.id AS service_id,n.record_json AS service_json,
   FROM new_model_services n
   LEFT JOIN model_service_sales s ON s.service_id=n.id
   LEFT JOIN model_service_orders p ON p.service_id=n.id AND p.tenant_id=? AND p.cancelled_at IS NULL
-  WHERE n.deleted_at IS NULL AND COALESCE(json_extract(n.record_json,'$.controlledOfferId'),'')=''
-    AND NOT EXISTS(SELECT 1 FROM offers o WHERE o.id=n.call_id OR o.record_id=n.id)`;
+  WHERE n.deleted_at IS NULL AND ${independentModelServiceSql}`;
 
 function readModelService(row) {
   return {
@@ -48,18 +47,23 @@ function visibleCards(cards, serviceId, audience) {
   return marketCardsForService(cards, serviceId).filter(({card}) => marketCardVisible(card,serviceId,audience));
 }
 
-function commerceReadiness(workspace, entry, tenant, at, {contextTokens = null,runtime = false,upstreams} = {}) {
+function internalModelAllowed(tenant, state, serviceId) {
+  const grant = tenant.grant || enterpriseGrant(state,tenant.id);
+  return (Array.isArray(tenant.modelRules) || Array.isArray(grant?.modelIds)) && tenantModelAllowed(tenant,grant,serviceId);
+}
+
+function serviceReadiness(workspace, entry, tenant, at, {contextTokens = null,runtime = false,upstreams} = {}) {
   const { service, sale, row } = entry;
-  const allowed = saleIncludes(sale, tenant);
   const internal = tenant?.internal === true;
+  const price = internal ? null : activeModelServiceSalePrice(sale,at);
+  const routes = service.listed && (internal || price) ? modelServiceSupply(workspace,service,at,contextTokens,{runtime,upstreams}) : [];
+  if (internal) return {price,routes};
+
+  const allowed = saleIncludes(sale, tenant);
   const stage = sale?.stage || 'unlisted';
-  const authorized = internal
-    ? allowed && tenantModelAllowed(tenant,tenant.grant || enterpriseGrant(workspace,tenant.id),service.id)
-    : Boolean(row.order_id) && ['gray','formal','paused'].includes(stage);
-  const price = activeModelServiceSalePrice(sale,at);
-  const routes = service.listed && price ? modelServiceSupply(workspace,service,at,contextTokens,{runtime,upstreams}) : [];
+  const authorized = Boolean(row.order_id) && ['gray','formal','paused'].includes(stage);
   let prices = null;
-  if (routes.length && (!internal || routes.every(route => route.costPrices?.length))) {
+  if (routes.length) {
     try {
       const amounts = platformPriceVersions(price,service,'销售价格',at);
       if (routes.every(route => !route.costPrices || matchingModelServicePrices(route.costPrices, amounts))) prices = amounts;
@@ -70,18 +74,19 @@ function commerceReadiness(workspace, entry, tenant, at, {contextTokens = null,r
 
 export async function catalogueModelServices(db, tenant, cards, audience, display, license) {
   const {results} = await db.prepare(selectServices + ' ORDER BY n.created_at,n.id').bind(tenant?.id || '').all();
+  const internal = tenant?.internal === true;
   const entries = results.map(readModelService).filter(({service,sale,row}) =>
-    service.listed && (sale || row.order_id || display && visibleCards(cards,service.id,audience).length));
+    service.listed && (internal || sale || row.order_id || display && visibleCards(cards,service.id,audience).length));
   if (!entries.length) return [];
   const workspace = await commerceWorkspace(db,tenant), at = Date.now();
   const upstreams = new Map(registeredServiceUpstreams(workspace).map(row=>[row.id,row]));
   return entries.flatMap(entry => {
     const {service,row} = entry;
+    if (internal && !internalModelAllowed(tenant,workspace,service.id)) return [];
     const linked = visibleCards(cards,service.id,audience);
-    const {stage, allowed, authorized, price, prices, routes} = commerceReadiness(workspace,entry,tenant,at,{upstreams});
-    const internal = tenant?.internal === true;
+    const {stage, allowed, authorized, price, prices, routes} = serviceReadiness(workspace,entry,tenant,at,{upstreams});
     const canOrder = Boolean(tenant && !internal && allowed && license?.commerceWritable !== false && prices && linked.length);
-    const callable = Boolean(prices && authorized);
+    const callable = internal ? routes.length > 0 : Boolean(prices && authorized);
     if (display ? !linked.length : !callable && !canOrder) return [];
     const upstream = routes[0]?.channel, provider = upstream?.provider;
     // A card supplies presentation. On order and project screens, use the service name even when no card is visible.
@@ -128,7 +133,7 @@ export async function prepareModelServiceOrders(db, tenant, entries, cards, audi
   const upstreams = new Map(registeredServiceUpstreams(workspace).map(row=>[row.id,row]));
   return entries.map(entry => {
     const { service } = entry;
-    const {allowed,price,prices} = commerceReadiness(workspace,entry,tenant,at,{upstreams});
+    const {allowed,price,prices} = serviceReadiness(workspace,entry,tenant,at,{upstreams});
     if (!service.listed) fail(409,'MODEL_UNAVAILABLE','模型服务已停服');
     if (entry.sale?.stage === 'paused') fail(409,'MODEL_UNAVAILABLE','此模型服务已停售');
     if (!allowed || !visibleCards(cards,service.id,audience).length) {
@@ -200,9 +205,15 @@ export async function invokeModelService(db, entry, {
   const at = Date.now(), timestamp = new Date(at).toISOString();
   const status = projectAccessError(project,service.id,key,at);
   if (status) callError(status);
+  if (internal) {
+    if (project.tenantId !== tenant.id) callError('project_unavailable');
+    if (!project.modelPermissions?.some(row => row.modelId === service.id)) callError('project_model_not_enabled');
+  }
   if (key && !key.modelIds?.includes(service.id)) fail(403,'model_not_authorized','当前 API Key 未授权此模型服务');
   if (key?.billingType === 'Token Plan') callError('plan_model_unavailable');
-  if (!tenantModelAllowed(tenant,tenant.grant || enterpriseGrant(projectState,tenant.id),service.id)) {
+  const tenantAllowed = internal ? internalModelAllowed(tenant,projectState,service.id)
+    : tenantModelAllowed(tenant,tenant.grant || enterpriseGrant(projectState,tenant.id),service.id);
+  if (!tenantAllowed) {
     fail(403,'enterprise_model_not_authorized','当前客户未获此模型服务授权');
   }
   if (!internal && !row.order_id) callError('order_required');
@@ -211,9 +222,11 @@ export async function invokeModelService(db, entry, {
   const input = body.messages.map(message => message.content).join('\n');
   const output = '模拟调用已完成。';
   const inputTokens = mockTextUsage(input,'').input;
-  const {authorized,price,prices,routes,stage} = commerceReadiness(workspace,entry,tenant,at,
+  const {authorized,price,prices,routes,stage} = serviceReadiness(workspace,entry,tenant,at,
     {contextTokens:contextRoutingEnabled(service) ? inputTokens : null,runtime:true});
-  if (!authorized || !prices) fail(409,'CALL_UNAVAILABLE','当前模型服务或价格不可用');
+  if (internal ? !routes.length : !authorized || !prices) {
+    fail(409,'CALL_UNAVAILABLE',internal ? '当前模型服务不可用' : '当前模型服务或价格不可用');
+  }
   const task = body.task || 'text', profile = serviceProfile(service);
   if (!profile.tasks?.includes({text:'对话',image:'文生图',video:'文生视频',voice:'语音识别'}[task]) ||
     (body.images && !profile.inputModalities?.includes('图片'))) fail(422,'TASK_UNSUPPORTED','所选模型不支持当前任务');
@@ -248,7 +261,7 @@ export async function invokeModelService(db, entry, {
   const model = {id:service.id,name:service.name,type:service.type};
   const cost = denied ? null : priceAmount(supply.costPrice,meter,model,timestamp);
   const retail = denied || internal ? null : priceAmount(price,meter,model,timestamp);
-  if (!denied && (internal ? !cost : !retail)) fail(409,'CALL_UNAVAILABLE','当前模型服务计量或价格不可用');
+  if (!denied && !internal && !retail) fail(409,'CALL_UNAVAILABLE','当前模型服务计量或价格不可用');
   const procurementSnapshot = cost ? supply.procurementSnapshot : null;
   const operational = {providerId:channel.provider?.id,endpointId:channel.endpointId,supplyId:channel.id};
   const response = {
@@ -256,7 +269,9 @@ export async function invokeModelService(db, entry, {
     choices:denied ? [] : [{index:0,message:{role:'assistant',content:answer},finish_reason:'stop'}],
     usage:denied ? null : key && task === 'text' ? {prompt_tokens:meter.input,completion_tokens:meter.output,total_tokens:meter.input+meter.output} : actualUsage,
     ...(key ? {} : {traceId:body.requestId,experience,
-      ...(denied && {httpStatus:403,invocationError:{code:'Model.AccessDenied',message:'当前账号暂无该模型的调用权限，请订购模型或切换其他可用模型。'}}),
+      ...(denied && {httpStatus:403,invocationError:{code:'Model.AccessDenied',message:internal
+        ? '当前账号暂无该模型的调用权限，请联系项目管理员或切换其他可用模型。'
+        : '当前账号暂无该模型的调用权限，请订购模型或切换其他可用模型。'}}),
     }),
   };
   const usage = { operational, traceId:body.requestId, routeVersion:row.service_revision, priceSnapshot:price, cost, saleTrial:retail,

@@ -2,6 +2,7 @@ import { APPLICATION_CONFIG } from '../mock/application-data.js';
 import { systemModelData } from '../mock/model-data.js';
 
 export const demoProviderId = 'provider-inference-demo';
+export const demoConnectionDeploymentId = 'deployment-bge-nj-online';
 const day = 86_400_000;
 const instance = (nameSuffix, workerId, firstGpu, gpuCount) => ({
   nameSuffix, workerId,
@@ -61,7 +62,7 @@ export function createInferenceDemoFixtures({ models: sourceModels, modelTemplat
   };
   const runningBge = {
     ...stamp, ...config('vLLM', '0.23.0', 'BAAI/bge-m3', '/mnt/models/bge-m3', 1),
-    id: 'deployment-bge-nj-online', deploymentId: 'deploy-bge-m3-nj', name: 'BGE-M3 向量检索',
+    id: demoConnectionDeploymentId, deploymentId: 'deploy-bge-m3-nj', name: 'BGE-M3 向量检索',
     modelId: models.bge, clusterId: nj, replicas: 1, readyReplicas: 1, status: '运行中',
     source: 'Hugging Face', modelFileId: 'file-bge-m3-nj-03', placement: '指定节点', placementTargets: [nj03],
     demoInstances: [instance('j8v2s', nj03, 0, 1)],

@@ -8,6 +8,7 @@ import AdminDescriptions from './AdminDescriptions';
 import AdminStatus from './AdminStatus';
 import AdminTable from './AdminTable';
 import { Choice } from './ServiceUI';
+import { useChannelText } from './channel-language';
 import { formatMonitoringTime, MonitoringRangeSummary, MonitoringTimeRange, useMonitoringScope } from './MonitoringTimeRange';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { canRecreateInstance, deploymentConfig, deploymentHistory, deploymentImportPlan, deploymentInstances, deploymentTablePage, instanceFilterStates } from './deployments';
@@ -180,16 +181,18 @@ const logStates = new Set(['initializing','running','error','starting','download
 
 export function DeploymentInstancesTable({ rows, state, can, onDetail, onLogs, onRestart, onBenchmark, canBenchmark,
   onDevice, detail = false, rowSelection, pagination, empty = '暂无模型实例' }) {
+  const t = useChannelText();
   const [sort,setSort] = useState(null);
   const actions = row => {
-    const entries = [];
-    if (detail || logStates.has(row.state)) entries.push({node:'item',name:'查看日志',onClick:()=>onLogs(row)});
-    if (logStates.has(row.state)) entries.push({node:'item',name:'下载日志',onClick:()=>downloadText(`${row.name}.log`, instanceLog(row))});
-    if (!detail && row.state === 'running' && (!row.role || row.role === 'router') && canBenchmark(row.deployment)) {
-      entries.push({node:'item',name:'基准测试',onClick:()=>onBenchmark(row.deployment,row)});
-    }
-    if (!detail && canRecreateInstance(row)) entries.push({node:'item',name:'删除并重建',type:'danger',disabled:!can,onClick:()=>onRestart(row)});
-    return entries.length ? <AdminActionMenu label={`${row.name} 操作`} items={entries}/> : '—';
+    const hasLogs = logStates.has(row.state);
+    const entries = [
+      {node:'item',name:'查看日志',disabled:!detail && !hasLogs,onClick:()=>onLogs(row)},
+      {node:'item',name:'下载日志',disabled:!hasLogs,onClick:()=>downloadText(`${row.name}.log`, instanceLog(row))},
+      {node:'item',name:'基准测试',disabled:detail || row.state!=='running' || Boolean(row.role && row.role!=='router') || !canBenchmark(row.deployment),
+        onClick:()=>onBenchmark(row.deployment,row)},
+      {node:'item',name:'删除并重建',type:'danger',disabled:detail || !can || !canRecreateInstance(row),onClick:()=>onRestart(row)},
+    ];
+    return <AdminActionMenu label={`${row.name} ${t('操作')}`} items={entries}>{t('操作')}</AdminActionMenu>;
   };
   const columns = [
       {title:'名称',dataIndex:'name',width:218,sorter:(a,b)=>a.name.localeCompare(b.name),render:(name,row)=><div className="admin-table-record">
@@ -212,7 +215,7 @@ export function DeploymentInstancesTable({ rows, state, can, onDetail, onLogs, o
       }},
       ...(!detail ? [{title:'创建时间',dataIndex:'createdAt',width:175,sorter:(a,b)=>String(a.createdAt || '').localeCompare(String(b.createdAt || '')),
         render:value=>value ? new Date(value).toLocaleString('zh-CN',{hour12:false}) : '—'}] : []),
-      {title:'操作',width:100,render:(_,row)=>actions(row)},
+      {title:'操作',key:'actions',width:90,fixed:'right',render:(_,row)=>actions(row)},
   ];
   return <AdminTable rowKey="id" dataSource={pagination ? deploymentTablePage(rows,columns,sort,pagination) : rows} empty={empty} rowSelection={rowSelection}
     pagination={pagination || { pageSize:10, showTotal:true, showSizeChanger:true }} scroll={{ x:'max(100%, 990px)' }}

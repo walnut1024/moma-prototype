@@ -48,6 +48,12 @@ const modelHubs = {
   ModelScope: { key: 'model_scope', root: 'https://modelscope.cn/models/', revision: 'master' },
 };
 
+const sampleHubActivity = {
+  'Qwen/Qwen2.5-7B-Instruct-GGUF': { trendingScore: 87, likes: 514, downloads: 90600, lastModified: '2026-11-22' },
+  'Qwen/Qwen3.5-9B': { trendingScore: 95, likes: 1110, downloads: 60700, lastModified: '2026-11-26' },
+  'BAAI/bge-m3': { trendingScore: 72, likes: 1680, downloads: 118500, lastModified: '2026-11-15' },
+};
+
 const choice = ({ path, sizeBytes }, options = {}) => ({
   value: path, label: path, sizeBytes, quantization: (path.match(shards)?.[1] ?? path).match(quantization)?.[1].toUpperCase(), parts: [], ...options,
 });
@@ -113,9 +119,21 @@ export function modelHubCandidates(records, source) {
   repositories.set(qwenGGUF.repository, { ...qwenGGUF, ...existing, files: [...(existing?.files || []), ...ggufFiles] });
   return Array.from(repositories.values(), row => {
     const fileOptions = repositoryFiles(row.files);
-    return { ...row, source, revision: row.revision || hub.revision,
+    return { ...sampleHubActivity[row.repository], ...row, source, revision: row.revision || hub.revision,
       repositoryUrl: hub.root + row.repository.split('/').map(encodeURIComponent).join('/'),
       format: row.format || (fileOptions.some(file => gguf.test(file.value)) ? 'GGUF' : undefined),
       files: fileOptions.map(file => file.value), fileOptions };
   });
+}
+
+export function searchModelHubCandidates(candidates, { query = '', quantization, sort = 'trendingScore' } = {}) {
+  const keyword = query.trim().toLowerCase();
+  const selected = quantization?.toLowerCase();
+  const rank = row => sort === 'lastModified' ? Date.parse(row.lastModified || row.releaseDate) || 0 : row[sort] || 0;
+  return candidates.filter(row => {
+    if (!`${row.name} ${row.repository}`.toLowerCase().includes(keyword)) return false;
+    if (!selected) return true;
+    const encodings = (row.specs || []).filter(spec => spec.repository === row.repository).map(spec => spec.quantization);
+    return [row.repository, ...encodings, ...(row.files || [])].some(value => String(value ?? '').toLowerCase().includes(selected));
+  }).sort((left, right) => rank(right) - rank(left));
 }

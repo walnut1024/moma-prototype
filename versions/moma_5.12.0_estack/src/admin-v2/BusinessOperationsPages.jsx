@@ -22,14 +22,11 @@ import { customerKeys, projectBillAmount, yuanMicros } from './customer-projects
 
 
 const { Text, Title } = Typography;
-const titles = { goods: '商品与套餐', orders: '订购记录', announcements: '公告与服务通知', metering: '消费明细',
+const titles = { goods: '商品与套餐', orders: '订购记录', metering: '消费明细',
   ledger: '账户与额度流水', bills: '账单', settlement: '服务商对账与结算', adjustments: '退款与调账' };
 const configs = {
   goods: { noun: '商品', collection: 'products', fields: [
     ['code', '商品编码'], ['name', '商品名称'], ['billingMode', '计费方式'], ['price', '基础价格', 'number'],
-  ] },
-  announcements: { noun: '公告', collection: 'announcements', fields: [
-    ['title', '标题'], ['audience', '受众'], ['channel', '连接'], ['effectiveAt', '生效时间', 'date'],
   ] },
 };
 const editable = (state, collection) => !state.commerceReadOnly && !state.storageError && canMutate(state.currentRole, { type: 'update', collection });
@@ -79,7 +76,7 @@ function Managed({ pageId, state, dispatch }) {
       }
       if (!record[field]) return setError('请填写全部必填项');
     }
-    if (await dispatch({ type: 'add', collection, record: { id: resourceId(collection === 'announcements' ? 'announcement' : 'product'), ...record, status: '已启用' } })) close();
+    if (await dispatch({ type: 'add', collection, record: { id: resourceId('product'), ...record, status: '已启用' } })) close();
   };
   return <>
     <AdminPageHeading title={title}>
@@ -98,9 +95,7 @@ function Managed({ pageId, state, dispatch }) {
         <Button form={formId} htmlType="submit" theme="solid" disabled={!canWrite}>创建{noun}</Button>
       </>} onCancel={close}>
       <Form id={formId} onSubmit={save} onValueChange={() => setError('')}>
-        {fields.map(([field, label, type]) => type === 'date'
-          ? <Form.DatePicker key={field} field={field} label={label} type="date" format="yyyy-MM-dd" onChangeWithDateFirst={false} zIndex={1200}/>
-          : <Form.Input key={field} field={field} label={label} type={type || 'text'}/>)}
+        {fields.map(([field, label, type]) => <Form.Input key={field} field={field} label={label} type={type || 'text'}/>)}
         {error && <Banner type="danger" closeIcon={null} description={error}/>}
       </Form>
     </Modal>}
@@ -371,7 +366,7 @@ function Adjustments({ state, dispatch }) {
   </>;
 }
 
-const pages = { goods: Managed, announcements: Managed, orders: Orders, metering: Metering, ledger: Ledger,
+const pages = { goods: Managed, orders: Orders, metering: Metering, ledger: Ledger,
   bills: Bills, settlement: Settlements, adjustments: Adjustments };
 
 export default function BusinessOperationsPage({ pageId, state, dispatch, params = new URLSearchParams() }) {

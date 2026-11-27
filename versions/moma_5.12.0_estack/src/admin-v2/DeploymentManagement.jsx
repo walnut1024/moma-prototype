@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import AdminStatus from './AdminStatus';
-import Table from './AdminTable';
+import Table, { AdminPagination } from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { useEffect, useId, useRef, useState } from 'react';
 import Descriptions from './AdminDescriptions';
@@ -10,7 +10,7 @@ import { IconPlus, IconRefresh, IconSearch } from '@douyinfe/semi-icons';
 import AdminActionMenu from './AdminActionMenu';
 import { FilterToolbar, FilterReset } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
-import { Choice, CopyId, serviceOperationsUi } from './ServiceUI';
+import { Choice, CopyId, Field, serviceOperationsUi } from './ServiceUI';
 import { canMutate } from './store';
 import { canRecreateInstance, deployableModels, runnableArtifact, deploymentCanServe, deploymentGpu, deploymentConfig, deploymentHistory, deploymentInstances,
   deploymentPreflight, deploymentRequiresRecreation, deploymentTablePage, deploymentTransaction, instanceFilterStates, requestedDeploymentGpu, validateDeploymentIdentity } from './deployments';
@@ -18,12 +18,12 @@ import { serviceCallIdentifiers } from './service-workspace';
 import { readInfrastructure } from './infrastructure-state';
 import { readInferenceDemoInfrastructure } from './inference-demo-infrastructure.js';
 import { linkedDeploymentModel, modelFileDeploymentName } from './ops-models';
-import { modelHubCandidates } from './model-hub-candidates';
+import { modelHubCandidates, searchModelHubCandidates } from './model-hub-candidates';
 import { catalogueInitialRecipe, catalogueRecipeMatches, catalogueRecipes } from './model-catalogue';
-import { backendAvailableVersions } from './inference-backend';
+import { backendAvailableVersions, backendEnvironmentRows } from './inference-backend';
 import { benchmarkDeploymentPreset } from './benchmark-alignment';
-import { compatibleDeploymentVersions, deploymentCacheIssue, deploymentCompatibilityWarnings, deploymentParameterSuggestions, deploymentRuntimeModes, deploymentSources,
-  deploymentSubmissionIssue, mergeDeploymentBackendDefaults,
+import { compatibleDeploymentVersions, deploymentBackendVersion, deploymentCacheIssue, deploymentCompatibilityWarnings, deploymentImageErrors, deploymentParameterSuggestions, deploymentRuntimeModes, deploymentSources,
+  deploymentSubmissionIssue, mergeDeploymentBackendDefaults, modelFileDeploymentCode, modelFileDeploymentFieldErrors,
   pdGib, pdModeDetails, pdModeIssue, pdModes, pdSupportsSource,pdVendor,
   PD_NODE_LAYER, placementModes, placementStrategies } from './deployment-options';
 import { defaultTopologyLayers, topologyLocation } from './ops-resources';
@@ -41,6 +41,12 @@ const inProgress = item => ['部署中', '扩缩容中', '更新中'].includes(i
 const time = value => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—';
 const catalogueSourceLabels = { huggingface:'Hugging Face', model_scope:'ModelScope', local_path:'本地路径' };
 const resolvedModelFile = file => file?.resolvedPaths?.[0] || file?.mountPath;
+const backendEnvironment = entry => backendEnvironmentRows(entry?.env).map(({key,value})=>`${key}=${value}`).join('\n');
+const modelFileSources = deploymentSources.slice(1);
+const supportsImageOverride = backend => ['vLLM','SGLang'].includes(backend);
+const isGgufPath = path => /\.gguf$/i.test(path || '');
+const modelFileCategory = {text:'llm',multimodal:'llm',embedding:'embedding',rerank:'reranker'};
+const modelFileCategories = [['automatic','自动'],['llm','LLM'],['embedding','Embedding'],['reranker','Reranker']];
 const blank = {
   name: '', deploymentId: '', modelId: '', modelFileId:'', runtimeId: '', weightId: '', weightPath: '', clusterId: '',
   namespace: 'inference', replicas: '1', gpuPerReplica: '1', tensorParallel: '1', pipelineParallel: '1',
@@ -90,23 +96,18 @@ function deploymentPrefill(state, selection, records) {
     if (!file && selection.spec === null) return { ...emptyCatalogueFields, modelId:modelId ?? '', name };
     const spec = !file && row.specs?.[selection.spec];
     const worker = file && (records['ops-nodes'] || []).find(item=>item.id===row.workerId && item.status==='就绪');
-    if (file && (!worker || !state.clusters.some(cluster=>cluster.id===worker.clusterId && cluster.status==='运行中'))) {
-      return { selectionError:'模型文件所在节点或集群未就绪，请返回模型文件重新选择' };
-    }
-    const placement = file ? {clusterId:worker.clusterId,placement:'指定节点',placementTargets:[worker.id]} : {};
-    const availableBackends = file ? compatibleBackends(records,placement)
+    const fileReady = file && worker && state.clusters.some(cluster=>cluster.id===worker.clusterId && cluster.status==='运行中');
+    const placement = file ? {clusterId:fileReady ? worker.clusterId : '',placement:'指定节点',placementTargets:fileReady ? [worker.id] : []} : {};
+    const availableBackends = file ? fileReady ? compatibleBackends(records,placement) : []
       : (records['ops-inference-backends'] || []).filter(item=>item.version && item.status!=='已停用');
-    const isGguf = file && /\.gguf$/i.test(row.filename || resolvedModelFile(row) || '');
-    const targets = file ? compatibleDevices(records,placement) : [];
-    const onlyAscend = targets.length > 0 && targets.every(item=>/huawei|ascend/i.test(item.vendor || ''));
-    const requestedBackend = file ? onlyAscend ? 'MindIE' : isGguf ? 'llama.cpp' : 'vLLM'
+    // GPUStack model-files seeds vLLM and an automatic runner version.
+    const requestedBackend = file ? 'vLLM'
       : spec ? spec.backend || (spec.imageName ? 'Custom' : undefined) : row.backend;
     const backend = availableBackends.find(item => item.name === requestedBackend);
-    const preferredVersion = file ? backend?.compatibleVersions.find(item=>item.version===backend.version)?.version || backend?.compatibleVersions[0]?.version : backend?.version;
     const runtime = requestedBackend ? {
       runtimeMode: spec?.imageName ? '自定义镜像' : '推理后端版本',
       backend: spec?.backend || backend?.name || '',
-      backendVersion: spec?.imageName ? '' : spec?.backendVersion || preferredVersion || '',
+      backendVersion: file || spec?.imageName ? '' : spec?.backendVersion || backend?.version || '',
       containerImage: spec?.imageName || '',
     } : {};
     const speculation = spec?.speculativeConfig;
@@ -129,7 +130,9 @@ function deploymentPrefill(state, selection, records) {
         } : null,
       } : {}),
       ...(file ? { weightPath:resolvedModelFile(row) || '', repository:row.repository || '', filename:row.filename || '' } : {}),
-      ...(file ? {modelFileId:row.id,...placement} : {}),
+      ...(file ? {modelFileId:row.id,...placement,parameters:(backend?.parameters || []).join('\n'),
+        environment:backendEnvironment(backend),
+        ...(!fileReady ? {selectionError:'模型文件所在节点或集群未就绪，请返回模型文件重新选择'} : {})} : {}),
     };
   } catch {
     return { selectionError:'无法读取部署来源，请重新打开部署配置' };
@@ -159,6 +162,15 @@ function compatibleBackends(infrastructure, values) {
   });
 }
 
+function initialDeploymentRuntime(infrastructure, clusterId) {
+  const target = {clusterId,placement:'自动调度'};
+  const devices = compatibleDevices(infrastructure,target);
+  const name = devices.length && devices.every(device=>pdVendor(device.vendor)==='ascend') ? 'MindIE' : 'vLLM';
+  const backend = compatibleBackends(infrastructure,target).find(row=>row.name===name);
+  return {runtimeMode:'推理后端版本',backend:backend?.name || '',backendVersion:'',
+    parameters:(backend?.parameters || []).join('\n'),environment:backendEnvironment(backend)};
+}
+
 function validateRuntime(values, infrastructure) {
   if (values.runtimeMode!=='推理后端版本' && !(values.runtimeMode==='自定义镜像' && values.backend && values.backend!=='Custom')) return;
   const backend = compatibleBackends(infrastructure,values).find(row=>row.name===values.backend);
@@ -171,7 +183,7 @@ function validatePlacement(values, infrastructure) {
   if (values.modelFileId) {
     const file = (infrastructure['ops-model-files'] || []).find(row=>row.id===values.modelFileId);
     if (!file || file.status!=='可用' || file.lora || ![resolvedModelFile(file),file.mountPath].includes(values.weightPath) ||
-      values.placement!=='指定节点' || values.placementTargets?.length!==1 || file.workerId!==values.placementTargets[0]) {
+      !isFileWorkerPlacement(file,values,infrastructure)) {
       throw Error('该模型文件或所在节点不可用，请重新选择文件');
     }
   }
@@ -181,6 +193,14 @@ function validatePlacement(values, infrastructure) {
     values.placementTargets.some(id=>!choices.some(([option])=>id===option))) {
     throw Error('调度目标不在所选集群内或当前不可用，请重新选择');
   }
+}
+
+function isFileWorkerPlacement(file, values, infrastructure) {
+  if (values.placement==='指定节点') {
+    return values.placementTargets?.length===1 && values.placementTargets[0]===file.workerId;
+  }
+  return values.placement==='指定 GPU' && values.placementTargets?.length>0 &&
+    values.placementTargets.every(id=>(infrastructure['ops-gpus'] || []).some(gpu=>gpu.id===id && gpu.nodeId===file.workerId));
 }
 
 const pdOff = { roles:null,pdMode:'',roleConfigs:undefined,pdSettings:undefined,replicas:1 };
@@ -510,30 +530,52 @@ const fileDefinitionFields = ['source','repository','filename','weightId','weigh
 
 function RemoteRepositoryPicker({ rows, value, filename, select, selectFile, disabled }) {
   const [query,setQuery] = useState('');
-  const normalized = query.trim().toLocaleLowerCase();
-  const results = rows.filter(row=>`${row.name} ${row.repository}`.toLocaleLowerCase().includes(normalized));
+  const [sort,setSort] = useState('trendingScore');
+  const [quantization,setQuantization] = useState();
+  const [page,setPage] = useState(1);
+  const [fileSort,setFileSort] = useState('size');
+  const pageSize = 10;
+  const results = searchModelHubCandidates(rows,{query,sort,quantization});
+  const currentPage = Math.min(page,Math.max(1,Math.ceil(results.length/pageSize)));
+  const visible = results.slice((currentPage-1)*pageSize,currentPage*pageSize);
   const selected = rows.find(row=>row.repository===value);
-  const fileOptions = (selected?.files || []).map(file=>typeof file==='string' ? file : file.name).filter(Boolean);
+  const fileOptions = (selected?.fileOptions || []).filter(file=>isGgufPath(file.value));
+  if (fileSort==='name') fileOptions.sort((left,right)=>left.label.localeCompare(right.label));
+  const fileLabel = file => [file.label,Number.isFinite(file.sizeBytes) ? `${(file.sizeBytes/(1024**3)).toFixed(2)} GiB` : ''].filter(Boolean).join(' · ');
   return <Card title="查找模型">
     <div className="deployment-repository-panel">
-      <Input aria-label="搜索模型仓库" prefix={<IconSearch aria-hidden="true"/>} placeholder="搜索模型名称或仓库" value={query} showClear onChange={setQuery}/>
+      <Input aria-label="搜索模型仓库" prefix={<IconSearch aria-hidden="true"/>} placeholder="搜索模型名称或仓库" value={query} showClear
+        onChange={value=>{setQuery(value);setPage(1);}}/>
+      <Space wrap>
+        <Choice label="仓库排序" value={sort} options={[[ 'trendingScore','趋势' ],[ 'likes','点赞量' ],[ 'downloads','下载量' ],[ 'lastModified','更新时间' ]]}
+          onChange={value=>{setSort(value);setPage(1);}}/>
+        <Choice label="量化" placeholder="量化" value={quantization} showClear
+          options={['FP8','AWQ','GPTQ'].map(value=>[value,value])} onChange={value=>{setQuantization(value);setPage(1);}}/>
+      </Space>
       <div className="deployment-repository-results" role="region" aria-label="搜索结果">
-        {results.length ? results.map(row=><Button key={row.repository} disabled={disabled} block theme={row.repository===value ? 'light' : 'borderless'}
+        {visible.length ? visible.map(row=><Button key={row.repository} disabled={disabled} block theme={row.repository===value ? 'light' : 'borderless'}
           aria-pressed={row.repository===value} onClick={()=>select(row)}>{row.repository}</Button>) : <Text type="secondary">未找到模型仓库</Text>}
       </div>
+      {results.length>pageSize && <AdminPagination total={results.length} currentPage={currentPage} pageSize={pageSize} onPageChange={setPage}/>}
       {selected && <>
         <Text strong>{selected.name}</Text>
         {selected.description && <Paragraph type="secondary">{selected.description}</Paragraph>}
-        {fileOptions.length > 0 && <Choice label="选择 GGUF 文件" placeholder="选择 GGUF 文件" value={filename || undefined}
-          options={fileOptions.map(file=>[file,file])} onChange={selectFile} disabled={disabled}/>}
+        {fileOptions.length > 0 && <>
+          <Choice label="文件排序" options={[[ 'size','大小' ],[ 'name','名称' ]]} value={fileSort} onChange={setFileSort}/>
+          <Choice label="选择 GGUF 文件" placeholder="选择 GGUF 文件" value={filename || undefined}
+            options={fileOptions.map(file=>[file.value,fileLabel(file)])} onChange={selectFile} disabled={disabled}/>
+        </>}
       </>}
     </div>
   </Card>;
 }
 
-function DeploymentEditor({ state, existing, clone, source, can, run, onClose, onSaved, dirty, selection, busy, infrastructure, confirmingClose }) {
+function DeploymentEditor({ state, existing, clone, source, can, run, onClose, onSaved, dirty, selection, busy,
+  infrastructure, readRecords = readInfrastructure, confirmingClose }) {
   const formId = useId();
   const original = existing || clone;
+  const fileFlow = !original && selection.page==='ops-model-files';
+  const file = fileFlow && (infrastructure['ops-model-files'] || []).find(row=>row.id===selection.id);
   const defaultClusterId = state.clusters.find(row=>row.status==='运行中' && row.isDefault)?.id ||
     state.clusters.find(row=>row.status==='运行中')?.id || '';
   const catalogueModel = !original && selection.page==='ops-model-library' &&
@@ -556,26 +598,35 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
     deploymentId: clone ? original.deploymentId.slice(0, 57) + '-copy' : original.deploymentId,
     tensorParallel: original.tensorParallel || original.gpuPerReplica,
     replicas:original.scalingSchedule?.enabled ? original.scalingSchedule.baseline_replicas ?? original.replicas : original.replicas,
-  } : { ...blank, clusterId:defaultClusterId, ...(deploymentSources.includes(source) ? { source } : {}),
+  } : { ...blank, clusterId:defaultClusterId,
+    ...(deploymentSources.includes(source) ? {source,...(!selection.id ? initialDeploymentRuntime(infrastructure,defaultClusterId) : {})} : {}),
     ...deploymentPrefill(state,{ ...selection,spec:catalogueSpecIndex },infrastructure) });
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [evaluated, setEvaluated] = useState(false);
   const [lastEvaluation, setLastEvaluation] = useState(null);
   const [catalogueWarningDismissed, setCatalogueWarningDismissed] = useState(false);
   const [weightMode, setWeightMode] = useState(original?.weightId ? 'artifact' : 'path');
+  const [fileWarningDismissed, setFileWarningDismissed] = useState(false);
+  const lastFilePath = useRef(values.weightPath);
+  const beforeFilePd = useRef(null);
   const seedParameters = useRef([]);
   const evaluationPanel = useRef(null);
   useEffect(()=>{
-    if (lastEvaluation?.result.hardError) evaluationPanel.current?.focus();
-  },[lastEvaluation]);
+    if (Object.keys(fieldErrors).length) {
+      document.getElementById(formId)?.querySelector('[aria-invalid="true"]:not([disabled])')?.focus();
+    } else if (lastEvaluation?.result.hardError) evaluationPanel.current?.focus();
+  },[fieldErrors,formId,lastEvaluation]);
   const change = patch => {
     setValues(previous => {
       const changedFile = previous.modelFileId && fileDefinitionFields.some(key=>Object.hasOwn(patch,key) && JSON.stringify(patch[key])!==JSON.stringify(previous[key]));
       return { ...previous, ...patch, ...(changedFile ? { modelFileId:'' } : {}) };
     });
+    setFieldErrors({});
     setError('');
     setEvaluated(false);
     setLastEvaluation(null);
+    setFileWarningDismissed(false);
     dirty.current = true;
   };
   const models = deployableModels(state);
@@ -586,13 +637,26 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
   const remote = ['Hugging Face','ModelScope'].includes(values.source);
   const showRepositoryPicker = remote && !existing && !catalogueModel && selection.page!=='ops-model-files';
   const remoteCandidates = remote ? modelHubCandidates(infrastructure,values.source) : [];
-  const currentValues = { ...values, weightPath:values.weightPath ||
-    ((remote || values.source==='模型库') && model && values.repository ? '/models/' + model.modelId : '') };
+  const draftPath = fileFlow ? values.weightPath.trim() : values.weightPath;
+  const matchesFile = file && [resolvedModelFile(file),file.mountPath].includes(draftPath) &&
+    isFileWorkerPlacement(file,values,infrastructure);
   const catalogueDevices = catalogueModel ? compatibleDevices(infrastructure,{ clusterId:values.clusterId }) : [];
   const catalogueModes = catalogueRecipes(catalogueSpecs,catalogueDevices);
   const backends = compatibleBackends(infrastructure,values);
   const backend = backends.find(row=>row.name===values.backend);
   const versions = backend?.compatibleVersions || [];
+  const resolvedVersion = deploymentBackendVersion(backend,values.backendVersion);
+  const currentValues = {
+    ...values,
+    weightPath:(fileFlow && remote && !matchesFile ? '' : draftPath) ||
+      ((remote || values.source==='模型库') && model && values.repository ? '/models/' + model.modelId : ''),
+    ...(values.runtimeMode==='推理后端版本' && !values.backendVersion ? {backendVersion:resolvedVersion?.version || ''} : {}),
+    ...(fileFlow ? {
+      deploymentId:modelFileDeploymentCode(values.name),
+      modelFileId:matchesFile ? file.id : '',
+      loraAdapters:values.loraAdapters.filter(entry=>entry.name.trim() || entry.path),
+    } : {}),
+  };
   const storedBackend = existing?.backend && existing.backend===values.backend ? existing.backend : undefined;
   const storedVersion = storedBackend && existing.backendVersion===values.backendVersion ? existing.backendVersion : undefined;
   const versionOptions = versions.map(entry=>({value:entry.version,label:entry.version}));
@@ -604,7 +668,7 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
   const pdVendors = pdAvailableVendors(infrastructure,values);
   const selectedPdVendor = values.pdSettings?.vendor || (pdVendors.length===1 ? pdVendors[0] : undefined);
   const pdModeOptions = supportedPdModes.map(value=>{
-    const error = pdModeIssue(value,{vendor:selectedPdVendor,version:values.backendVersion});
+    const error = pdModeIssue(value,{vendor:selectedPdVendor,version:currentValues.backendVersion});
     return {value,label:pdModeDetails[value][0]+(error ? ' · '+error : ''),disabled:Boolean(error)};
   });
   const preferredPdMode = pdModeOptions.find(option=>!option.disabled)?.value || '';
@@ -616,15 +680,19 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
   const assessment = lastEvaluation?.values===values && lastEvaluation.revision===state.revision ? lastEvaluation.result
     : assessDeploymentDraft(state,currentValues,existing,infrastructure,catalogueModel,catalogueSpec);
   const warningCodes = assessment.warnings.map(item=>item.code);
+  const showFileWarning = fileFlow && warningCodes.length>0 && !fileWarningDismissed;
+  const fieldsDisabled = !can || busy;
+  const changedImage = !existing || ['runtimeMode','backend','containerImage','containerCommand'].some(key=>(existing[key] || '')!==(values[key] || ''));
   const compatibilityId = formId+'-compatibility';
   const showCatalogueWarning = catalogueWithoutSpec && !catalogueWarningDismissed;
   const evaluate = () => {
     let result;
-    try { result = assessDeploymentDraft(state,currentValues,existing,readInfrastructure(),catalogueModel,catalogueSpec); }
+    try { result = assessDeploymentDraft(state,currentValues,existing,readRecords(),catalogueModel,catalogueSpec); }
     catch (issue) { result = {hardError:issue.message,warnings:[]}; }
     setLastEvaluation({revision:state.revision,values,result});
     setEvaluated(true);
     setCatalogueWarningDismissed(false);
+    setFileWarningDismissed(false);
     return result;
   };
   const submit = async (acknowledged = []) => {
@@ -632,6 +700,12 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
     if (catalogueWithoutSpec) {
       setCatalogueWarningDismissed(false);
       Toast.error(catalogueNoGpuMessage);
+      return;
+    }
+    const errors = fileFlow ? modelFileDeploymentFieldErrors(values) : changedImage ? deploymentImageErrors(values) : {};
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
+      setError('');
       return;
     }
     try {
@@ -648,12 +722,19 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
       else setError('部署已提交，请返回列表刷新核对。');
     } catch (issue) { setError(issue.message); }
   };
-  const input = (key,label,props={}) => <Form.Slot label={label}>
-    <Input aria-label={label} value={values[key] ?? ''} onChange={value=>change({[key]:value})} disabled={!can} {...props}/>
-  </Form.Slot>;
-  const textArea = (key,label,placeholder) => <Form.Slot label={label}>
-    <TextArea aria-label={label} rows={3} value={values[key] ?? ''} onChange={value=>change({[key]:value})} placeholder={placeholder} disabled={!can}/>
-  </Form.Slot>;
+  const input = (key,label,props={}) => {
+    const { required, hint, ...controlProps } = props;
+    const control = <Input aria-label={label} value={values[key] ?? ''} onChange={value=>change({[key]:value})}
+      disabled={fieldsDisabled} required={required} {...controlProps}/>;
+    return fileFlow || required || fieldErrors[key] ? <Field label={label} required={required} hint={hint} error={fieldErrors[key]}>{control}</Field>
+      : <Form.Slot label={label}>{control}</Form.Slot>;
+  };
+  const textArea = (key,label,placeholder,required=false) => {
+    const control = <TextArea aria-label={label} rows={3} value={values[key] ?? ''} onChange={value=>change({[key]:value})}
+      placeholder={placeholder} required={required} disabled={fieldsDisabled}/>;
+    return required || fieldErrors[key] ? <Field label={label} required={required} error={fieldErrors[key]}>{control}</Field>
+      : <Form.Slot label={label}>{control}</Form.Slot>;
+  };
   const choice = (key,label,options,props={}) => <Form.Slot label={label}>
     <Choice label={label} value={values[key] || undefined} disabled={!can} motion={false} options={options}
       onChange={value=>change({[key]:value})} {...props}/>
@@ -666,18 +747,35 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
     seedParameters.current=inserted;
     return parameters;
   };
-  const changeBackend = (name, customImage = false) => {
+  const changeBackend = name => {
     const row = backends.find(item=>item.name===name);
+    if (fileFlow) {
+      const custom = name==='Custom';
+      const supportsPerformance = row?.source==='内置' && supportsImageOverride(name);
+      const replicas = beforeFilePd.current?.replicas ?? 1;
+      if (beforeFilePd.current) beforeFilePd.current={replicas};
+      change({backend:custom ? '' : name,backendVersion:'',runtimeMode:custom ? '自定义镜像' : '推理后端版本',
+        containerImage:'',containerCommand:'',parameters:(row?.parameters || []).join('\n'),
+        environment:backendEnvironment(row),nativeAnthropic:false,cacheAcceleration:null,
+        ...(!supportsPerformance ? {kvCache:undefined,speculative:null} : {}),
+        ...(values.roles ? pdModes[name] ? {pdMode:'',pdSettings:undefined,roleConfigs:{}} : {...pdOff,replicas} : {}),
+        ...(name==='VoxBox' && values.placement==='指定 GPU' ? {placementTargets:values.placementTargets.slice(0,1),
+          fileGpuCount:undefined,gpuPerReplica:1,tensorParallel:1,pipelineParallel:1} : {})});
+      return;
+    }
     change({ backend:name==='Custom' ? '' : name,backendVersion:'', parameters:selectBackendParameters(row),cacheAcceleration:null,
-      ...(customImage ? {containerImage:'',containerCommand:''} : {}),
+      containerImage:'',containerCommand:'',nativeAnthropic:false,
+      ...(!supportsImageOverride(name) ? {kvCache:undefined,speculative:null} : {}),
       ...(values.roles ? pdModes[name] ? {pdMode:'',pdSettings:undefined} : pdOff : {}) });
   };
   const chooseRepository = row => {
     const linked = linkedDeploymentModel(row,models);
-    const recommended = backends.find(backend=>backend.name===(row.backend || 'vLLM'));
-    const version = recommended?.compatibleVersions.find(entry=>entry.version===recommended.version) || recommended?.compatibleVersions[0];
-    change({ repository:row.repository, filename:'', modelId:linked?.id || '', weightId:'', weightPath:'',
-      runtimeMode:'推理后端版本', backend:recommended?.name || '', backendVersion:version?.version || '',
+    const filename = row.fileOptions?.find(file=>isGgufPath(file.value))?.value || '';
+    const recommended = backends.find(backend=>backend.name===(filename ? 'llama.cpp' : row.backend || 'vLLM')) ||
+      backends.find(backend=>backend.name==='vLLM');
+    change({ repository:row.repository, filename, modelId:linked?.id || '', weightId:'', weightPath:'',
+      runtimeMode:'推理后端版本', backend:recommended?.name || '', backendVersion:'',
+      containerImage:'',containerCommand:'',
       parameters:selectBackendParameters(recommended) });
     setEvaluated(true);
   };
@@ -697,36 +795,143 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
   const catalogueSources = Object.entries(catalogueSourceLabels)
     .filter(([source])=>catalogueModes.some(option=>option.spec.source===source));
   const updateCataloguePlacement = placement => {
-    if (!catalogueModel || !placement.clusterId) { change(placement); return; }
+    if (!catalogueModel || !placement.clusterId) {
+      const scopedBackend = compatibleBackends(infrastructure,{...values,...placement}).find(row=>row.name===values.backend);
+      change({...placement,...(values.backendVersion && !deploymentBackendVersion(scopedBackend,values.backendVersion) ? {backendVersion:''} : {})});
+      return;
+    }
     const devices = compatibleDevices(infrastructure,{ clusterId:placement.clusterId });
     const next = catalogueInitialRecipe(catalogueSpecs,devices);
     chooseCatalogueSpec(next?.index ?? null,placement);
   };
+  const fileChoice = (key,label,options,{ required, ...props } = {}) =>
+    <Field label={label} required={required} error={fieldErrors[key]}>
+      <Choice label={label} options={options} value={values[key] || undefined}
+        disabled={fieldsDisabled} motion={false} onChange={value=>change({[key]:value})} {...props}/>
+    </Field>;
+  const selectVersion = (value) => {
+    if (value==='custom-image') {
+      change({runtimeMode:'自定义镜像',backendVersion:'',containerImage:'',containerCommand:''});
+      return;
+    }
+    const selected = value==='automatic' ? '' : value || '';
+    const version = deploymentBackendVersion(backend,selected);
+    change({backendVersion:selected,
+      ...(version?.env && Object.keys(version.env).length ? {environment:backendEnvironment(version)} : {})});
+  };
+  const displayedVersions = [
+    ...(versions.length ? [{value:'automatic',label:'自动'}] : []),...versionOptions,
+    ...(supportsImageOverride(values.backend) ? [{value:'custom-image',label:'使用自定义镜像…'}] : []),
+  ];
+  const exitImageMode = () => change({runtimeMode:'推理后端版本',backendVersion:'',containerImage:'',containerCommand:''});
+  const filePathBlur = () => {
+    const path = values.weightPath.trim();
+    if (path===lastFilePath.current || !path) return;
+    lastFilePath.current=path;
+    if (isGgufPath(path) || path.split('/').at(-1).includes('sha256')) {
+      if (values.backend!=='llama.cpp' && backends.some(row=>row.name==='llama.cpp')) changeBackend('llama.cpp');
+    } else if (values.backend==='llama.cpp') {
+      const devices = compatibleDevices(infrastructure,values);
+      changeBackend(devices.length && devices.every(item=>pdVendor(item.vendor)==='ascend') ? 'MindIE' : 'vLLM');
+    }
+  };
+  const changeFileCluster = clusterId => {
+    const manual = values.placement==='指定 GPU';
+    const owner = !manual && (infrastructure['ops-nodes'] || []).find(node=>
+      node.id===file?.workerId && node.clusterId===clusterId && node.status==='就绪');
+    change({clusterId,placement:manual ? '指定 GPU' : owner ? '指定节点' : '自动调度',
+      placementTargets:owner ? [owner.id] : [],backendVersion:'',cacheAcceleration:null,kvCache:undefined,loraAdapters:[],
+      fileGpuCount:undefined,gpuPerReplica:1,tensorParallel:1,pipelineParallel:1,
+      ...(values.roles ? {pdSettings:undefined,roleConfigs:{}} : {})});
+  };
+  const toggleFilePd = enabled => {
+    if (!enabled) {
+      change({...pdOff,...beforeFilePd.current});
+      beforeFilePd.current=null;
+      return;
+    }
+    const {replicas,kvCache,speculative,parameters} = values;
+    beforeFilePd.current={replicas,kvCache,speculative,parameters};
+    change({roles:{prefill:1,decode:1,router:1},roleConfigs:{},replicas:3,pdMode:preferredPdMode,
+      kvCache:undefined,speculative:null,parameters:'',loraAdapters:[],cacheAcceleration:null});
+  };
+  const fileModels = values.fileCategory ? models.filter(row=>modelFileCategory[row.type]===values.fileCategory) : models;
+  const fileAdapters = fileFlow ? (infrastructure['ops-model-files'] || []).filter(row=>row.lora && row.status==='可用' &&
+    resolvedModelFile(row) && (!row.modelId || row.modelId===values.modelId) &&
+    (infrastructure['ops-nodes'] || []).some(node=>node.id===row.workerId && node.clusterId===values.clusterId && node.status==='就绪')) : [];
+  const fileAssessment = fileFlow && (showFileWarning || evaluated) && <div id={compatibilityId} ref={evaluationPanel}
+    tabIndex={-1} style={{ flexBasis:'100%' }}>
+    {assessment.hardError ? <Banner type="danger" closeIcon={null} title="部署校验" description={assessment.hardError}/>
+      : showFileWarning && <Banner type="warning" title="兼容性告警" onClose={()=>setFileWarningDismissed(true)}
+        description={assessment.warnings.map(warning=><div key={warning.code}>{warning.message}</div>)}/>}
+  </div>;
   return <AdminSideSheet title={existing ? '编辑部署' : clone ? '克隆部署' : '部署模型'} visible
     width="min(1120px, 100vw)" className="admin-deployment-drawer" onCancel={close} closeOnEsc={!busy && !confirmingClose}
     footer={<>
+      {fileAssessment}
       {showCatalogueWarning && <div id={compatibilityId} style={{flexBasis:'100%'}}>
         <Banner type="warning" description={catalogueNoGpuMessage} onClose={()=>setCatalogueWarningDismissed(true)}/>
       </div>}
       <Button disabled={busy} onClick={close}>取消</Button>
-      <Button disabled={busy} onClick={()=>{setError('');evaluate();}}>评估部署</Button>
-      {showCatalogueWarning || warningCodes.length>0 ? <Button htmlType="button" theme="solid" loading={busy} disabled={!can}
+      {!fileFlow && <Button disabled={busy} onClick={()=>{setError('');evaluate();}}>评估部署</Button>}
+      {(fileFlow ? showFileWarning : showCatalogueWarning || warningCodes.length>0) ? <Button htmlType="button" theme="solid" loading={busy} disabled={!can || busy}
         aria-describedby={compatibilityId} onClick={()=>submit(warningCodes)}>仍然提交</Button>
         : <Button form={formId} htmlType="submit" theme="solid" loading={busy}
-          disabled={!can || Boolean(values.selectionError)}>{existing?'保存':'部署'}</Button>}
+          disabled={!can || busy || Boolean(values.selectionError)}>{existing || fileFlow ? '保存' : '部署'}</Button>}
     </>}>
     <form id={formId} noValidate onSubmit={event=>{event.preventDefault();submit();}}
       className={`admin-deployment-editor${showRepositoryPicker ? ' admin-deployment-editor-remote' : ''}`}>
       {showRepositoryPicker && <RemoteRepositoryPicker key={values.source} rows={remoteCandidates} value={values.repository} filename={values.filename}
         select={chooseRepository} selectFile={filename=>{
           const gguf = /\.gguf$/i.test(filename) && backends.find(row=>row.name==='llama.cpp');
-          const version = gguf && (gguf.compatibleVersions.find(entry=>entry.version===gguf.version) || gguf.compatibleVersions[0]);
-          change({filename,...(gguf ? {runtimeMode:'推理后端版本',backend:gguf.name,backendVersion:version.version,parameters:selectBackendParameters(gguf)} : {})});
+          change({filename,...(gguf ? {runtimeMode:'推理后端版本',backend:gguf.name,backendVersion:'',
+            containerImage:'',containerCommand:'',parameters:selectBackendParameters(gguf)} : {})});
           setEvaluated(true);
         }} disabled={!can || busy}/>}
       <Card>
         <div className="admin-analytics-fields">
           <Title heading={5} component="h2">基本信息</Title>
+          {fileFlow ? <>
+            {input('name','名称',{required:true,maxLength:63,hint:values.enableInternalRoute!==false
+              ? '以英文字母开头，最多 63 个字符，可使用字母、数字、点、下划线和连字符，末尾为字母或数字。'
+              : '最多 63 个字符，可使用字母、数字、点、下划线和连字符，首尾为字母或数字。'})}
+            {fileChoice('source','模型来源',sameOptions(modelFileSources),{required:true,disabled:true})}
+            {remote ? <>
+              {input('repository','模型仓库',{required:true,disabled:true})}
+              {(isGgufPath(values.filename) || isGgufPath(values.weightPath)) && input('filename','文件名',{disabled:true})}
+            </> : input('weightPath','文件路径',{required:true,showClear:true,placeholder:'/models/qwen',onBlur:filePathBlur,
+              onChange:weightPath=>change({weightPath,loraAdapters:[]})})}
+            {fileChoice('clusterId','集群',state.clusters.filter(row=>row.status==='运行中').map(row=>[row.id,row.name]),{
+              required:true,onChange:changeFileCluster,
+            })}
+            {fileChoice('backend','推理后端',[...sameOptions(backends.map(row=>row.name)),['Custom','自定义']],{
+              required:true,filter:true,onChange:changeBackend,
+              value:values.runtimeMode==='自定义镜像' && !values.backend ? 'Custom' : values.backend || undefined,
+            })}
+            {values.runtimeMode==='自定义镜像' ? <>
+              {input('containerImage',values.backend ? '自定义镜像' : '镜像名称',{required:true,showClear:true,
+                placeholder:'registry.example.com/inference:latest'})}
+              {values.backend && <Button type="primary" theme="borderless" size="small"
+                disabled={fieldsDisabled} onClick={exitImageMode}>
+                切换至版本选择
+              </Button>}
+              <Field label="执行命令" required={!values.backend} error={fieldErrors.containerCommand}>
+                <TextArea aria-label="执行命令" rows={2} value={values.containerCommand} disabled={fieldsDisabled}
+                  onChange={containerCommand=>change({containerCommand})}/>
+              </Field>
+            </> : fileChoice('backendVersion','后端版本',[],{
+              optionList:displayedVersions, disabled:fieldsDisabled || !backend,filter:true,
+              value:values.backendVersion || (versions.length ? 'automatic' : undefined),onChange:selectVersion,
+            })}
+            {!values.roles && input('replicas','副本数',{required:true,type:'number',min:0,max:100,
+              onChange:replicas=>change({replicas,...(values.scalingSchedule?.enabled ? {scalingSchedule:{...values.scalingSchedule,
+                baseline_replicas:replicas==='' ? null : Number(replicas)}} : {})})})}
+            {textArea('description','描述','')}
+            {fileChoice('modelId','关联模型',fileModels.map(row=>[row.id,row.name+' · '+row.modelId]),{
+              required:true,filter:true,onChange:modelId=>change({modelId,loraAdapters:[]}),
+            })}
+            {values.selectionError && <ErrorNote message={values.selectionError}/>}
+          </> : <>
           {catalogueModel && <>
             <Facts values={[[ '模型库',catalogueModel.name ],[ '部署规格',catalogueSpec?.quantization ],[ '模型仓库',catalogueSpec?.repository ]]}/>
             <div className="admin-deployment-fields">
@@ -771,20 +976,24 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
           })}
           {values.runtimeMode===deploymentRuntimeModes[0] ? choice('runtimeId','运行时镜像',artifactOptions(runtimes))
             : values.runtimeMode===deploymentRuntimeModes[2] ? <div className="admin-deployment-fields">
-              <Choice label="推理后端" value={values.backend || 'Custom'} disabled={!can} options={[[ 'Custom','自定义' ],...sameOptions(backends.map(row=>row.name))]}
-                onChange={backend=>changeBackend(backend,true)}/>
-              {input('containerImage','容器镜像地址',{placeholder:'registry.example.com/inference:latest'})}
-              {textArea('containerCommand','执行命令','如 serve {{model_path}} --port {{port}}')}
+              <Choice label="推理后端" value={values.backend || 'Custom'} disabled={fieldsDisabled} options={[[ 'Custom','自定义' ],...sameOptions(backends.map(row=>row.name))]}
+                onChange={changeBackend}/>
+              {input('containerImage','容器镜像地址',{required:true,placeholder:'registry.example.com/inference:latest'})}
+              {textArea('containerCommand','执行命令','如 serve {{model_path}} --port {{port}}',!values.backend && changedImage)}
+              {supportsImageOverride(values.backend) && <Button type="primary" theme="borderless" size="small"
+                disabled={fieldsDisabled} onClick={exitImageMode}>切换至版本选择</Button>}
             </div>
               : <div className="admin-deployment-fields">
                 {choice('backend','推理后端',sameOptions([...new Set([...backends.map(row=>row.name),storedBackend].filter(Boolean))]),
                   {onChange:name=>changeBackend(name)})}
-                {choice('backendVersion','后端版本',[],{optionList:versionOptions,disabled:!can || !backend})}
+                {choice('backendVersion','后端版本',[],{optionList:displayedVersions,disabled:fieldsDisabled || !backend,
+                  value:values.backendVersion || (versions.length ? 'automatic' : undefined),filter:true,onChange:selectVersion})}
               </div>}
           <Title heading={5} component="h2">集群与调度</Title>
           <div className="admin-deployment-fields">
             {choice('clusterId','目标集群',state.clusters.filter(row=>row.status==='运行中').map(row=>[row.id,row.name]),
               {disabled:!can || Boolean(existing),onChange:clusterId=>updateCataloguePlacement({clusterId,placementTargets:[],cacheAcceleration:null,
+                ...(values.kvCache?.mode==='shared' ? {kvCache:undefined} : {}),
                 ...(values.roles ? {pdSettings:undefined,roleConfigs:Object.fromEntries(Object.entries(values.roleConfigs || {}).map(([role,config])=>
                   [role,{...config,placementTargets:[]}]))} : {})})})}
             {input('namespace','命名空间')}
@@ -794,14 +1003,47 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
               options={placementOptions} onChange={placementTargets=>updateCataloguePlacement({placementTargets})}/>}
           </div>
           <div className="admin-deployment-fields">
-            {input('replicas','副本数',{type:'number',min:values.scalingSchedule?.enabled ? 0 : 1,max:100,disabled:!can || Boolean(values.roles),
+            {input('replicas','副本数',{type:'number',min:0,max:100,disabled:fieldsDisabled || Boolean(values.roles),
               onChange:replicas=>change({replicas,...(values.scalingSchedule?.enabled ? {scalingSchedule:{...values.scalingSchedule,
                 baseline_replicas:replicas==='' ? null : Number(replicas)}} : {})})})}
             {input('gpuPerReplica','每副本 GPU',{type:'number',min:1,max:64,onChange:gpuPerReplica=>change({gpuPerReplica,tensorParallel:gpuPerReplica,pipelineParallel:1})})}
             {input('tensorParallel','张量并行 TP',{type:'number',min:1})}
             {input('pipelineParallel','流水线并行 PP',{type:'number',min:1})}
           </div>
+          </>}
           <Collapse>
+            {fileFlow && !values.roles && <AdminCollapsePanel itemKey="schedule" header="调度">
+              {fileChoice('placement','调度方式',[[ '自动调度','自动' ],[ '指定 GPU','手动' ]],{
+                value:values.placement==='指定 GPU' ? '指定 GPU' : '自动调度',
+                onChange:placement=>{
+                  const node = placement==='自动调度' && (infrastructure['ops-nodes'] || []).find(item=>
+                    item.id===file?.workerId && item.clusterId===values.clusterId && item.status==='就绪');
+                  change({placement:node ? '指定节点' : placement,placementTargets:node ? [node.id] : [],
+                    fileGpuCount:undefined,gpuPerReplica:1,tensorParallel:1,pipelineParallel:1});
+                },
+              })}
+              {values.placement==='指定 GPU' ? <>
+                {fileChoice('placementTargets','GPU 选择',placementOptions,{required:true,filter:true,showClear:true,
+                  multiple:values.backend!=='VoxBox',
+                  value:values.backend==='VoxBox' ? values.placementTargets[0] : values.placementTargets,
+                  onChange:targets=>change({placementTargets:Array.isArray(targets) ? targets : targets ? [targets] : []})})}
+                {fileChoice('gpuPerReplica','每个副本的 GPU 数量',[
+                  ['automatic','自动'],...[1,2,4,8,16].map(count=>[count,String(count)]),['custom','自定义数量'],
+                ],{value:values.fileGpuCount ?? 'automatic',onChange:gpu=>{
+                  const count = typeof gpu==='number' ? gpu : 1;
+                  change({fileGpuCount:gpu,gpuPerReplica:count,tensorParallel:count,pipelineParallel:1});
+                }})}
+                {values.fileGpuCount==='custom' && input('gpuPerReplica','自定义 GPU 数量',{required:true,type:'number',min:1,max:64,
+                  onChange:gpuPerReplica=>change({gpuPerReplica,tensorParallel:gpuPerReplica,pipelineParallel:1})})}
+              </> : <>
+                {fileChoice('placementStrategy','放置策略',placementStrategies)}
+                {fileChoice('placementTargets','节点选择器（worker-name）',placementChoices(infrastructure,{...values,placement:'指定节点'}),{
+                  value:values.placementTargets[0],filter:true,showClear:true,onChange:id=>change({
+                    placement:id ? '指定节点' : '自动调度',placementTargets:id ? [id] : [],
+                  }),
+                })}
+              </>}
+            </AdminCollapsePanel>}
             <AdminCollapsePanel itemKey="routing" header="模型访问">
               <Space wrap>
                 <Space><span>启用模型路由</span><Switch aria-label="启用模型路由" checked={values.enableInternalRoute!==false}
@@ -810,33 +1052,50 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
                   disabled={!can || busy || values.enableInternalRoute===false} onChange={genericProxy=>change({genericProxy})}/></Space>
               </Space>
             </AdminCollapsePanel>
-            <AdminCollapsePanel itemKey="parameters" header="高级运行参数">
-              <div className="admin-deployment-fields">
+            <AdminCollapsePanel itemKey="parameters" header={fileFlow ? '高级' : '高级运行参数'}>
+              {fileFlow && fileChoice('fileCategory','模型类别',modelFileCategories,{
+                value:values.fileCategory || 'automatic',
+                onChange:category=>change({fileCategory:category==='automatic' ? '' : category,
+                  ...(model && category!=='automatic' && modelFileCategory[model.type]!==category ? {modelId:'',loraAdapters:[]} : {})}),
+              })}
+              {!fileFlow && <div className="admin-deployment-fields">
                 {input('maxModelLen','上下文上限（Token）',{type:'number'})}
                 {input('gpuMemoryUtilization','显存利用比例',{type:'number',min:.01,max:1,step:.01})}
                 {input('startupTimeout','启动超时（秒）',{type:'number',min:1,max:7200})}
-              </div>
-              {textArea('parameters','推理参数','每行一项启动参数')}
-              {suggestions.length>0 && <Choice label="添加常用参数" placeholder="添加常用参数" value="" options={sameOptions(suggestions)}
+              </div>}
+              {(!fileFlow || !values.roles) && textArea('parameters','推理参数','每行一项启动参数')}
+              {(!fileFlow || !values.roles) && suggestions.length>0 && <Choice label="添加常用参数" placeholder="添加常用参数" value="" options={sameOptions(suggestions)}
                 disabled={!can || busy} onChange={line=>line && change({parameters:[values.parameters,line].filter(Boolean).join('\n')})}/>}
               {textArea('environment','环境变量','每行一项 NAME=VALUE')}
               <Space wrap>
                 {Object.entries({offloading:'CPU 卸载',distributedInference:'跨节点推理',restartOnError:'异常后重启',nativeAnthropic:'原生 Anthropic API'})
+                  .filter(([key])=>!fileFlow ||
+                    (key!=='nativeAnthropic' || values.backend!=='VoxBox') &&
+                    (key!=='offloading' || backend?.source!=='内置') &&
+                    (key!=='distributedInference' || backend?.source==='内置'))
                   .map(([key,label])=><Space key={key}><span>{label}</span>
-                    <Switch aria-label={label} checked={values[key]} onChange={value=>change({[key]:value})}/></Space>)}
+                    <Switch aria-label={label} disabled={fieldsDisabled} checked={values[key]} onChange={value=>change({[key]:value})}/></Space>)}
               </Space>
             </AdminCollapsePanel>
-            <AdminCollapsePanel itemKey="lora" header="LoRA 适配器">
+            {(!fileFlow || !values.roles) && <AdminCollapsePanel itemKey="lora" header="LoRA 适配器">
               {(values.loraAdapters ?? []).map((entry,index)=><Space key={index} wrap>
-                {Object.entries({name:'名称',path:'权重路径'}).map(([key,label])=><Input key={key} aria-label={`适配器 ${index+1} ${label}`}
+                {fileFlow && <Choice label={`适配器 ${index+1} 选择 LoRA`} placeholder="选择 LoRA"
+                  value={entry.path || undefined} filter showClear disabled={fieldsDisabled}
+                  options={fileAdapters.filter(row=>resolvedModelFile(row)===entry.path ||
+                    !values.loraAdapters.some(item=>item.path===resolvedModelFile(row))).map(row=>[resolvedModelFile(row),`${row.name} · ${row.source}`])}
+                  onChange={path=>change({loraAdapters:values.loraAdapters.map((row,i)=>i===index ? {...row,path:path || ''} : row)})}/>}
+                {Object.entries(fileFlow ? {name:'名称'} : {name:'名称',path:'权重路径'}).map(([key,label])=><Input key={key}
+                  aria-label={`适配器 ${index+1} ${label}`} disabled={fileFlow && fieldsDisabled}
                   value={entry[key]} placeholder={label} onChange={value=>change({loraAdapters:values.loraAdapters.map((row,i)=>i===index?{...row,[key]:value}:row)})}/>)}
-                <Button type="danger" theme="borderless" onClick={()=>change({loraAdapters:values.loraAdapters.filter((_,i)=>i!==index)})}>移除</Button>
+                <Button type="danger" theme="borderless" disabled={fileFlow && fieldsDisabled}
+                  onClick={()=>change({loraAdapters:values.loraAdapters.filter((_,i)=>i!==index)})}>移除</Button>
               </Space>)}
-              <Button theme="light" disabled={values.loraAdapters?.length>=20}
+              <Button theme="light" disabled={fileFlow && fieldsDisabled || values.loraAdapters?.length>=20}
                 onClick={()=>change({loraAdapters:[...(values.loraAdapters ?? []),{name:'',path:''}]})}>添加适配器</Button>
-            </AdminCollapsePanel>
-            <AdminCollapsePanel itemKey="speculative" header="推测解码">
+            </AdminCollapsePanel>}
+            {(!fileFlow || !values.roles) && <AdminCollapsePanel itemKey="speculative" header="推测解码">
               <Space><span>启用推测解码</span><Switch aria-label="启用推测解码" checked={Boolean(values.speculative)}
+                disabled={fieldsDisabled || fileFlow && (backend?.source!=='内置' || !supportsImageOverride(values.backend))}
                 onChange={enabled=>change({speculative:enabled?{algorithm:'N-gram',tokens:5,min:1,max:3}:null})}/></Space>
               {values.speculative && <div className="admin-deployment-fields">
                 <Choice label="推测解码算法" value={values.speculative.algorithm} options={sameOptions(['Eagle3','MTP','N-gram'])}
@@ -847,26 +1106,27 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
                       onChange={value=>change({speculative:{...values.speculative,[key]:value}})}/>
                   </Form.Slot>)}
               </div>}
-            </AdminCollapsePanel>
-            <AdminCollapsePanel itemKey="scaling" header="定时伸缩">
+            </AdminCollapsePanel>}
+            {(!fileFlow || !values.roles) && <AdminCollapsePanel itemKey="scaling" header="定时伸缩">
               {values.roles ? <Text type="secondary">启用 PD 分离时不可启用定时伸缩</Text> :
                 <DeploymentScalingSchedule value={values.scalingSchedule} legacyRules={values.scalingRules} replicas={values.replicas} disabled={!can || busy}
-                  onChange={(scalingSchedule,replicas)=>change({scalingSchedule,...(replicas!=null ? {replicas:!scalingSchedule?.enabled && Number(replicas)===0 ? 1 : replicas} : {})})}/>}
-            </AdminCollapsePanel>
-            <AdminCollapsePanel itemKey="cache" header="缓存加速">
+                  onChange={(scalingSchedule,replicas)=>change({scalingSchedule,...(replicas!=null ? {replicas} : {})})}/>}
+            </AdminCollapsePanel>}
+            {(!fileFlow || !values.roles) && <AdminCollapsePanel itemKey="cache" header="缓存加速">
               {values.cacheAcceleration && <Space>
                 <Text>{values.cacheAcceleration.name}</Text><Button size="small" disabled={!can || busy}
                   onClick={()=>change({cacheAcceleration:null})}>解除引用</Button>
               </Space>}
               {(!values.roles || values.kvCache?.enabled) && <DeploymentCacheFields value={values.kvCache} rows={cacheServices}
-                rules={{backend:values.backend,backendVersion:values.backendVersion}} disabled={!can || busy}
+                rules={{backend:values.backend,backendVersion:currentValues.backendVersion}} disabled={!can || busy}
                 onChange={kvCache=>change({kvCache,cacheAcceleration:null})}/>}
               {values.roles && !values.kvCache?.enabled && <Text type="secondary">在 Prefill 角色中配置扩展 KV 缓存。</Text>}
-            </AdminCollapsePanel>
-            {(supportedPdModes.length>0 && pdSupportsSource(values) || values.roles) && <AdminCollapsePanel itemKey="pd" header="预填充 / 解码分离">
+            </AdminCollapsePanel>}
+            {(supportedPdModes.length>0 && pdSupportsSource(values) || values.roles) && <AdminCollapsePanel itemKey="pd" header={fileFlow ? 'PD 分离配置' : '预填充 / 解码分离'}>
               <div className="deployment-pd-role">
                 <Space><span>启用 PD 分离</span><Switch aria-label="启用 PD 分离" checked={Boolean(values.roles)} disabled={!can || busy || Boolean(values.scalingSchedule?.enabled)}
-                  onChange={enabled=>change(enabled?{roles:{prefill:1,decode:1,router:1},roleConfigs:{},replicas:3,pdMode:preferredPdMode}:pdOff)}/></Space>
+                  onChange={enabled=>fileFlow ? toggleFilePd(enabled) :
+                    change(enabled?{roles:{prefill:1,decode:1,router:1},roleConfigs:{},replicas:3,pdMode:preferredPdMode}:pdOff)}/></Space>
                 {values.roles && <>
                   <div className="admin-deployment-fields">
                     {(pdVendors.length>1 || values.pdSettings?.vendor) && <Form.Slot label="加速卡厂商">
@@ -892,7 +1152,7 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
                   </div>
                   <Tabs type="line">
                     {pdRoles.map(([role,label])=><Tabs.TabPane key={role} itemKey={role} tab={label}>
-                      <PdRoleEditor role={role} label={label} count={values.roles[role]} config={values.roleConfigs?.[role] || {}} values={values}
+                      <PdRoleEditor role={role} label={label} count={values.roles[role]} config={values.roleConfigs?.[role] || {}} values={currentValues}
                         infrastructure={infrastructure} disabled={!can || busy}
                         onCount={count=>{
                           const roles={...values.roles,[role]:count};
@@ -908,7 +1168,7 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
           <ErrorNote message={error}/>
         </div>
       </Card>
-      <Card title="资源预览">
+      {!fileFlow && <Card title="资源预览">
         <div className="admin-analytics-fields">
           <Facts values={[[ '模型',model?.name ],[ '目标集群',cluster?.name ],[ 'GPU 型号',cluster?.gpuType ],
             [ '当前可用 GPU',available ],[ '本次需求',Number.isFinite(required)?required:null ],[ '预计余量',available==null?null:available-required ]]}/>
@@ -920,7 +1180,7 @@ function DeploymentEditor({ state, existing, clone, source, can, run, onClose, o
           </div>}
           {assessment.recreation && dirty.current && <Banner type="warning" closeIcon={null} description="保存后会重新创建运行实例，部署端点可能暂时不可用。"/>}
         </div>
-      </Card>
+      </Card>}
     </form>
   </AdminSideSheet>;
 }
@@ -930,20 +1190,21 @@ const detailTabs = [['overview','概览'],['monitoring','监控'],['instances','
 function DeploymentActions({ item, can, go, ask, tools }) {
   const t = useChannelText();
   const menu = [
-    !inProgress(item) && { name:'编辑', disabled:!can, onClick:()=>go({ view:'edit',deployment:item.id }) },
-    tools.canPlayground(item) && { name:t('在 Playground 中打开'), onClick:()=>tools.openPlayground(item) },
+    { name:'编辑', disabled:!can || inProgress(item), onClick:()=>go({ view:'edit',deployment:item.id }) },
+    { name:t('在 Playground 中打开'), disabled:!tools.canPlayground(item), onClick:()=>tools.openPlayground(item) },
     { name:'监控详情', onClick:()=>go({ deployment:item.id,tab:'monitoring' }) },
-    tools.canBenchmark(item) && { name:'基准测试', onClick:()=>tools.onBenchmark(item) },
-    ['失败','停止'].includes(item.status) && { name:item.scalingSchedule?.paused ? '恢复定时伸缩' : confirmTitles.start, disabled:!can, onClick:()=>ask(item,'start') },
-    inProgress(item) && !item.configRevision && { name:confirmTitles.check, disabled:!can, onClick:()=>ask(item,'check') },
-    item.status==='运行中' && { name:'重新启动', disabled:!can, onClick:()=>ask(item,'restart') },
-    item.status!=='停止' && { name:'停止', disabled:!can, onClick:()=>ask(item,'stop') },
+    { name:'基准测试', disabled:!tools.canBenchmark(item), onClick:()=>tools.onBenchmark(item) },
+    { name:item.scalingSchedule?.paused ? '恢复定时伸缩' : confirmTitles.start,
+      disabled:!can || !['失败','停止'].includes(item.status), onClick:()=>ask(item,'start') },
+    { name:confirmTitles.check, disabled:!can || !inProgress(item) || Boolean(item.configRevision), onClick:()=>ask(item,'check') },
+    { name:'重新启动', disabled:!can || item.status!=='运行中', onClick:()=>ask(item,'restart') },
+    { name:'停止', disabled:!can || item.status==='停止', onClick:()=>ask(item,'stop') },
     { name:'配置版本历史', onClick:()=>tools.openHistory(item) },
     { name:'克隆', disabled:!can, onClick:()=>go({ view:'create',clone:item.id, deployment:null,tab:null }) },
     { name:'导出 YAML', onClick:()=>tools.exportRows([item]) },
     { name:'删除', type:'danger', disabled:!can, onClick:()=>ask(item,'delete') },
-  ].filter(Boolean).map(entry=>({node:'item',...entry}));
-  return <AdminActionMenu label={item.name + ' 操作'} items={menu}/>;
+  ].map(entry=>({node:'item',...entry}));
+  return <AdminActionMenu label={`${item.name} ${t('操作')}`} items={menu}>{t('操作')}</AdminActionMenu>;
 }
 
 function DeploymentDetail({ item, state, can, go, ask, tab, tools, infrastructure }) {
@@ -972,9 +1233,9 @@ function DeploymentDetail({ item, state, can, go, ask, tab, tools, infrastructur
     <AdminPageHeading title={item.name} description={`${item.deploymentId} · ${model?.name || '模型记录缺失'}`}>
       <Space wrap>
         <Button onClick={()=>tools.openYaml(item)}>查看部署 YAML</Button>
-        {tools.canBenchmark(item) && <Button onClick={()=>tools.onBenchmark(item)}>基准测试</Button>}
-        {endpoint?.status==='运行中' && item.status==='运行中' && <Button onClick={()=>tools.openAccess(item)}>API 访问信息</Button>}
-        {tools.canPlayground(item) && <Button theme="solid" onClick={()=>tools.openPlayground(item)}>{t('在 Playground 中打开')}</Button>}
+        <Button disabled={!tools.canBenchmark(item)} onClick={()=>tools.onBenchmark(item)}>基准测试</Button>
+        <Button disabled={endpoint?.status!=='运行中' || item.status!=='运行中'} onClick={()=>tools.openAccess(item)}>API 访问信息</Button>
+        <Button theme="solid" disabled={!tools.canPlayground(item)} onClick={()=>tools.openPlayground(item)}>{t('在 Playground 中打开')}</Button>
         <DeploymentActions item={item} can={can} go={go} ask={ask} tools={tools}/>
       </Space>
     </AdminPageHeading>
@@ -1127,12 +1388,13 @@ function DeploymentReplicasCell({ item, can, save }) {
     <Button theme="borderless" size="small" disabled={!can || item.status!=='运行中' || Boolean(item.scalingSchedule?.enabled)}
       onClick={()=>{setIssue('');setDraft(item.roles || { replicas:item.replicas });}}>编辑副本数</Button>
   </div>;
-  const numbers = Object.values(draft).map(Number);
+  const numbers = Object.values(draft).map(value=>value==='' || value==null ? NaN : Number(value));
   const count = numbers.reduce((sum,value)=>sum+value,0);
-  const valid = numbers.every(value=>Number.isInteger(value) && value>=1) && count<=100;
+  const min = roles.length ? 1 : 0;
+  const valid = numbers.every(value=>Number.isInteger(value) && value>=min) && count<=100;
   return <Space vertical align="start" spacing={4}>
     {Object.entries(draft).filter(([role])=>role!=='router').map(([role,value])=><InputNumber key={role} aria-label={roleNames[role] ? `${roleNames[role]}副本数` : '副本数'}
-      size="small" value={value} min={1} max={100} disabled={saving}
+      size="small" value={value} min={min} max={100} disabled={saving}
       onChange={next=>{setIssue('');setDraft({...draft,[role]:next});}}/>)}
     {issue && <Text type="danger" size="small" role="alert">{issue}</Text>}
     <Space>
@@ -1192,8 +1454,12 @@ function DeploymentInstanceList({ state, params, can, go, tools, infrastructure 
 function DeploymentList({ state, params, can, go, ask, tools, infrastructure }) {
   const translateLabel = useChannelText();
   const [selected, setSelected] = useState([]);
-  const [expanded, setExpanded] = useState(() => params.has('expanded') ? [params.get('expanded')] : []);
+  const target = params.get('expanded');
+  const [expanded, setExpanded] = useState(() => target ? [target] : []);
   const [sort,setSort] = useState(null);
+  useEffect(()=>{
+    if (target) setExpanded(keys=>keys.includes(target) ? keys : [target,...keys]);
+  },[target]);
   const query = params.get('q') || '';
   const filter = params.get('status') || 'all';
   const cluster = params.get('cluster') || 'all';
@@ -1207,9 +1473,6 @@ function DeploymentList({ state, params, can, go, ask, tools, infrastructure }) 
     && (cluster === 'all' || item.clusterId === cluster)
     && (category === 'all' || models.find(row=>row.id===item.modelId)?.type===category));
   const rows = scope.filter(item => matchesStatus(item, filter));
-  const targetIndex = params.has('expanded') ? rows.findIndex(item=>item.id===params.get('expanded')) : -1;
-  const landingPage = targetIndex < 0 ? 1 : Math.floor(targetIndex / size) + 1;
-  const page = Math.max(1, Math.min(Math.floor(Number(params.get('page'))) || landingPage, Math.ceil(rows.length / size) || 1));
   const change = patch => go({ ...patch, page: null, expanded:null }, false, true);
   const details = (item, tab = 'overview') => go({ deployment: item.id, tab });
   const selectedRows = rows.filter(row=>selected.includes(row.id));
@@ -1227,24 +1490,28 @@ function DeploymentList({ state, params, can, go, ask, tools, infrastructure }) 
       render: (_,item)=><DeploymentReplicasCell key={item.id} item={item} can={can} save={tools.scaleDirect}/> },
     { title: '创建时间', width: 150, dataIndex:'createdAt', render:time,
       sorter:(a,b)=>String(a.createdAt ?? '').localeCompare(b.createdAt ?? '') },
-    { title: '操作', width: 90, render: (_, item) => <DeploymentActions item={item} can={can} go={go} ask={ask} tools={tools}/> },
+    { title: '操作', key: 'actions', width: 90, fixed: 'right', render: (_, item) => <DeploymentActions item={item} can={can} go={go} ask={ask} tools={tools}/> },
   ];
+  const targetIndex = target ? deploymentTablePage(rows,columns,sort,{currentPage:1,pageSize:rows.length}).findIndex(item=>item.id===target) : -1;
+  const landingPage = targetIndex < 0 ? 1 : Math.floor(targetIndex / size) + 1;
+  const page = Math.max(1, Math.min(Math.floor(Number(params.get('page'))) || landingPage, Math.ceil(rows.length / size) || 1));
   const visible = deploymentTablePage(rows,columns,sort,{currentPage:page,pageSize:size});
 
   return <>
     <AdminPageHeading title={translateLabel("模型部署")} description="部署和管理自有模型推理服务，查看资源、就绪状态与部署事件。">
       <Space wrap>
-        {!tools.inferenceDemo && <Text link={{ href: '?demo=inference#/admin-2/deployments' }}>
-          {translateLabel('查看演示数据')}
+        {!tools.inferenceDemo && <Text link={{ href: '?demo=inference-interactive#/admin-2/deployments' }}>
+          {translateLabel('进入可操作演示')}
         </Text>}
-        {!instanceView && !tools.inferenceDemo && <>
+        {!instanceView && (
           <Dropdown trigger="click" render={<Dropdown.Menu>
-            {deploymentSources.map(source=><Dropdown.Item key={source} onClick={()=>source==='模型库' ? tools.onNavigate('ops-model-library') : go({view:'create',source})}>{source}</Dropdown.Item>)}
+            {deploymentSources.map(source=><Dropdown.Item key={source} disabled={tools.inferenceDemo && source==='模型库'}
+              onClick={()=>source==='模型库' ? tools.onNavigate('ops-model-library') : go({view:'create',source},false,true)}>{source}</Dropdown.Item>)}
             <Dropdown.Item onClick={tools.openImport}>YAML 文件</Dropdown.Item>
           </Dropdown.Menu>}>
             <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!can}>部署模型</Button>
           </Dropdown>
-        </>}
+        )}
       </Space>
     </AdminPageHeading>
     <Card>
@@ -1265,14 +1532,14 @@ function DeploymentList({ state, params, can, go, ask, tools, infrastructure }) 
         <Button theme="borderless" icon={<IconRefresh aria-hidden="true"/>} aria-label="刷新" loading={tools.refreshing} onClick={tools.refresh}/>
         <Button theme="borderless" onClick={()=>setExpanded(expanded.length?[]:visible.map(row=>row.id))}>{expanded.length?'全部收起':'全部展开'}</Button>
       </FilterToolbar>
-      {selectedRows.length>0 && <Space wrap className="admin-list-toolbar">
-        <Text>已选 {selectedRows.length} 条</Text>
+      <Space wrap className="admin-list-toolbar">
+        {selectedRows.length>0 && <Text>已选 {selectedRows.length} 条</Text>}
         {['start','stop','delete'].map(operation=><Button key={operation} type={operation==='delete'?'danger':'primary'}
-          disabled={!can || selectedRows.some(row=>operation==='start' && !['停止','失败'].includes(row.status) || operation==='stop' && row.status==='停止')}
+          disabled={!can || !selectedRows.length || selectedRows.some(row=>operation==='start' && !['停止','失败'].includes(row.status) || operation==='stop' && row.status==='停止')}
           onClick={()=>tools.askBatch(selectedRows,operation,()=>setSelected([]))}>{operation==='start'?'批量启动':operation==='stop'?'批量停止':'批量删除'}</Button>)}
-        <Button onClick={()=>tools.exportRows(selectedRows)}>批量导出 YAML</Button>
-        <Button theme="borderless" onClick={()=>setSelected([])}>清空选择</Button>
-      </Space>}
+        <Button disabled={!selectedRows.length} onClick={()=>tools.exportRows(selectedRows)}>批量导出 YAML</Button>
+        <Button theme="borderless" disabled={!selectedRows.length} onClick={()=>setSelected([])}>清空选择</Button>
+      </Space>
       <Table size="small" rowKey="id" dataSource={visible} scroll={{ x: 'max(100%, 1000px)' }} onChange={({ sorter })=>setSort(sorter)}
         columns={columns.map(column=>column.sorter ? { ...column,sorter:true,sortOrder:sort?.dataIndex===column.dataIndex ? sort.sortOrder : false } : column)}
         rowSelection={{ selectedRowKeys:selected,onChange:setSelected }} expandedRowKeys={expanded}
@@ -1287,7 +1554,7 @@ function DeploymentList({ state, params, can, go, ask, tools, infrastructure }) 
   </>;
 }
 
-async function saveDeploymentOperation(state, dispatch, can, operation, data, deploymentId, quiet) {
+async function saveDeploymentOperation(state, dispatch, can, operation, data, deploymentId, quiet, readRecords = readInfrastructure) {
   if (!can) throw Error('当前角色或数据状态不允许修改部署');
   const deployment = state.deployments.find(item=>item.id===deploymentId);
   const validate = (configuration, records) => {
@@ -1298,9 +1565,9 @@ async function saveDeploymentOperation(state, dispatch, can, operation, data, de
   if (['create','update','start','restart','rollback'].includes(operation)) {
     const configuration = operation==='rollback' && deployment ? deploymentHistory(deployment).find(row=>row.revision===Number(data.revision))?.config
       : { ...deployment,...data };
-    if (configuration && (operation!=='update' || deploymentRequiresRecreation(deployment,configuration))) validate(configuration,readInfrastructure());
+    if (configuration && (operation!=='update' || deploymentRequiresRecreation(deployment,configuration))) validate(configuration,readRecords());
   } else if (operation==='import') {
-    const records=readInfrastructure();
+    const records=readRecords();
     data.items.forEach(item=>validate(item,records));
   }
   const action = { type:'deploymentOperation', operation, data, deploymentId };
@@ -1334,7 +1601,8 @@ export function ModelFileDeploymentDrawer({ fileId, state, dispatch, can, infras
   </>;
 }
 
-export default function ModelDeployments({ state, dispatch, conflict, onNavigate, refreshRead, inferenceDemo = false }) {
+export default function ModelDeployments({ state, dispatch, conflict, onNavigate, refreshRead,
+  inferenceDemo = false, interactiveDemo = false, demoInfrastructure }) {
   const translateLabel = useChannelText();
   const [params, setParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const [error, setError] = useState('');
@@ -1352,8 +1620,9 @@ export default function ModelDeployments({ state, dispatch, conflict, onNavigate
   const checked = useRef(new Set());
   const scheduleAttempts = useRef(new Map());
   const accepted = useRef(location.hash);
+  const readRecords = inferenceDemo ? () => demoInfrastructure ?? readInferenceDemoInfrastructure() : readInfrastructure;
   let infrastructure;
-  try { infrastructure = inferenceDemo ? readInferenceDemoInfrastructure() : readInfrastructure(); }
+  try { infrastructure = readRecords(); }
   catch { infrastructure = {}; }
 
   useEffect(() => {
@@ -1408,13 +1677,15 @@ export default function ModelDeployments({ state, dispatch, conflict, onNavigate
     else navigate();
   };
 
-  const can = !inferenceDemo && !conflict && !state.storageError && canMutate(state.currentRole, { type: 'deploymentOperation' });
+  const canEdit = !inferenceDemo || interactiveDemo;
+  const can = canEdit && Boolean(dispatch) && !conflict && !state.storageError &&
+    canMutate(state.currentRole, { type: 'deploymentOperation' });
   const run = async (operation, data = {}, deploymentId, quiet = false, reportError) => {
     if (pending.current) return null;
     pending.current = true;
     setBusy(true);
     try {
-      const next = await saveDeploymentOperation(state,dispatch,can,operation,data,deploymentId,quiet);
+      const next = await saveDeploymentOperation(state,dispatch,can,operation,data,deploymentId,quiet,readRecords);
       setError('');
       return next;
     } catch (issue) {
@@ -1505,10 +1776,10 @@ export default function ModelDeployments({ state, dispatch, conflict, onNavigate
     content = <DeploymentPlayground state={state} deploymentId={params.get('deployment')} routeId={params.get('playgroundRoute')}
       refreshRead={refreshRead} onRoute={value=>go({playgroundRoute:value},false,true)}
       onBack={()=>go({view:null,deployment:selected?.id || null,tab:selected ? params.get('tab') : null})}/>;
-  } else if (!inferenceDemo && (view === 'create' || (view === 'edit' && selected))) {
+  } else if (canEdit && (view === 'create' || (view === 'edit' && selected))) {
     const selection = { page:'ops-model-library', id:params.get('catalogModel'), spec:params.get('catalogSpec'),
       repositorySource:params.get('repositorySource'), repository:params.get('repository') };
-    const returnCatalogue = view==='create' && params.has('catalogModel') && params.get('from')==='catalog' ? () => {
+    const returnCatalogue = view==='create' && params.get('from')==='catalog' ? () => {
       const query = new URLSearchParams(params.get('catalogQuery') || '');
       const navigate = () => {
         dirty.current=false;
@@ -1521,10 +1792,11 @@ export default function ModelDeployments({ state, dispatch, conflict, onNavigate
       {selected ? <DeploymentDetail key={selected.id} item={selected} state={state} can={can} go={go} ask={ask} tab={tab} tools={tools} infrastructure={infrastructure}/>
         : <DeploymentList state={state} params={params} can={can} go={go} ask={ask} tools={tools} infrastructure={infrastructure}/>}
       <DeploymentEditor key={[view,selected?.id,clone?.id,selection.id,selection.spec,selection.repositorySource,params.get('source')].join(':')} state={state}
-        existing={view === 'edit' ? selected : null} clone={clone} source={params.get('source')} infrastructure={infrastructure}
+        existing={view === 'edit' ? selected : null} clone={clone} source={params.get('source')} infrastructure={infrastructure} readRecords={readRecords}
         can={can} run={run} dirty={dirty} selection={selection} busy={busy} confirmingClose={Boolean(leave)}
-        onClose={returnCatalogue || (()=>go({view:null,deployment:view==='edit' ? selected.id : null}))}
-        onSaved={id=>go({view:null,deployment:id,tab:'overview'},true)}/>
+        onClose={returnCatalogue || (()=>go({view:null,deployment:view==='edit' ? selected.id : null},false,true))}
+        onSaved={id=>view==='edit' ? go({view:null,deployment:id,tab:'overview'},true) :
+          go({view:null,deployment:null,tab:null,expanded:id,page:null,q:null,cluster:null,category:null,status:null},true)}/>
     </>;
   } else if (params.has('deployment') && !selected) {
     content = <Banner type="warning" closeIcon={null} title="部署不存在" description={
@@ -1554,7 +1826,7 @@ export default function ModelDeployments({ state, dispatch, conflict, onNavigate
     {!confirm && <ErrorNote message={error}/>}
     {importOpen && <DeploymentImportDialog state={state} infrastructure={infrastructure} busy={busy} close={()=>{setImportOpen(false);setError('');}}
       validate={(items,overwrite)=>{
-        const placements = readInfrastructure();
+        const placements = readRecords();
         items.forEach(item=>{
           validatePlacement(item,placements);
           validateRuntime(item,placements);
@@ -1584,6 +1856,8 @@ export default function ModelDeployments({ state, dispatch, conflict, onNavigate
       <div className="admin-analytics-fields">
         <Text strong>{confirm.rows ? `已选 ${confirm.rows.length} ${confirm.operation === 'restartInstance' ? '个实例' : '条部署'}` : confirm.instanceName || current?.name || '部署状态已变化'}</Text>
         <Paragraph>{confirmDetails[confirm.operation]}</Paragraph>
+        {confirm.operation==='start' && (current ? [current] : confirm.rows || []).some(row=>row.replicas===0 && !row.scalingSchedule?.enabled) &&
+          <Paragraph>未启用定时伸缩的 0 副本部署将按 1 个副本启动。</Paragraph>}
         {confirm.operation==='stop' && (current?.scalingSchedule?.enabled || confirm.rows?.some(row=>row.scalingSchedule?.enabled)) &&
           <Paragraph type="secondary">停止部署时会暂停已启用的定时伸缩。再次启动后按当前计划恢复。</Paragraph>}
         {confirm.operation==='start' && (current?.scalingSchedule?.paused || confirm.rows?.some(row=>row.scalingSchedule?.paused)) &&

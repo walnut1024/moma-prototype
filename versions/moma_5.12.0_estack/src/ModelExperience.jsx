@@ -69,10 +69,10 @@ export default function ModelExperience({
   kind = "text",
   groupLabel,
   onKindChange,
-  onCompare, initialServiceId = "", owner = "", project,
+  onCompare, initialServiceId = "", owner = "", project, internalProjectServices,
 }) {
   const mode = "语音识别";
-  const directory = useServiceDirectory(kind,project), models = directory.models;
+  const directory = useServiceDirectory(kind,project,internalProjectServices), models = directory.models;
   const {settings,error:settingsError}=useExperienceSettings(kind);
   const voiceCatalog=settings?.voices || [],videoProfile=settings?.video || emptyVideoProfile;
   const [draft] = useState(() => { try { return readExperienceDraft(owner, kind); } catch { return { storageError: '草稿读取失败，请核对本地存储' }; } });

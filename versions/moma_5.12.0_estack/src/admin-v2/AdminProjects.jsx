@@ -4,6 +4,7 @@ import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { FilterToolbar, normalizePageSize, PAGE_SIZES } from '../components/FilterControls';
 import { ProjectFields } from '../components/ProjectConfiguration';
 import { activeProjectMembers } from '../project-access.mjs';
+import { internalSpace } from '../operating-space.mjs';
 import { customerProject } from '../personal-project.mjs';
 import { activeCustomer } from '../service-access.mjs';
 import { useTenantData } from '../useTenantData';
@@ -15,7 +16,7 @@ import CustomerProjectDetails, { AdminProjectTable } from './CustomerProjectDeta
 import { EnterpriseDialog } from './EnterpriseUI';
 import { Choice } from './ServiceUI';
 
-function CreateProject({ tenants, state, initialTenant, internal, close, onCreated }) {
+function CreateProject({ tenants, state, initialTenant, close, onCreated }) {
   const t = useChannelText();
   const formId = useId();
   const [tenantId, setTenantId] = useState(initialTenant || '');
@@ -49,10 +50,9 @@ function CreateProject({ tenants, state, initialTenant, internal, close, onCreat
     <Button form={formId} htmlType="submit" theme="solid" loading={busy} disabled={!selected}>{t('创建')}</Button>
   </>}>
     <form id={formId} className="project-form" onSubmit={submit}>
-      {internal ? <Typography.Text>{selectedTenant?.name}</Typography.Text>
-        : <Choice label="所属租户" placeholder={t('请选择企业租户')} disabled={busy} filter
-          value={tenantId || undefined} options={tenants.map(row=>[row.id,row.name + ' · ' + row.id])}
-          onChange={id=>{setTenantId(id);setAdmin(null);setError('');}}/>}
+      <Choice label="所属租户" placeholder={t('请选择企业租户')} disabled={busy} filter
+        value={tenantId || undefined} options={tenants.map(row=>[row.id,row.name + ' · ' + row.id])}
+        onChange={id=>{setTenantId(id);setAdmin(null);setError('');}}/>
       {ready ? <>
         {members.length ? <Choice label="项目管理员" placeholder={t('请选择首位项目管理员')} disabled={busy} filter
           options={members.map(row=>[row.id,[row.name,row.account].filter(Boolean).join(' · ')])}
@@ -80,8 +80,10 @@ export default function AdminProjects({ state, params, internal, reload, conflic
   const tenants = state.tenants.filter(isManagedCustomerAccount);
   const byTenant = new Map(tenants.map(row=>[row.id,row]));
   const tenant = byTenant.get(tenantId);
-  const canWrite = state.currentRole==='平台管理员' && !state.commerceReadOnly && !state.storageError && !conflict;
-  const creatable = tenants.filter(row=>['企业','政府'].includes(row.type) && activeCustomer(row));
+  const canWrite = !internal && !internalSpace(state.spacePolicy,tenant) && state.currentRole==='平台管理员' &&
+    !state.commerceReadOnly && !state.storageError && !conflict;
+  const creatable = tenants.filter(row=>['企业','政府'].includes(row.type) && activeCustomer(row) && !internalSpace(state.spacePolicy,row));
+  const canCreate = canWrite && (tenant ? creatable.some(row=>row.id===tenant.id) : creatable.length>0);
   const visible = state.projects.flatMap(row=>{
     if (!byTenant.has(row.tenantId) || tenantId && row.tenantId!==tenantId) return [];
     try { return customerProject(state,row) || []; }
@@ -118,7 +120,7 @@ export default function AdminProjects({ state, params, internal, reload, conflic
   }
   return <div className="admin-page-stack">
     <AdminPageHeading title={t('项目管理')}>
-      {canWrite && creatable.length>0 && (!tenant || creatable.some(row=>row.id===tenant.id)) &&
+      {canCreate &&
         <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={()=>setCreating(true)}>{t('新建项目')}</Button>}
     </AdminPageHeading>
     <Card><div className="admin-analytics-fields">
@@ -135,10 +137,10 @@ export default function AdminProjects({ state, params, internal, reload, conflic
         pagination={{currentPage:page,pageSize:size,total:listed.length,pageSizeOpts:PAGE_SIZES,showTotal:true,showSizeChanger:true,
           onPageChange:page=>update({page},true),onPageSizeChange:size=>update({size,page:''},true)}}/>
     </div></Card>
-    {creating && canWrite && <CreateProject state={state} tenants={creatable} initialTenant={tenantId} internal={internal}
+    {creating && canCreate && <CreateProject state={state} tenants={creatable} initialTenant={tenantId}
       close={()=>setCreating(false)} onCreated={createdTenant=>{
         setCreating(false);
-        update({q:'',page:'',tenant:tenantId && !internal ? createdTenant : ''},true);
+        update({q:'',page:'',tenant:tenantId ? createdTenant : ''},true);
         Toast.success(t('项目已创建'));
         void reload();
       }}/>}

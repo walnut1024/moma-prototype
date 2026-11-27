@@ -2,9 +2,31 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { clusterLabels, finishClusterRegistration, nodeSelectorIssues, validateClusterYaml } from '../src/admin-v2/ops-cluster-domain.js';
 import { deploymentInstances } from '../src/admin-v2/deployments.js';
-import { defaultTopologyLayers, deviceDeployments, gpuMemoryUtilization, groupResourceModels, hostMemoryUsed, labelMap, labelPairIssues,
+import { defaultTopologyLayers, deviceDeployments, dockerWorkerRegistrationArgs, dockerWorkerRegistrationDefaults, gpuMemoryUtilization, groupResourceModels, hostMemoryUsed, labelMap, labelPairIssues,
   resourceLoad, resourceMetricHistory, resourceObservations, RESOURCE_PAGES, resourceScopeFromParams, resourceTimeRangeIssue, topologyLocation,
   validateTopologyLayers, workerDeployments, workerGpuInventory, workerLabelOptions, workerLabelsMatch } from '../src/admin-v2/ops-resources.js';
+
+test('Docker node registration auto-detects addresses and validates only enabled overrides', () => {
+  const { values, overrides } = dockerWorkerRegistrationDefaults;
+  const defaults = dockerWorkerRegistrationArgs(values, overrides, ['NVIDIA']);
+  assert.deepEqual(defaults.active, { dataVolume: 'gpustack-data', containerName: 'gpustack-worker' });
+  assert.ok(Object.values(defaults.errors).every(issue => !issue));
+
+  const configured = dockerWorkerRegistrationArgs({
+    ...values, ip: ' 192.0.2.24 ', externalIp: 'invalid', modelPath: '/models,/mnt/models', kvTransferNic: 'invalid nic',
+  }, { ip: true, modelPath: true, kvTransferNic: true }, ['Ascend']);
+  assert.deepEqual(configured.active, { ip: '192.0.2.24', modelPath: '/models,/mnt/models' });
+  assert.deepEqual(configured.modelPaths, ['/models', '/mnt/models']);
+  assert.ok(Object.values(configured.errors).every(issue => !issue));
+
+  const { errors } = dockerWorkerRegistrationArgs({
+    ...values, externalIp: 'invalid', modelPath: '/models,/mnt/../models', kvTransferNic: 'invalid nic',
+  }, { ip: true, externalIp: true, modelPath: true, kvTransferNic: true }, ['NVIDIA']);
+  assert.match(errors.ip, /IPv4/);
+  assert.match(errors.externalIp, /IPv4/);
+  assert.match(errors.modelPath, /绝对模型路径/);
+  assert.match(errors.kvTransferNic, /网卡/);
+});
 
 test('node and GPU assignments protect a selected node and resolve its actual deployments', () => {
   const node = { id: 'different-node', clusterId: 'cluster-1' };
@@ -118,6 +140,19 @@ test('GPU utilization preserves a zero observation and falls back only when usag
   assert.equal(gpuMemoryUtilization({ vram: 80, vramUsed: 0, vramAllocated: 50 }), 0);
   assert.equal(gpuMemoryUtilization({ vram: 80, vramUsed: null, vramAllocated: 40 }), 50);
   assert.equal(gpuMemoryUtilization({ vram: 80, vramUsed: null }), null);
+});
+
+test('GPU search finds the displayed worker name and limits that name to the device cluster', () => {
+  const gpu = { id: 'mock-gpu-id', name: 'NVIDIA H20', index: 0, nodeId: 'worker-id', clusterId: 'main' };
+  const records = { 'ops-nodes': [
+    { id: 'worker-id', name: 'Other region node', clusterId: 'other' },
+    { id: 'worker-id', name: 'East Inference Node', clusterId: gpu.clusterId },
+  ] };
+  const { searchMatches } = RESOURCE_PAGES['ops-gpus'];
+  for (const query of ['h20', '0', 'worker-id', 'mock-gpu-id', 'east inference']) {
+    assert.equal(searchMatches(gpu, query, records), true, query);
+  }
+  assert.equal(searchMatches(gpu, 'other region', records), false);
 });
 
 test('resource aggregates only count measured signals and distinguish zero usage from allocation', () => {

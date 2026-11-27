@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Checkbox, Input, Modal, Select, Table, TextArea } from '@douyinfe/semi-ui';
-import { PROJECT_ADMIN, PROJECT_MEMBER, projectRoleLabel } from '../project-access.mjs';
+import { PROJECT_ADMIN, PROJECT_MEMBER, projectRoleLabel, projectServiceEnabled } from '../project-access.mjs';
 import { departmentPath } from '../organization-data.mjs';
 import { millionTokens, PROJECT_BUDGET_PERIODS } from '../project-token-budget.mjs';
 
@@ -132,7 +132,8 @@ export function ProjectModels({ tenant, project, onExperience, dirtyRef }) {
   }
   const saved = personal ? [...new Set([...available.keys(), ...(project.modelPermissions || []).map(row => row.modelId)])]
     .map(modelId => project.modelPermissions?.find(row => row.modelId === modelId) || {modelId,rpm:null,tpm:null})
-    : project.modelPermissions ?? [...available.keys()].map(modelId => ({ modelId, rpm:null, tpm:null }));
+    : project.modelPermissions ?? [...available.values()].filter(service => projectServiceEnabled(project,service))
+      .map(({modelKey:modelId}) => ({ modelId, rpm:null, tpm:null }));
   const [draft, setDraft] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -183,7 +184,8 @@ export function ProjectModels({ tenant, project, onExperience, dirtyRef }) {
               disabled={saving} value={permission[key] ?? ''} onChange={value => update(id,{...permission,[key]:value})} />
           : permission?.[key] ?? (permission ? '不限' : '—'),
     })),
-    { title:'操作', render:(_, {id,service}) => onExperience && project.status === '正常' && service?.callable && saved.some(item => item.modelId === id)
+    { title:'操作', render:(_, {id,service}) => onExperience && project.status === '正常' && service?.callable &&
+      (!(service.internal && service.independentService) || service.tasks?.length) && saved.some(item => item.modelId === id)
       ? <Button theme="borderless" onClick={() => onExperience(service)}>在线体验</Button> : '—' },
   ];
   return <form className="project-panel" aria-label="模型权限" onSubmit={submit}>

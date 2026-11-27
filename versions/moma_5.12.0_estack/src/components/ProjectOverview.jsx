@@ -4,7 +4,7 @@ import { TimeSeriesChart } from './AnalyticsCharts';
 import { shanghaiDate } from '../call-log-data.mjs';
 import { bucketLabel } from '../usage-data.mjs';
 import { tenantUsageReport, usageMoney, usageRanking, usageSuccessRate, UNASSIGNED, USAGE_OVERVIEW } from '../tenant-usage-report.mjs';
-import { experienceKeyId, projectModelEnabled } from '../project-access.mjs';
+import { experienceKeyId, projectServiceEnabled } from '../project-access.mjs';
 import ProjectBudgetNotice from './ProjectBudgetNotice';
 import { projectMoney, projectTime } from './ProjectConfiguration';
 
@@ -48,7 +48,7 @@ export default function ProjectOverview({ tenant, project, department, openTab, 
   const routes = tenant.projectRouting?.routes.filter(row => row.projectId === project.id) || [];
   const keys = tenant.keys.filter(row => row.projectId === project.id);
   const experience = tenant.logKeys.find(row => row.id === experienceKeyId(project.id));
-  const enabled = new Set(tenant.projectServices.filter(row => projectModelEnabled(project, row.modelKey)).map(row => row.modelKey));
+  const enabled = new Set(tenant.projectServices.filter(row => projectServiceEnabled(project,row)).map(row => row.modelKey));
   const recent = tenant.requests.filter(row => row.projectId === project.id).toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const links = [
     ['预算', project.canManage && budget ? `${projectMoney(spend?.spent / 1_000_000)} / ${projectMoney(budget.amountMicros / 1_000_000)}` : project.canManage ? '不限' : '—', () => openTab('settings')],

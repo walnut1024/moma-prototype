@@ -27,6 +27,7 @@ import { readProjectSpacePolicy } from './project-space-policy.js';
 import { trafficAdmission } from './traffic-calls.js';
 import { normalizeMemberPhone } from '../src/organization-data.mjs';
 import { allowsSpace, internalSpace } from '../src/operating-space.mjs';
+import { invalidateInferenceConnections } from '../src/admin-v2/inference-connection-targets.js';
 
 const collections = [
   'tenants', 'users', 'memberships', 'organizations', 'projects', 'apiKeys', 'grants',
@@ -34,7 +35,7 @@ const collections = [
   'routes', 'limits', 'fallbacks', 'releases', 'caches', 'requests', 'alerts', 'incidents', 'integrations',
   'clusters', 'artifacts', 'deployments', 'admins', 'tenantRoutes', 'projectRoutes', 'identityEvents', 'customerApplications', 'audits',
 ];
-const directCollections = new Set(['products','prices','orders','bills','settlements','adjustments','announcements','routes','limits','fallbacks','releases','caches','alerts','incidents','integrations','clusters']);
+const directCollections = new Set(['products','prices','orders','bills','settlements','adjustments','routes','limits','fallbacks','releases','caches','alerts','incidents','integrations','clusters']);
 const usageFields = usage => usage ? {input:usage.input_tokens,output:usage.output_tokens,cached:usage.cached_tokens,seconds:usage.seconds,characters:usage.characters,images:usage.images} : null;
 const week = 7 * 86400000;
 const encoder = new TextEncoder();
@@ -213,7 +214,7 @@ export async function applicationBootstrap(db, actor, configured = []) {
   const requests=mergeProjectFacts(projectFacts, [...facts.requests, ...state.requests])
     .map(({requestBody:_request,responseBody:_response,requestHash:_hash,rejection:_rejection,...fact}) => withRequestScope(state,fact));
   if(maintenance)return maintenanceView(state,row.model_revision,requests,events);
-  const { cloudMockState: _snapshot, projectRoutes: _projectRoutes, ...view } = state;
+  const { cloudMockState: _snapshot, projectRoutes: _projectRoutes, announcements: _announcements, ...view } = state;
   if (actor.role === '平台管理员') {
     const savedPolicy = state.globalRoutingParameters;
     view.globalRoutingParameters = globalRoutingValues({
@@ -281,7 +282,7 @@ function allowedKeyIp(key, address) {
   });
 }
 
-export async function customerInvocation(db,credentialDigest,body,clientIp,privateSite) {
+export async function customerInvocation(db,credentialDigest,body,clientIp,privateSite,license) {
   const { row,state,reference }=await applicationState(db,{id:'customer-api',role:'客户'});
   const keys=state.apiKeys.filter(item=>item.credentialDigest===credentialDigest && item.kind!=='experience');
   const key=keys.length===1 ? keys[0] : null;
@@ -289,7 +290,9 @@ export async function customerInvocation(db,credentialDigest,body,clientIp,priva
   if (key.expiresAt && !(Date.parse(key.expiresAt)>Date.now())) issue(401,'key_expired',projectCallErrors.key_expired[1]);
   if (!allowedKeyIp(key,clientIp)) issue(403,'ip_not_allowed','当前来源不在 API Key 的 IP 白名单内');
   const tenant=state.tenants.find(item=>item.id===key.tenantId);
-  const policy=privateSite ? await readProjectSpacePolicy(db) : null, internal=internalSpace(policy,tenant);
+  const savedPolicy=privateSite || license?.managed ? await readProjectSpacePolicy(db) : null;
+  const policy=license?.managed ? { ...savedPolicy, operatingMode:license.commercial ? 'factory' : 'internal' } : savedPolicy;
+  const internal=internalSpace(policy,tenant);
   if (!activeCustomer(tenant) || !allowsSpace(policy,tenant)) {
     issue(403,'customer_unavailable','当前客户空间不可用');
   }
@@ -411,7 +414,7 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
   let next, cancellation, invocationFact, projectAudit, initialCredential;
   const savedPolicy=await readProjectSpacePolicy(db);
   const policy=license?.managed ? { ...savedPolicy, operatingMode:license.commercial ? 'factory' : 'internal' } : savedPolicy;
-  const commerceCollections = ['products','orders','bills','ledger','settlements','adjustments','announcements'];
+  const commerceCollections = ['products','orders','bills','ledger','settlements','adjustments'];
   const changes = Array.isArray(action.changes) ? action.changes : [action];
   if (license && !license.commerceWritable && (['activateOrder','cancelMarketOrder','generateBills','adjustment','individual'].includes(action.type) ||
       (license.commercial && action.type === 'enterprise') ||
@@ -504,7 +507,7 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
         if (action.operation==='quota' && (!license?.commerceWritable || internalSpace(policy,tenant))) {
           issue(403,'LICENSE_REQUIRED','预付费配额仅开放给商业租户');
         }
-        const result=tenantServiceTransaction(state,action);
+        const result=tenantServiceTransaction({...state,spacePolicy:policy},action);
         command={type:'batch',objectId:action.tenantId,...result};
       } else {
         command = adminAction(state, actor, action);
@@ -512,6 +515,10 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
       if (policy.operatingMode==='internal' && (action.type==='individual' || action.type==='enterprise' &&
           (action.operation==='create' || action.tenantId!==policy.internalTenantId))) {
         issue(403,'INTERNAL_SPACE','企业内用站点仅管理本企业');
+      }
+      if (action.type==='enterprise' && action.operation==='toggle-key' &&
+          internalSpace(policy,state.tenants.find(tenant=>tenant.id===action.tenantId))) {
+        issue(403,'FORBIDDEN','企业内用项目请在用户控制台管理');
       }
       const openingPersonal=action.type==='individual' && action.operation==='create';
       const openingEnterprise=action.type==='enterprise' && ['create','add-admin'].includes(action.operation);
@@ -577,8 +584,11 @@ export async function applicationCommand(db, actor, body, key, configuredAdmins,
         account.account || null,withSecret?action.loginDigest:null));
     if(action.operation==='resetPassword')statements.push(db.prepare('UPDATE admin_sessions SET revoked_at=? WHERE actor_id=? AND id<>? AND revoked_at IS NULL').bind(Date.now(),action.id,actor.session_id));
   }
-  if (action.type === 'deploymentOperation' && JSON.stringify(state.endpoints) !== JSON.stringify(next.endpoints)) {
-    statements.push(...modelChanges(db, { ...state, revision: row.model_revision }, { ...next, revision: row.model_revision+1 }));
+  if (action.type === 'deploymentOperation') {
+    next.endpoints = invalidateInferenceConnections(state, next);
+    if (JSON.stringify(state.endpoints) !== JSON.stringify(next.endpoints)) {
+      statements.push(...modelChanges(db, { ...state, revision: row.model_revision }, { ...next, revision: row.model_revision+1 }));
+    }
   }
   const { action: label, objectId, result, createdAt } = audit;
   return save(db, actor, state, key, operationId, digest, 'application.'+action.type,

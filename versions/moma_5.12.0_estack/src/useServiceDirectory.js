@@ -2,15 +2,20 @@ import { resourceId } from './resource-id.mjs';
 import { useEffect, useState } from 'react';
 import { MARKET_EVENT, marketRequest, useCloudMarket } from './CloudMarket';
 
-import { projectModelEnabled } from './project-access.mjs';
+import { projectServiceEnabled } from './project-access.mjs';
 
-export function useServiceDirectory(task, project) {
+export function useServiceDirectory(task, project, internalProjectServices = []) {
   const market=useCloudMarket();
+  const internal = market.tenant?.internal === true;
+  const services = internal ? [
+    ...market.services.filter(model => !model.independentService),
+    ...internalProjectServices.filter(model => model.internal && model.independentService),
+  ] : market.services;
   return {
-    models:market.services.filter(model=>!task || model.tasks.includes(task)).map(model=>project && !projectModelEnabled(project,model.serviceModelId)
+    models:services.filter(model=>!task || model.tasks.includes(task)).map(model=>project && !projectServiceEnabled(project,model)
       ? { ...model, callable:false, reason:'该模型未在当前项目开通' } : model),
     projectId:project?.id,
-    tenantId:market.tenant?.id, internal:market.tenant?.internal === true,
+    tenantId:market.tenant?.id, internal,
     identityError:!market.loading && !market.tenant ? '请先登录客户账号' : '',
     error:market.error,
   };
@@ -33,7 +38,7 @@ export function useExperienceSettings(task) {
 export function beginExperience(directory, id, task, { images=false }={}) {
   if (!directory.tenantId) throw Error('请先登录客户账号');
   const model=directory.models.find(row=>row.id===id);
-  if (!model?.callable) throw Error(model?.reason || '请先订购此模型服务');
+  if (!model?.callable) throw Error(model?.reason || (directory.internal ? '请联系项目管理员确认模型权限。' : '请先订购此模型服务'));
   if (!model.tasks.includes(task) || (images && !model.inputModalities.includes('image'))) throw Error('所选模型不支持当前任务');
   return { tenantId:directory.tenantId, projectId:directory.projectId, serviceId:id, callId:model.callId, requestId:resourceId('request'), modelName:model.name, task, images };
 }

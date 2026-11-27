@@ -11,8 +11,8 @@
 .infra-page .infra-toolbar-actions { margin-inline-start: auto; }
 .infra-page .infra-catalogue-card { position: relative; }
 .infra-catalogue-card .semi-card-body { display: grid; min-height: 112px; align-content: start; gap: 10px; }
-.infra-catalogue-card .infra-catalogue-select { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 1; }
-.infra-catalogue-card .infra-catalogue-select:is(:hover, :active) { background: transparent; }
+.infra-catalogue-card .infra-catalogue-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.infra-catalogue-heading > .semi-button { flex-shrink: 0; }
 .infra-catalogue-card:has(:focus-visible), .infra-catalogue-card:hover { border-color: var(--semi-color-primary); }
 .infra-catalogue-card .infra-catalogue-icon { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; }
 .infra-catalogue-card .infra-catalogue-icon img { object-fit: contain; }

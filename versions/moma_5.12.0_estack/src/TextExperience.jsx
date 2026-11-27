@@ -66,11 +66,12 @@ function ModelPicker({ value, onChange, models, disabled }) {
 }
 
 export default function TextExperience({ onCompare, title = "文本生成", imageUploadEnabled = false, initialServiceId = "", owner = "", project,
-  tenantRoutes = [], onReturnToRouting }) {
-  const directory = useServiceDirectory('text',project);
+  tenantRoutes = [], internalProjectServices, onReturnToRouting }) {
+  const directory = useServiceDirectory('text',project,internalProjectServices);
+  const routeCandidates = directory.internal ? directory.models.filter(model => !model.independentService) : directory.models;
   const routeModels = tenantRoutes.filter(route => isTenantRouteCall(route.callId)).map(route => {
     const config = activeTenantVersion(route)?.config;
-    const callable = Boolean(route.enabled && config && routeTargets(config,directory.models,route.callId).length);
+    const callable = Boolean(route.enabled && config && routeTargets(config,routeCandidates,route.callId).length);
     return { id:route.callId,callId:route.callId,name:tenantRouteLabel(route),provider:'智能路由',type:'text',billing:directory.internal ? '内部使用' : '按量计费',
       inputModalities:['text'],tasks:['text'],callable,reason:!route.enabled ? '当前路由未生效' : '当前项目暂无可调用的路由候选模型' };
   });

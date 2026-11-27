@@ -7,6 +7,8 @@ export const MAX_BENCHMARK_STAGES = 500;
 export const BENCHMARK_TARGETS = ['模型实例', '路由'];
 export const BENCHMARK_LOAD_TYPES = ['固定请求速率', '并发数'];
 export const BENCHMARK_LOAD_PATTERNS = ['单次', '手工分阶段', '自动调优'];
+export const BENCHMARK_SEED_MAX = 2147483647;
+const benchmarkNamePattern = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$/;
 const adaptiveBudget = { minLoad: 4, maxLoad: 8192, maxPoints: 18, maxTotalSeconds: 5400 };
 export const BENCHMARK_PROFILES = {
   '最大吞吐量': { ...adaptiveBudget, maxPoints: 15, maxTotalSeconds: 3600, dataset: 'Random', inputTokens: 1024, outputTokens: 128,
@@ -109,6 +111,7 @@ export function isBenchmarkTargetReady(row, records) {
 
 const profileNameSlugs = {'最大吞吐量':'max-throughput','满足延迟 SLO':'meet-latency-slo','自定义':'custom'};
 const benchmarkSlug = (value,max) => text(value).toLowerCase().replace(/[^a-z\d.]+/g,'-').replace(/^[-.]+|[-.]+$/g,'').slice(0,max);
+export const newBenchmarkSeed = () => crypto.getRandomValues(new Uint32Array(1))[0] % BENCHMARK_SEED_MAX + 1;
 const benchmarkName = (deployment,profile,now,random) => {
   const model = benchmarkSlug(deployment?.name,24) || benchmarkSlug(deployment?.deploymentId,24) || 'benchmark';
   const preset = profileNameSlugs[profile] || benchmarkSlug(profile,20) || 'custom';
@@ -138,7 +141,7 @@ export function initialBenchmarkDraft(records, row, preset, { clone = false, now
   const imported = preset instanceof URLSearchParams ? Object.fromEntries(preset.entries()) : preset || {};
   const base = row || imported;
   const clusters = (records.clusters || []).filter(cluster => cluster.status === '运行中');
-  const clusterId = base.clusterId || clusters.find(cluster => cluster.isDefault)?.id || (clusters.length === 1 ? clusters[0].id : '');
+  const clusterId = base.clusterId || clusters.find(cluster => cluster.isDefault)?.id || clusters[0]?.id || '';
   const mode = base.targetMode || '模型实例';
   const targets = benchmarkTargets(records, clusterId, mode);
   const exactSelection = Object.hasOwn(base, 'targetSelection');
@@ -208,8 +211,6 @@ function boundedPair(draft, from, to, label) {
 
 function budgetStop(draft) {
   return {
-    executionWarmup: numeric(draft.executionWarmup, '预热比例', { min: 0, max: 100, integer: false }),
-    executionCooldown: numeric(draft.executionCooldown, '冷却比例', { min: 0, max: 100, integer: false }),
     maxErrors: numeric(draft.maxErrors, '错误数上限', { min: 0 }),
     maxErrorPercent: numeric(draft.maxErrorPercent, '错误率上限', { min: 1, max: 99, integer: false }),
     stopOnSaturation: Boolean(draft.stopOnSaturation),
@@ -241,10 +242,10 @@ function loadConfig(draft) {
   const missingStop = stages.findIndex(stage => stage.requests == null && stage.duration == null);
   if (missingStop >= 0) throw Error(`第 ${missingStop + 1} 个阶段须填写最大请求数或最大耗时。`);
   if (draft.loadPattern === '自动调优') {
-    const minLoad = load(draft.minLoad, '负载下限'), maxLoad = load(draft.maxLoad, '负载上限');
+    const minLoad = numeric(draft.minLoad, '负载下限'), maxLoad = numeric(draft.maxLoad, '负载上限');
     if ((minLoad ?? adaptiveBudget.minLoad) >= (maxLoad ?? adaptiveBudget.maxLoad)) throw Error('负载下限必须小于负载上限。');
     return { minLoad, maxLoad, load: maxLoad || adaptiveBudget.maxLoad, stages,
-      maxPoints: numeric(draft.maxPoints, '最大测量点数', { max: MAX_BENCHMARK_STAGES }),
+      maxPoints: numeric(draft.maxPoints, '最大测量点数', { min: 2, max: MAX_BENCHMARK_STAGES }),
       maxTotalSeconds: numeric(draft.maxTotalSeconds, '最大总耗时'), requests: null, duration: null };
   }
   if (stages.length) return { load: stages.at(-1).load, stages, requests: stages.some(item => item.requests != null)
@@ -264,9 +265,9 @@ function datasetConfig(draft) {
   })) : [];
   return {
     dataset: draft.dataset, pinSeed: random && Boolean(draft.pinSeed),
-    randomSeed: random ? draft.pinSeed ? numeric(draft.randomSeed, '随机种子', { required: true, max: 2147483647 })
-      : crypto.getRandomValues(new Uint32Array(1))[0] % 2147483647 + 1 : null,
-    incrementSeed: random && Boolean(draft.incrementSeed),
+    randomSeed: random ? draft.pinSeed ? numeric(draft.randomSeed, '随机种子', { required: true, max: BENCHMARK_SEED_MAX })
+      : newBenchmarkSeed() : null,
+    incrementSeed: random && (!draft.pinSeed || Boolean(draft.incrementSeed)),
     inputTokens: random ? numeric(draft.inputTokens, '输入 Token 长度', { required: true }) : null,
     outputTokens: random || draft.shareGptFilter ? numeric(draft.outputTokens, '输出 Token 长度', { required: random }) : null,
     inputMin, inputMax, outputMin, outputMax,
@@ -317,44 +318,75 @@ export function benchmarkEnvironmentSnapshot(records, cluster, target, now) {
   };
 }
 
+function validateBenchmarkSection(section, validate) {
+  try { return validate(); }
+  catch (issue) { throw Object.assign(issue, { benchmarkSection: section }); }
+}
+
+export function benchmarkNameIssue(value, currentName) {
+  const name = text(value);
+  if (!name) return '请填写基准测试名称。';
+  if (name !== currentName && !benchmarkNamePattern.test(name)) {
+    return '基准测试名称最多 63 个字符，只能包含字母、数字、点、下划线和连字符，且首尾须为字母或数字。';
+  }
+  return '';
+}
+
 export function saveAlignedBenchmark(latest, records, draft, current, now = new Date()) {
   const previous = current && latest.find(row => row.id === current.id);
   if (current && (!previous || JSON.stringify(previous) !== JSON.stringify(current))) throw Error('基准测试已更新，请重新打开。');
   const name = text(draft.name);
-  if (!name) throw Error('请填写基准测试名称。');
+  validateBenchmarkSection('basic', () => {
+    const issue = benchmarkNameIssue(name, previous?.name);
+    if (issue) throw Error(issue);
+    if (latest.some(row => row.id !== previous?.id && row.name.toLowerCase() === name.toLowerCase())) {
+      throw Error(`已存在同名基准测试 ${name}。`);
+    }
+  });
   const identity = { name, description: text(draft.description), updatedAt: now.toISOString() };
-  if (latest.some(row => row.id !== previous?.id && row.name.toLowerCase() === name.toLowerCase())) throw Error(`已存在同名基准测试 ${name}。`);
   if (previous) return latest.map(row => row.id === previous.id ? { ...row, ...identity } : row);
 
-  if (!BENCHMARK_TARGETS.includes(draft.targetMode)) throw Error('请选择测试目标类型。');
-  const cluster = records.clusters?.find(row => row.id === draft.clusterId && row.status === '运行中');
-  if (!cluster) throw Error('请选择运行中的集群。');
-  const target = benchmarkTargets(records, cluster.id, draft.targetMode, draft.targetId)
-    .find(option => benchmarkTargetValue(option) === draft.targetSelection && (!draft.targetId || option.deployment.id === draft.targetId));
-  if (!target) throw Error(draft.targetMode === '路由' ? '请选择指向此集群就绪部署的可用路由。' : '请选择此集群中就绪的模型实例。');
-  if (!Object.hasOwn(BENCHMARK_PROFILES, draft.profile)) throw Error('请选择测试模式。');
-  if (!['Random', 'ShareGPT'].includes(draft.dataset)) throw Error('请选择数据集。');
-  if (!BENCHMARK_LOAD_TYPES.includes(draft.loadType) || !BENCHMARK_LOAD_PATTERNS.includes(draft.loadPattern)) throw Error('请选择负载类型和负载模式。');
-  if (draft.profile !== '自定义' && ['loadType','loadPattern'].some(key => draft[key] !== BENCHMARK_PROFILES[draft.profile][key])) {
-    throw Error('当前模式已固定负载类型和负载模式。需要修改时请选择自定义。');
-  }
-  const load = loadConfig(draft);
-  const dataset = datasetConfig(draft);
-  const sloTargets = draft.profile === '最大吞吐量' ? {} : Object.fromEntries(BENCHMARK_SLO.flatMap(([key,label]) => {
-    if (!set(draft.sloTargets?.[key])) return [];
-    return [[key, numeric(draft.sloTargets[key], label, { min: Number.EPSILON, integer: false })]];
-  }));
-  const stop = budgetStop(draft);
+  const { cluster, target, labels } = validateBenchmarkSection('basic', () => {
+    if (!BENCHMARK_TARGETS.includes(draft.targetMode)) throw Error('请选择测试目标类型。');
+    const cluster = records.clusters?.find(row => row.id === draft.clusterId && row.status === '运行中');
+    if (!cluster) throw Error('请选择运行中的集群。');
+    const target = benchmarkTargets(records, cluster.id, draft.targetMode, draft.targetId)
+      .find(option => benchmarkTargetValue(option) === draft.targetSelection && (!draft.targetId || option.deployment.id === draft.targetId));
+    if (!target) throw Error(draft.targetMode === '路由' ? '请选择指向此集群就绪部署的可用路由。' : '请选择此集群中就绪的模型实例。');
+    return { cluster, target, labels: readLabels(draft.labels) };
+  });
+  const dataset = validateBenchmarkSection('workload', () => {
+    if (!Object.hasOwn(BENCHMARK_PROFILES, draft.profile)) throw Error('请选择测试模式。');
+    if (!['Random', 'ShareGPT'].includes(draft.dataset)) throw Error('请选择数据集。');
+    return datasetConfig(draft);
+  });
+  const sloTargets = draft.profile === '最大吞吐量' ? {} : validateBenchmarkSection('slo', () =>
+    Object.fromEntries(BENCHMARK_SLO.flatMap(([key,label]) => {
+      if (!Object.hasOwn(draft.sloTargets || {}, key)) return [];
+      return [[key, numeric(draft.sloTargets[key], label, { min: 0, integer: false, required: true })]];
+    })));
+  const load = validateBenchmarkSection('load', () => {
+    if (!BENCHMARK_LOAD_TYPES.includes(draft.loadType) || !BENCHMARK_LOAD_PATTERNS.includes(draft.loadPattern)) throw Error('请选择负载类型和负载模式。');
+    if (draft.profile !== '自定义' && ['loadType','loadPattern'].some(key => draft[key] !== BENCHMARK_PROFILES[draft.profile][key])) {
+      throw Error('当前模式已固定负载类型和负载模式。需要修改时请选择自定义。');
+    }
+    return {
+      ...loadConfig(draft),
+      executionWarmup: numeric(draft.executionWarmup, '预热比例', { min: 0, max: 99, integer: false }),
+      executionCooldown: numeric(draft.executionCooldown, '冷却比例', { min: 0, max: 99, integer: false }),
+    };
+  });
+  const stop = validateBenchmarkSection('execution', () => budgetStop(draft));
   return [{
-    ...identity, labels: readLabels(draft.labels), ...load, ...dataset, ...stop,
+    ...identity, labels, ...load, ...dataset, ...stop,
     id: resourceId('benchmark'), createdAt: now.toISOString(), status: '排队中', operationStartedAt: now.getTime(),
     targetMode: draft.targetMode, targetSelection: target.value, targetId: target.deployment.id, targetName: target.label,
     routeId: target.route?.id, routeName: target.route?.name || target.route?.routeId,
     replica: target.instance?.ordinal, modelName: target.deployment.name, modelInstanceName: target.instance?.name,
     clusterId: cluster.id, profile: draft.profile, loadType: draft.loadType, loadPattern: draft.loadPattern,
     sloTargets, latencySlo: sloTargets.p95Ttft, tpotSlo: sloTargets.p95Tpot, totalLatencySlo: sloTargets.p95Latency,
-    warmup: stop.executionWarmup == null ? null : stop.executionWarmup / 100,
-    cooldown: stop.executionCooldown == null ? null : stop.executionCooldown / 100,
+    warmup: load.executionWarmup == null ? null : load.executionWarmup / 100,
+    cooldown: load.executionCooldown == null ? null : load.executionCooldown / 100,
     maxErrorRate: stop.maxErrorPercent == null ? null : stop.maxErrorPercent / 100,
     environment: benchmarkEnvironmentSnapshot(records, cluster, target, now),
     runEvents: [{ at: now.toISOString(), message: '基准测试已提交，等待模拟执行。' }],
@@ -364,9 +396,10 @@ export function saveAlignedBenchmark(latest, records, draft, current, now = new 
 export function cloneAlignedBenchmark(row, records) {
   const current = initialBenchmarkDraft(records, row, undefined, { clone: true });
   const names = new Set((records[BENCHMARK_PAGE_ID] || []).map(item => item.name.toLowerCase()));
-  const stem = `${row.name}-copy`;
-  let name = stem;
-  for (let index = 2; names.has(name.toLowerCase()); index += 1) name = `${stem}-${index}`;
+  const stem = benchmarkNamePattern.test(row.name) ? row.name : benchmarkSlug(row.name, 63) || 'benchmark';
+  const copyName = suffix => `${stem.slice(0, 63 - suffix.length)}${suffix}`;
+  let name = copyName('-copy');
+  for (let index = 2; names.has(name.toLowerCase()); index += 1) name = copyName(`-copy-${index}`);
   return { ...current, name, automaticName:name,randomSeed: row.pinSeed ? row.randomSeed : undefined };
 }
 
@@ -433,7 +466,7 @@ export const BENCHMARK_STOP_REASONS = {
 export function benchmarkStageInspection(row) {
   const targets = BENCHMARK_SLO.flatMap(([key, label]) => {
     const threshold = row.sloTargets?.[key];
-    return Number.isFinite(threshold) && threshold > 0 ? [{ key, label, threshold }] : [];
+    return Number.isFinite(threshold) && threshold >= 0 ? [{ key, label, threshold }] : [];
   });
   const byStage = (row.stageResults || []).map((point, index) => {
     const observed = { p95Ttft: point.ttft, p95Tpot: point.tpot, p95Latency: point.totalLatency, ...point.slo };

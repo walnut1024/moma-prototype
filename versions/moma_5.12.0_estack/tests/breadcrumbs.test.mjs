@@ -17,12 +17,12 @@ test('sidebar follows the operations and maintenance groups in order', () => {
     ['商业运营', '模型售卖', '套餐管理', '套餐数据', '协议管理'],
     ['流量运营', '限流配置'],
     ['访问控制', '租户管理', '项目管理'],
-    ['平台管理', '站点配置', '授权管理', '后台账号', '审计日志'],
+    ['平台管理', '站点配置', '公告管理', '授权管理', '后台账号', '审计日志'],
     ['研发须知', '平台术语', '需求文档'],
   ]);
   assert.deepEqual(menu('maintenance'), [
     ['运行分析', '模型性能', '调用日志'],
-    ['模型推理', '集群管理', '模型部署', '基准测试', '推理后端', 'KV缓存', '模型文件'],
+    ['模型推理', '集群管理', '模型库', '模型部署', '基准测试', '推理后端', 'KV缓存', '模型文件'],
     ['网关管理', '模型路由', '路由设置（全局）'],
   ]);
   assert.equal(pageWorkspace('license'), 'operations');
@@ -32,12 +32,15 @@ test('sidebar follows the operations and maintenance groups in order', () => {
   assert.equal(canAccessPage('运维人员', 'global-routing'), false);
 });
 
-test('platform account and audit entries use their existing administrator-only routes', () => {
+test('platform announcement, account and audit entries use their existing administrator-only routes', () => {
   const platform = adminSections.find(group => group.id === 'platform');
-  for (const [itemId, route, label] of [['accounts', 'admins', '后台账号'], ['audit-logs', 'audit-logs', '审计日志']]) {
+  for (const [itemId, route, label] of [
+    ['announcements', 'announcements', '公告管理'], ['accounts', 'admins', '后台账号'], ['audit-logs', 'audit-logs', '审计日志'],
+  ]) {
     assert.deepEqual(platform.items.find(item => item.id === itemId).children, [[route, label]]);
     assert.equal(pageFromHash('#/admin-2/' + route, '平台管理员'), route);
     assert.deepEqual(labels(build(route)), ['平台管理', label]);
+    assert.equal(commercialPage(route), false);
     for (const commercial of [true, false]) {
       assert.equal(canAccessPage('平台管理员', route, { commercial }), true);
       assert.equal(canAccessPage('运营人员', route, { commercial }), false);
@@ -189,7 +192,7 @@ test('model performance is the maintenance home', () => {
 
 test('cluster management is the first model inference entry and shares a navigation item across three tabs', () => {
   const group = sections.find(group => group.id === 'ops-model-service');
-  assert.ok(group.items.some(item => item.id === 'ops-model-library'));
+  assert.deepEqual(labels(build('ops-model-library')), ['模型推理', '模型库']);
   assert.deepEqual(group.items[0].children, [['clusters', '集群'], ['ops-nodes', '节点'], ['ops-gpus', 'GPU']]);
   for (const [id, label] of group.items[0].children) {
     const crumbs = build(id);

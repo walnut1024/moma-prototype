@@ -57,7 +57,8 @@ export function changeProject({ state, identity, link }, projectId, action, inpu
     const seen = new Set();
     if (!Array.isArray(input) || input.length > 500) throw Error('项目模型配置无效');
     changes.modelPermissions = input.map(({ modelId, rpm, tpm }) => {
-      const model = state.models.find(row => row.id === modelId);
+      const model = state.models.find(row => row.id === modelId) ||
+        services.find(row => row.modelKey === modelId && row.internal && row.independentService);
       const previous = project.modelPermissions?.find(row => row.modelId === modelId);
       if ((!allowed.has(modelId) && (!previous || previous.rpm !== rpm || previous.tpm !== tpm)) || seen.has(modelId)) throw Error('模型重复或当前空间无权开通该模型');
       if ([rpm, tpm].some(limit => limit !== null && (!Number.isSafeInteger(limit) || limit < 1))) throw Error('RPM 和 TPM 须为正整数');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  backendAvailableVersions, backendFrameworkIndex, backendSourceChanged, backendSourceConfiguration, backendSourceDraft, backendSourceHours, backendSourceSlots, backendSourceSnapshot,
+  backendAvailableVersions, backendEditableVersionName, backendFrameworkIndex, backendSourceChanged, backendSourceConfiguration, backendSourceDraft, backendSourceHours, backendSourceSlots, backendSourceSnapshot,
   backendVersionRuntime, backendVersions, backendYaml, backendYamlEditorDraft, backendYamlFieldHints, backendYamlIssueLocation, backendYamlTemplate, communityBackendCandidates,
   decodeBackendYaml, enableCommunityBackend, INFERENCE_BACKEND_PAGE, initialBackendDraft, replayBackendSource,
   saveBackendSourceConfiguration, saveInferenceBackend, updateBackendVersionDraft, validateBackendVersionEntries,
@@ -253,6 +253,29 @@ test('editing a version number only carries forward an explicitly selected defau
   assert.equal(backendYamlEditorDraft(backendYaml(saved, { forEditor: true }), saved).version, '');
   const selected = updateBackendVersionDraft({ ...first, version: 'v1' }, 0, { version: 'v2' });
   assert.equal(selected.version, 'v2');
+});
+
+test('community defaults distinguish a managed version from the custom version sharing its base name', () => {
+  const row = {
+    ...byName(seed, 'llama.cpp'),
+    version: 'cuda-custom',
+    versionEntries: [
+      { ...version('cuda'), sourceManaged: true },
+      { ...version('cuda-custom'), sourceManaged: false },
+    ],
+  };
+  const draft = initialBackendDraft(row);
+  assert.equal(draft.versionEntries[0].version, 'cuda');
+  assert.equal(backendEditableVersionName(draft.versionEntries[0].version, row.source), 'cuda-custom');
+  assert.equal(draft.version, 'cuda-custom');
+  assert.equal(saveInferenceBackend([row], {}, draft, { current: row })[0].version, 'cuda-custom');
+  const renamed = updateBackendVersionDraft(draft, 0, { version: 'cuda-lab' }, row.source);
+  assert.equal(renamed.version, 'cuda-lab-custom');
+  const selectManaged = { ...draft, version: 'cuda' };
+  const renamedWithManagedDefault = updateBackendVersionDraft(selectManaged, 0, { version: 'cuda-lab' }, row.source);
+  assert.equal(renamedWithManagedDefault.version, 'cuda');
+  assert.equal(saveInferenceBackend([row], {}, { ...selectManaged, ...renamedWithManagedDefault }, { current: row })[0].version, 'cuda');
+  assert.deepEqual(INFERENCE_BACKEND_PAGE.searchKeys, ['name']);
 });
 
 test('pinned runner variants report per-version frameworks without overwriting stored custom or legacy versions', () => {

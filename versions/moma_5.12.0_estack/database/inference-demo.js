@@ -1,20 +1,38 @@
 import { resourceId } from '../src/resource-id.mjs';
-import { createInferenceDemoFixtures, demoProviderId } from '../src/admin-v2/inference-demo-data.js';
+import { createInferenceDemoFixtures, demoConnectionDeploymentId, demoProviderId } from '../src/admin-v2/inference-demo-data.js';
+import { commitAdminState } from '../src/admin-v2/state-transaction.js';
 import { loadModelWorkspace, modelChanges } from '../server/model-repository.js';
 
 export async function initializeInferenceDemo(db, now = Date.now()) {
   const recorded = await db.prepare('SELECT reference_json, application_revision FROM model_workspace WHERE id=1').first();
   if (!recorded?.application_revision) throw Error('请先初始化本地演示工作区');
   const reference = JSON.parse(recorded.reference_json);
-  const before = await loadModelWorkspace(db, { id: 'admin-001', role: '平台管理员' }, { simulation: false });
+  const before = await loadModelWorkspace(db, { id: 'admin-001', role: '平台管理员' }, { command: true, simulation: false });
   if (before.providers.some(row => row.id === demoProviderId)) return;
   const fixtures = createInferenceDemoFixtures(before, reference.deployments, now, () => resourceId('model'));
-  const after = {
-    ...structuredClone(before),
+  const bge = fixtures.deployments.find(row => row.id === demoConnectionDeploymentId);
+  // Keep the deployment and its model file on the same BGE identity when exposing it for connection creation.
+  const modelData = {
+    ...before.modelData,
+    archivedCatalogueIds: before.modelData.archivedCatalogueIds.filter(id => id !== bge.modelId),
+  };
+  const after = commitAdminState({
+    ...before,
+    deployments: fixtures.deployments,
+    modelData,
     modelTemplates: fixtures.modelTemplates,
     endpoints: [...before.endpoints, ...fixtures.endpoints],
     providers: [...before.providers, ...fixtures.providers],
-  };
+  }, {
+    type: 'modelOperations',
+    operation: 'channelDirectoryCreateInference',
+    data: {
+      instanceId: `${bge.id}:1`,
+      name: 'BGE-M3 内置推理',
+      note: '南京推理集群的 BGE-M3 向量检索服务。',
+      creationId: crypto.randomUUID(),
+    },
+  });
   reference.deployments = fixtures.deployments;
   reference.routes.push(...fixtures.routes);
   await db.batch([

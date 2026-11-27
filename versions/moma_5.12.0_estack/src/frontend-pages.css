@@ -95,6 +95,14 @@
   --semi-color-primary-light-active: #d8e3ff;
   --semi-color-focus-border: var(--semi-color-primary);
 }
+.tenant-semi .tenant-announcement-title { display: inline-flex; align-items: center; gap: 9px; }
+.tenant-semi .tenant-announcement-title svg { color: var(--semi-color-primary); flex: none; }
+.tenant-semi .tenant-announcement-modal .semi-modal-body { max-height: 60dvh; overflow-y: auto; overscroll-behavior: contain; }
+.tenant-semi .tenant-announcement + .tenant-announcement { border-top: 1px solid var(--semi-color-border); margin-top: 16px; padding-top: 16px; }
+.tenant-semi .tenant-announcement h2 { margin: 0 0 8px; font-size: 17px; line-height: 1.4; overflow-wrap: anywhere; }
+.tenant-semi .tenant-announcement p { margin: 0; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tenant-semi .tenant-announcement + .semi-banner { margin-top: 12px; }
+.tenant-semi .tenant-announcement-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .tenant-semi > header:not(.tenant-banner) .version-switch .semi-select {
   min-width: 158px;
   background: #252525;

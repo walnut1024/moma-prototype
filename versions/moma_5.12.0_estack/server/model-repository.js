@@ -353,12 +353,15 @@ export const stoppedOfferSql = `COALESCE((SELECT NOT json_extract(n.record_json,
   FROM new_model_services n WHERE n.call_id=o.id
     AND json_extract(n.record_json,'$.controlledOfferId')=o.record_id
   ORDER BY (n.deleted_at IS NULL) DESC,n.deleted_at DESC LIMIT 1),0)`;
+export const independentModelServiceSql = `COALESCE(json_extract(n.record_json,'$.controlledOfferId'),'')=''
+  AND NOT EXISTS(SELECT 1 FROM offers o WHERE o.id=n.call_id OR o.record_id=n.id)`;
 
-async function workspacePayload(db,actor,command=false,simulation=true){
+async function workspacePayload(db,actor,command=false,simulation=true,inference=false){
   const fields=[`'supplyRelations',${supplyRelationsSql}`];
   fields.push(`'stoppedModelOfferIds',${arraySql(`SELECT json_quote(o.record_id) AS record_json FROM offers o WHERE o.retired_at IS NULL AND ${stoppedOfferSql}`)}`);
   fields.push(`'marketModelServices',${arraySql(`SELECT json_object('id',n.id,'name',json_extract(n.record_json,'$.name'),
     'callId',n.call_id,'type',json_extract(n.record_json,'$.type'),'listed',json_extract(n.record_json,'$.listed'),
+    ${command ? `'independentService',json(CASE WHEN ${independentModelServiceSql} THEN 'true' ELSE 'false' END),` : ''}
     'controlledOfferId',json_extract(n.record_json,'$.controlledOfferId'),
     'channelIds',json((SELECT json_group_array(json_extract(c.value,'$.channelId')) FROM json_each(n.record_json,'$.channels') c
       WHERE COALESCE(json_extract(c.value,'$.simulated'),0)=0)),
@@ -381,7 +384,7 @@ async function workspacePayload(db,actor,command=false,simulation=true){
   }
   for(const collection of ['modelSalePrices','supplyPrices'])fields.push(`'${collection}',${arraySql(`SELECT record_json FROM model_price_records WHERE record_collection='${collection}'`)}`);
   fields.push(`'tariffDictionary',${arraySql("SELECT record_json FROM billing_items WHERE deleted_at IS NULL UNION ALL SELECT record_json FROM billing_units WHERE deleted_at IS NULL UNION ALL SELECT record_json FROM currencies WHERE deleted_at IS NULL")}`);
-  fields.push(`'audits',${arraySql(`SELECT json_remove(record_json,'$.before','$.after','$.platformAudit') AS record_json FROM audit_events WHERE record_json!='{}' ORDER BY created_at DESC LIMIT ${command?1:200}`)}`);
+  fields.push(`'audits',${arraySql(`SELECT json_remove(record_json,'$.before','$.after','$.platformAudit') AS record_json FROM audit_events WHERE record_json!='{}' AND entity_type!='announcement' ORDER BY created_at DESC LIMIT ${command?1:200}`)}`);
   fields.push(`'admins',${arraySql("SELECT json_object('id',id,'loginCode',COALESCE(login_name,id),'name',name,'role',role,'status',CASE WHEN enabled THEN '已启用' ELSE '已停用' END) AS record_json FROM admin_accounts")}`);
   if(simulation){
     const snapshot=["'operations',json('{}')"];
@@ -392,13 +395,14 @@ async function workspacePayload(db,actor,command=false,simulation=true){
   fields.push("'cloudOperations',json('true'),'revision',w.revision,'commitSeq',(SELECT commit_seq FROM db_state WHERE id=1),'adminSession',json_object('accountId',?),'currentRole',?");
   const reference=`json_object('tenants',COALESCE(json_extract(w.reference_json,'$.tenants'),json('[]')),
     'settings',json_extract(w.reference_json,'$.settings'),'orders',json('[]'),'products',json('[]'),'requests',json('[]'),
-    'alerts',json('[]'),'deployments',json('[]'),'apiKeys',json('[]'),'users',json('[]'),'memberships',json('[]'),'projects',json('[]'),
+    'alerts',json('[]'),'deployments',${inference ? "COALESCE(json_extract(w.reference_json,'$.deployments'),json('[]'))" : "json('[]')"},
+    'apiKeys',json('[]'),'users',json('[]'),'memberships',json('[]'),'projects',json('[]'),
     'grants',${command?"COALESCE(json_extract(w.reference_json,'$.grants'),json('[]'))":"json('[]')"})`;
   const payload=await db.prepare(`SELECT json_patch(json_patch(${reference},w.meta_json),json_object(${fields.join(',')})) AS payload FROM model_workspace w WHERE id=1`).bind(actor.id,actor.role).first('payload');
   if(!payload)throw Error('模型运营工作区尚未初始化');return payload;
 }
-export const modelWorkspacePayload=(db,actor)=>workspacePayload(db,actor);
-export async function loadModelWorkspace(db,actor,{command=false,simulation=true}={}){return domainModelWorkspace(JSON.parse(await workspacePayload(db,actor,command,simulation)));}
+export const modelWorkspacePayload=(db,actor)=>workspacePayload(db,actor,false,true,true);
+export async function loadModelWorkspace(db,actor,{command=false,simulation=true,inference=false}={}){return domainModelWorkspace(JSON.parse(await workspacePayload(db,actor,command,simulation,inference)));}
 
 // Simulator calls need live resource availability, not the full model editing workspace.
 export async function loadSimulationWorkspace(db){
@@ -407,7 +411,7 @@ export async function loadSimulationWorkspace(db){
     db.prepare("SELECT json_object('id',id,'status',json_extract(record_json,'$.status'),'apiKeys',json_extract(record_json,'$.apiKeys'),'catalogModels',json_extract(record_json,'$.catalogModels'),'catalogConnections',json_extract(record_json,'$.catalogConnections')) AS record_json FROM suppliers WHERE deleted_at IS NULL"),
     db.prepare("SELECT json_object('id',id,'providerId',supplier_id,'status',json_extract(record_json,'$.status'),'deletedAt',json_extract(record_json,'$.deletedAt'),'frozen',json_extract(record_json,'$.frozen'),'apiKeys',json_extract(record_json,'$.apiKeys')) AS record_json FROM channels WHERE deleted_at IS NULL"),
     db.prepare("SELECT json_object('id',id,'type',json_extract(record_json,'$.type'),'platformPublications',json_extract(record_json,'$.platformPublications')) AS record_json FROM services WHERE deleted_at IS NULL"),
-    db.prepare("SELECT kind,id,payload_json FROM simulation_records WHERE kind NOT IN ('operations','site-agreements','project-usage','project-space-policy','site-portal')")]);
+    db.prepare("SELECT kind,id,payload_json FROM simulation_records WHERE kind NOT IN ('operations','site-agreements','project-usage','project-space-policy','site-portal','announcement-dismissal')")]);
   const snapshot=createMockEngine().snapshot();
   for(const kind of new Set(rows[5].results.map(r=>r.kind))){const records=rows[5].results.filter(r=>r.kind===kind);if(kind==='meta')Object.assign(snapshot,JSON.parse(records[0].payload_json));else snapshot[kind]=kind==='rateEvents'?Object.fromEntries(records.map(r=>[r.id,JSON.parse(r.payload_json)])):records.map(r=>JSON.parse(r.payload_json));}
   return {cloudOperations:true,revision:rows[0].results[0].revision,commitSeq:rows[1].results[0].commit_seq,providers:rows[2].results.map(r=>JSON.parse(r.record_json)),endpoints:rows[3].results.map(r=>JSON.parse(r.record_json)),models:rows[4].results.map(r=>JSON.parse(r.record_json)),modelTemplates:[],cloudMockState:snapshot};

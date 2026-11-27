@@ -3,18 +3,19 @@ import { AutoComplete, Banner, Button, Card, Cascader, Checkbox, Dropdown, Empty
 import { IconArrowDown, IconArrowUp, IconDelete, IconDownload, IconLayers, IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { DEFAULT_SCHEMA, dump, JSON_SCHEMA, load } from 'js-yaml';
 import AdminDescriptions from './AdminDescriptions';
+import AdminActionMenu from './AdminActionMenu';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import AdminStatus from './AdminStatus';
-import AdminTable from './AdminTable';
+import AdminTable, { AdminPagination } from './AdminTable';
 import { Choice, serviceOperationsUi } from './ServiceUI';
-import { benchmarkLog, cacheAttachedInstances, cacheConfigurationChanged, cacheCreateDefaults, cacheInstances, cacheL2Entries, cacheLogAvailable, cacheParameterGroups, cachePlacement, cachePlacementChanged, cacheServiceLogAvailable, catalogueCategories, modelFileCreation, modelFileNodeIssue, modelOperationDeadline, reconcileModelOperation, singleCacheFramework } from './ops-models';
+import { benchmarkLog, cacheAttachedInstances, cacheConfigurationChanged, cacheCreateDefaults, cacheInstances, cacheL2Entries, cacheLogAvailable, cacheParameterGroups, cachePlacement, cachePlacementChanged, cacheServiceLogAvailable, catalogueCategories, modelFileCreation, modelFileNodeIssue, modelFileOnNode, modelOperationDeadline, reconcileModelOperation, singleCacheFramework } from './ops-models';
 import { activeCacheProvider, cacheCatalogueChangeIssue, cacheFieldState, cacheL2Default, cacheL2Values, cacheProviderCatalogue, cacheProviderSourceDocument, configuredCacheProviders, normalizeCacheProviderDocument } from './cache-provider-fields';
 import { labelIssue, labelPairs } from './ops-resources';
 import { resourceId } from '../resource-id.mjs';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { INFERENCE_BACKEND_VIEW } from './InferenceBackendViews';
-import { modelHubCandidates } from './model-hub-candidates';
+import { modelHubCandidates, searchModelHubCandidates } from './model-hub-candidates';
 import { catalogueCategoryLabels, catalogueDocument, catalogueIconSource, readCatalogueDocument } from './model-catalogue';
 import { MODEL_SOURCE_SLOTS, readModelSourceSetting } from './infrastructure-source-settings';
 import { BENCHMARK_ALIGNMENT_VIEW, BenchmarkAdvancedFacts } from './BenchmarkAlignment';
@@ -404,36 +405,49 @@ function SourceDrawer({ pageId, page, commit, busy, onClose, t }) {
 function SourcesButton(props) {
   const [open, setOpen] = useState(false);
   if (props.records.actorRole !== '平台管理员') return null;
-  return <><Button onClick={() => setOpen(true)}>{props.pageId === cachePage ? '管理缓存提供方' : '管理来源'}</Button>
-    {open && <SourceDrawer {...props} onClose={() => setOpen(false)}/>}</>;
+  return <><Button disabled={!props.writable || props.busy}
+    onClick={() => setOpen(true)}>{props.pageId === cachePage ? '管理缓存提供方' : '管理来源'}</Button>
+    {open && props.writable && <SourceDrawer {...props} onClose={() => setOpen(false)}/>}</>;
 }
 
 function CatalogueHeader(props) {
   return <Space wrap>
     <SourcesButton {...props}/>
-    <Button theme="solid" icon={<IconSearch aria-hidden="true"/>}
+    <Button id="model-catalogue-browse" theme="solid" icon={<IconSearch aria-hidden="true"/>}
+      disabled={!props.writable || props.busy}
       onClick={() => {
-        const source = props.filtered[0]?.source;
-        props.navigate(`deployments?${new URLSearchParams({ view: 'create', source: source === 'ModelScope' ? source : 'Hugging Face', from: 'catalog' })}`);
+        const source = props.rows[0]?.source;
+        const catalogQuery = props.listQuery();
+        catalogQuery.set('catalogFocus', 'model-catalogue-browse');
+        props.navigate(`deployments?${new URLSearchParams({ view: 'create', source: sourceLabels.includes(source) ? source : 'Hugging Face', from: 'catalog', catalogQuery:catalogQuery.toString() })}`);
       }}>浏览更多模型</Button>
   </Space>;
 }
 
-function CatalogueCard({ row, navigate, t, listQuery }) {
+function CatalogueCard({ row, navigate, t, listQuery, writable, busy }) {
   const categories = row.categories?.map(key => catalogueCategoryLabels[key] || catalogueCategories[key] || key) || [row.category].filter(Boolean);
   const icon = catalogueIconSource(row.icon,import.meta.env.BASE_URL);
   const [failedIcon,setFailedIcon] = useState(null);
   const licences = row.license?.split('、') || [];
   const size = row.size > 0 ? `${row.size}${row.sizeUnit || 'B'}${row.activatedSize > 0 ? `-A${row.activatedSize}B` : ''}` : '';
+  const actionId = `model-catalogue-${row.id}`;
+  const deploy = () => {
+    const catalogQuery = listQuery();
+    catalogQuery.set('catalogFocus', actionId);
+    navigate(`deployments?${new URLSearchParams({ view: 'create', catalogModel: row.id, from: 'catalog', catalogQuery:catalogQuery.toString() })}`);
+  };
   return <Card className="infra-catalogue-card">
-    <Button className="infra-catalogue-select" theme="borderless" aria-label={`${t('部署模型')} ${row.name}`}
-      onClick={() => navigate(`deployments?${new URLSearchParams({ view: 'create', catalogModel: row.id, from: 'catalog', catalogQuery:listQuery().toString() })}`)}/>
-    <Space wrap>
-      <span className="infra-catalogue-icon" aria-hidden="true">
-        {icon && failedIcon!==icon ? <img src={icon} alt="" width="24" height="24" loading="lazy" onError={()=>setFailedIcon(icon)}/> : <IconLayers/>}
-      </span>
-      <Text strong>{row.name}</Text>{row.experimental && <Tag color="blue">{t('实验性')}</Tag>}
-    </Space>
+    <div className="infra-catalogue-heading">
+      <Space wrap>
+        <span className="infra-catalogue-icon" aria-hidden="true">
+          {icon && failedIcon!==icon ? <img src={icon} alt="" width="24" height="24" loading="lazy" onError={()=>setFailedIcon(icon)}/> : <IconLayers/>}
+        </span>
+        <Text strong>{row.name}</Text>{row.experimental && <Tag color="blue">{t('实验性')}</Tag>}
+      </Space>
+      <AdminActionMenu id={actionId} label={`${row.name} ${t('操作')}`} items={[
+        { node:'item', key:'deploy', name:t('部署模型'), disabled:!writable || busy, onClick:deploy },
+      ]}>{t('操作')}</AdminActionMenu>
+    </div>
     {(row.releaseDate || licences.length > 0) && <Space wrap spacing={8}>
       {row.releaseDate && <Text type="secondary" title={t('发布日期')}>{row.releaseDate}</Text>}
       {licences.map(license => <Text key={license} type="secondary">{license}</Text>)}
@@ -480,7 +494,8 @@ const benchmarkMetrics = [
 function BenchmarkCompare({ selectedRows, ...props }) {
   const [open, setOpen] = useState(false);
   const compared = selectedRows.filter(row => row.status === '已完成').slice(0, 5);
-  return <><ModelOperationProgress {...props}/>{compared.length >= 2 && <Button className="infra-batch-actions" onClick={() => setOpen(true)}>比较选中结果</Button>}
+  return <><ModelOperationProgress {...props}/><Button className="infra-batch-actions"
+    disabled={compared.length < 2} onClick={() => setOpen(true)}>比较选中结果</Button>
     {open && <AdminSideSheet title="比较基准测试" visible closeOnEsc onCancel={() => setOpen(false)} width="min(1050px, 100vw)">
       <AdminTable rowKey="id" dataSource={compared} pagination={false} columns={[
         { title: '测试名称', dataIndex: 'name' }, { title: '测试对象', dataIndex: 'targetName' },
@@ -504,7 +519,7 @@ function BenchmarkDetail({ row, records, page, panel, openDetail, renderActions,
     <Space wrap>
       <Select value={row.id} aria-label="切换基准测试" filter optionList={reports.map(item => ({ label: item.name, value: item.id }))} onChange={select}/>
       <AdminStatus value={row.status}/>
-      {renderActions(row, { allowEdit: false, panelActions: { logs: () => setLogs(true) } })}
+      {renderActions(row, { panelActions: { logs: () => setLogs(true) } })}
       <Button theme="borderless" onClick={() => navigate(benchmarkPage)}>全部测试</Button>
     </Space>
     <Tabs activeKey={tab} onChange={setTab} style={{ width: '100%' }}>
@@ -531,7 +546,7 @@ function BenchmarkDetail({ row, records, page, panel, openDetail, renderActions,
 }
 
 function CacheHeader(props) {
-  const { openEditor, closeEditor, records } = props;
+  const { openEditor, closeEditor, records, busy, writable } = props;
   const [pick, setPick] = useState(false);
   const [saved, setSaved] = useState(null);
   const savedDefinitions = configuredCacheProviders();
@@ -550,7 +565,8 @@ function CacheHeader(props) {
   };
   return <Space wrap>
     <SourcesButton {...props}/>
-    <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={() => { setSaved(null); setPick(true); }}>添加缓存服务</Button>
+    <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!writable || busy}
+      onClick={() => { setSaved(null); setPick(true); }}>添加缓存服务</Button>
     {pick && <AdminSideSheet title="选择缓存提供方" visible closeOnEsc width="min(760px, 100vw)" onCancel={() => { setSaved(null); setPick(false); }}>
       <div className="infra-card-grid">{available.map(provider => {
         const icon = catalogueIconSource(provider.icon,import.meta.env.BASE_URL);
@@ -603,7 +619,7 @@ function CacheProviderCell({ row }) {
   return <Space spacing={8}>{icon && <img src={icon} alt="" width={16} height={16}/>}{provider?.displayName || row.provider}</Space>;
 }
 
-function CacheRows({ row, records, commit, busy, inferenceDemo }) {
+function CacheRows({ row, records, commit, busy, writable }) {
   const [recreate, setRecreate] = useState(null);
   const [logs, setLogs] = useState(null);
   const [error, setError] = useState('');
@@ -631,15 +647,18 @@ function CacheRows({ row, records, commit, busy, inferenceDemo }) {
     } catch (issue) { setError(issue.message); }
   };
   return <>
-    <AdminTable rowKey="id" dataSource={instances} pagination={false} empty="当前配置没有可展示的实例" columns={[
+    <AdminTable rowKey="id" dataSource={instances} pagination={false} scroll={{ x: 680 }}
+      empty="当前配置没有可展示的实例" columns={[
       { title: '实例节点', dataIndex: 'name' }, { title: '地址', dataIndex: 'address' },
       { title: '内存容量', dataIndex: 'memoryGiB', render: value => fmtUnit(value, ' GiB') },
       { title: '状态', dataIndex: 'state', render: (value, item) => <Space><AdminStatus value={value}/>{item.configPending && <Tag color="amber">配置待生效</Tag>}</Space> },
       { title: '最近检查', dataIndex: 'observedAt', render: fmtDate },
-      { title: '操作', render: (_value, item) => <Space wrap>
-        {item.id !== 'external' && cacheLogAvailable(item.state) && <Button theme="borderless" size="small" onClick={() => setLogs(item)}>查看日志</Button>}
-        {!inferenceDemo && item.id !== 'external' && <Button type="danger" theme="borderless" size="small" onClick={() => { setError(''); setRecreate(item); }}>删除并重建</Button>}
-      </Space> },
+      { title: '操作', key: 'actions', width: 76, fixed: 'right', render: (_value, item) =>
+        <AdminActionMenu label={`${item.name} 操作`} items={[
+          { node:'item', key:'logs', name:'查看日志', disabled:item.id === 'external' || !cacheLogAvailable(item.state), onClick:() => setLogs(item) },
+          { node:'item', key:'recreate', name:'删除并重建', type:'danger', disabled:item.id === 'external' || !writable || busy,
+            onClick:() => { setError(''); setRecreate(item); } },
+        ]}>操作</AdminActionMenu> },
     ]}/>
     {recreate && <AdminModal title="重建缓存实例" visible onCancel={() => !busy && setRecreate(null)} confirmLoading={busy} onOk={run}>
       <Paragraph>{`重建 ${recreate.name} 的共享缓存实例？`}</Paragraph>
@@ -791,7 +810,7 @@ function CacheDetail({ row, records, panel, openDetail, ...props }) {
       </div>
       <Card title={<Space wrap>{row.name}<CacheStatusCell row={row}/>
         {validateSourceUrl(row.managementUrl) && <Typography.Text link={{ href: row.managementUrl, target: '_blank', rel: 'noopener noreferrer' }}>管理界面</Typography.Text>}
-      </Space>} headerExtraContent={cacheServiceLogAvailable(row) && <Button onClick={() => setLogs(true)}>查看日志</Button>}>
+      </Space>} headerExtraContent={<Button disabled={!cacheServiceLogAvailable(row)} onClick={() => setLogs(true)}>查看日志</Button>}>
         <AdminDescriptions data={facts.map(({ label, value }) => ({ key: label, value }))}/>
       </Card>
     </section>
@@ -808,19 +827,33 @@ function FilesHeader({ openEditor, selectedRows, clearSelection, ...props }) {
   const menu = sourceLabels.map(source => <Dropdown.Item key={source} onClick={() => openEditor({ preset: { source } })}>{source}</Dropdown.Item>);
   return <Space wrap>
     <Dropdown trigger="click" render={<Dropdown.Menu>{menu}</Dropdown.Menu>} clickToHide>
-      <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} aria-label="添加模型文件">添加模型文件</Button>
+      <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!props.writable || props.busy}
+        aria-label="添加模型文件">添加模型文件</Button>
     </Dropdown>
-    <Button type="danger" disabled={!selectedRows.length || props.busy} onClick={() => setBatch(selectedRows)}>删除{selectedRows.length > 0 && `（${selectedRows.length}）`}</Button>
+    <Button type="danger" disabled={!props.writable || !selectedRows.length || props.busy}
+      onClick={() => setBatch(selectedRows)}>删除{selectedRows.length > 0 && `（${selectedRows.length}）`}</Button>
     {batch && <RemoveFiles {...props} rows={batch} onClose={() => setBatch(null)} onRemoved={clearSelection}/>}
   </Space>;
 }
 
+function orderedGgufFiles(repository, sort) {
+  const files = (repository?.fileOptions || []).filter(file => /\.gguf$/i.test(file.value));
+  return sort === 'name' ? files.sort((left, right) => left.label.localeCompare(right.label)) : files;
+}
+
+const repositorySortOptions = [
+  {value:'trendingScore',label:'趋势'}, {value:'likes',label:'点赞量'},
+  {value:'downloads',label:'下载量'}, {value:'lastModified',label:'更新时间'},
+];
+const repositoriesPerPage = 10;
+
 function ModelFileEditor({ editor, records, commit, onClose, dirtyRef, busy }) {
   const formId = useId();
+  const errorSummary = useRef(null);
   const source = editor.preset?.source || 'Hugging Face';
   const local = source === '本地路径';
   const candidates = local ? [] : modelHubCandidates(records, source);
-  const nodeGroups = records.clusters.flatMap(cluster => {
+  const nodeGroups = records.clusters.filter(cluster => cluster.status === '运行中').flatMap(cluster => {
     const children = (records['ops-nodes'] || []).filter(node => node.clusterId === cluster.id && node.status === '就绪')
       .map(node => ({ value: node.id, label: node.name }));
     return children.length ? [{ value: cluster.id, label: cluster.name, children, provider: cluster.provider }] : [];
@@ -830,6 +863,9 @@ function ModelFileEditor({ editor, records, commit, onClose, dirtyRef, busy }) {
     return preferred ? [preferred.value, preferred.children[0].value] : [];
   });
   const [query, setQuery] = useState('');
+  const [quantization, setQuantization] = useState();
+  const [repositorySort, setRepositorySort] = useState('trendingScore');
+  const [repositoryPage, setRepositoryPage] = useState(1);
   const [repo, setRepo] = useState(null);
   const [fileSort, setFileSort] = useState('size');
   const [filename, setFilename] = useState('');
@@ -837,16 +873,18 @@ function ModelFileEditor({ editor, records, commit, onClose, dirtyRef, busy }) {
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const results = candidates.filter(row => `${row.name} ${row.repository}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const files = (repo?.fileOptions || []).filter(file => /\.gguf$/i.test(file.value));
-  const visibleFiles = fileSort === 'name' ? [...files].sort((left, right) => left.label.localeCompare(right.label)) : files;
+  useEffect(() => { if (error) errorSummary.current?.focus(); }, [error]);
+  const results = searchModelHubCandidates(candidates, { query,quantization,sort:repositorySort });
+  const resultPage = Math.min(repositoryPage, Math.max(1, Math.ceil(results.length / repositoriesPerPage)));
+  const visibleRepositories = results.slice((resultPage - 1) * repositoriesPerPage, resultPage * repositoriesPerPage);
+  const files = orderedGgufFiles(repo, fileSort);
   const selectedFile = files.find(file => file.value === filename);
   const draft = { source, repository:repo?.repository, filename, lora:repo?.lora,
     downloadParts:selectedFile?.parts.map(part=>part.path), sizeBytes:selectedFile?.sizeBytes,
     ...(local ? { mountPath:path } : { localDir:path }) };
   const issueFor = workerId => modelFileNodeIssue({ ...draft,workerId },records);
   const nodeChoices = nodeGroups.map(group=>({ ...group,children:group.children.map(node=>({
-    ...node, label: issueFor(node.value) ? `${node.label} [${local ? '已添加' : '已下载'}]` : node.label,
+    ...node, label: modelFileOnNode({ ...draft,workerId:node.value },records) ? `${node.label} [${local ? '已添加' : '已下载'}]` : node.label,
   })) }));
   const pathIssue = target.length ? issueFor(target.at(-1)) : undefined;
   const sizeLabel = bytes => Number.isFinite(bytes) ? `${(bytes / (1024 ** 3)).toFixed(2)} GiB` : '';
@@ -873,17 +911,35 @@ function ModelFileEditor({ editor, records, commit, onClose, dirtyRef, busy }) {
     } catch (issue) { setError(issue.message); }
   };
   return <>
-    <AdminSideSheet title={editor.title || '添加模型文件'} label={editor.title || '添加模型文件'} visible className="infra-sheet"
+    <AdminSideSheet title={editor.title || '添加模型文件'} visible className="infra-sheet"
       width={local ? 'min(560px, 100vw)' : 'min(1120px, 100vw)'} onCancel={close} closeOnEsc={!busy && !discard}
       footer={<><Button onClick={close} disabled={busy}>取消</Button><Button htmlType="submit" form={formId} theme="solid" loading={busy}>确定</Button></>}>
-      {error && <Banner type="danger" description={error} closeIcon={null}/>}
+      {error && <div ref={errorSummary} tabIndex={-1}><Banner type="danger" description={error} closeIcon={null}/></div>}
       <form id={formId} className={local ? 'infra-form' : 'infra-file-editor'} onSubmit={submit}>
         {!local && <>
           <section aria-label="搜索模型" className="infra-file-editor-column">
-            <Input prefix={<IconSearch/>} aria-label="搜索模型" placeholder="搜索模型" showClear value={query} onChange={setQuery}/>
-            {results.length ? results.map(row => <Button key={row.repository} className="infra-file-repository"
+            <Input prefix={<IconSearch/>} aria-label="搜索模型" placeholder="搜索模型" showClear value={query}
+              onChange={value => { setQuery(value); setRepositoryPage(1); }}/>
+            <Space wrap>
+              <span className="sr-only" id={`${formId}-hub-sort`}>仓库排序</span>
+              <Select aria-labelledby={`${formId}-hub-sort`} value={repositorySort} optionList={repositorySortOptions}
+                onChange={value => { setRepositorySort(value); setRepositoryPage(1); }}/>
+              <span className="sr-only" id={`${formId}-hub-quantization`}>量化</span>
+              <Select aria-labelledby={`${formId}-hub-quantization`} placeholder="量化" value={quantization} optionList={optionList(['FP8', 'AWQ', 'GPTQ'])}
+                showClear onChange={value => { setQuantization(value); setRepositoryPage(1); }}/>
+            </Space>
+            {visibleRepositories.length ? visibleRepositories.map(row => <Button key={row.repository} className="infra-file-repository"
               aria-pressed={repo?.repository === row.repository} theme={repo?.repository === row.repository ? 'light' : 'borderless'}
-              onClick={() => change(() => { setRepo(row); setFilename(row.fileOptions?.find(file => /\.gguf$/i.test(file.value))?.value || ''); })}>{row.repository}</Button>) : <Empty description="未找到模型"/>}
+              onClick={() => change(() => { setRepo(row); setFilename(orderedGgufFiles(row, fileSort)[0]?.value || ''); })}>
+              <Space vertical align="start" spacing={2}>
+                {row.repository}
+                {row.likes != null && row.downloads != null && <Text type="secondary" size="small">
+                  点赞 {row.likes.toLocaleString()} · 下载 {row.downloads.toLocaleString()}
+                </Text>}
+              </Space>
+            </Button>) : <Empty description="未找到模型"/>}
+            {results.length > repositoriesPerPage && <AdminPagination total={results.length} currentPage={resultPage}
+              pageSize={repositoriesPerPage} onPageChange={setRepositoryPage}/>}
           </section>
           <section aria-label="模型与文件" className="infra-file-editor-column">
             {repo ? <><Text strong>{repo.name}</Text>
@@ -894,10 +950,10 @@ function ModelFileEditor({ editor, records, commit, onClose, dirtyRef, busy }) {
               {repo.format === 'GGUF' && <>
                 <span className="sr-only" id={`${formId}-sort`}>文件排序</span>
                 <Select aria-labelledby={`${formId}-sort`} value={fileSort} optionList={[{ value: 'size', label: '大小' }, { value: 'name', label: '名称' }]} onChange={setFileSort}/>
-                {visibleFiles.length > 0 ? <>
+                {files.length > 0 ? <>
                   <span className="sr-only" id={`${formId}-file`}>选择模型文件</span>
                   <Select aria-labelledby={`${formId}-file`} value={filename || undefined} placeholder="选择模型文件"
-                    optionList={visibleFiles.map(file => ({ value: file.value, label: [file.label, sizeLabel(file.sizeBytes)].filter(Boolean).join(' · ') }))}
+                    optionList={files.map(file => ({ value: file.value, label: [file.label, sizeLabel(file.sizeBytes)].filter(Boolean).join(' · ') }))}
                     filter onChange={value => change(() => setFilename(value ?? ''))}/>
                 </> : <Empty description="未找到 GGUF 文件"/>}
               </>}
@@ -918,7 +974,7 @@ function ModelFileEditor({ editor, records, commit, onClose, dirtyRef, busy }) {
           <div className="infra-field"><label id={`${formId}-target`}>节点 *</label>
             <Cascader aria-labelledby={`${formId}-target`} aria-required="true" treeData={nodeChoices} filter showClear value={target}
               aria-describedby={pathIssue ? `${formId}-path-issue` : undefined}
-              placeholder="请选择集群和节点" onChange={value => change(() => setTarget(value || []))}/>
+              placeholder="请选择集群和节点" emptyContent="没有就绪节点" onChange={value => change(() => setTarget(value || []))}/>
             {pathIssue && <Text type="warning" id={`${formId}-path-issue`}>{pathIssue}</Text>}
           </div>
           {!local && <div className="infra-field"><label htmlFor={`${formId}-path`}>本地目录</label>

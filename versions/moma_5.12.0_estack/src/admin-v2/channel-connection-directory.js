@@ -11,7 +11,7 @@ export const CHANNEL_SOURCE_TYPES = ['thirdParty', 'selfHosted'];
 export function channelSourceTypeLabel(sourceType) {
   switch (sourceType) {
     case 'thirdParty': return '第三方模型服务';
-    case 'selfHosted': return '自有模型推理服务';
+    case 'selfHosted': return '内置模型推理服务';
     default: return '—';
   }
 }

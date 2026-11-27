@@ -16,6 +16,7 @@ import TableFieldHelp from '../components/TableFieldHelp';
 import { resourceId } from '../resource-id.mjs';
 import { deployableModels } from './deployments';
 import { canMutate } from './state-transaction';
+import { isInfrastructurePage } from './navigation.mjs';
 import { changeInfrastructure, INFRASTRUCTURE_STORAGE, infrastructurePages, readInfrastructure } from './infrastructure-state';
 import { readInferenceDemoInfrastructure } from './inference-demo-infrastructure.js';
 import './infrastructure.css';
@@ -36,6 +37,14 @@ const views = { ...MODEL_SERVICE_VIEWS, ...RESOURCE_VIEWS };
 const changesInfrastructure = action => Boolean(action.apply || action.editor || action.deployModelFile ||
   action.panel === 'delete' || action.target?.mode === 'create');
 const ModelFileDeploymentDrawer = lazy(() => import('./DeploymentManagement').then(module => ({ default:module.ModelFileDeploymentDrawer })));
+
+function scrollTableWithArrowKeys(event) {
+  if (event.target !== event.currentTarget || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  const body = event.currentTarget.querySelector('.semi-table-body');
+  if (!body || body.scrollWidth <= body.clientWidth) return;
+  event.preventDefault();
+  body.scrollBy({ left: event.key === 'ArrowLeft' ? -40 : 40 });
+}
 
 function readSource(inferenceDemo) {
   try { return inferenceDemo ? readInferenceDemoInfrastructure() : readInfrastructure(); }
@@ -216,13 +225,19 @@ function saveFile({ name, content, type }) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function InfrastructurePage({ pageId, state, params, navigate, dirtyRef, dispatch, conflict, inferenceDemo = false }) {
+export default function InfrastructurePage({ pageId, state, params, navigate, dirtyRef, dispatch, conflict,
+  inferenceDemo = false, interactiveDemo = false, demoInfrastructure, changeDemoInfrastructure }) {
   const t = useChannelText();
   const headingId = useId();
   const page = infrastructurePages[pageId];
+  const keepActionsVisible = isInfrastructurePage(pageId);
   const columnsKey = INFRASTRUCTURE_STORAGE + ':columns:' + pageId;
   const { Header, Detail, Extra, ExpandedRow, Fields, Cells, FormNotice, Card: CardView, Editor, Empty: EmptyView, afterCreate } = views[pageId] ?? {};
-  const [source, setSource] = useState(() => readSource(inferenceDemo));
+  const practiceNodes = interactiveDemo && pageId === 'ops-nodes' && Boolean(changeDemoInfrastructure) &&
+    canMutate(state.currentRole, { type: 'update', collection: 'clusters' });
+  const readOnlyDemo = inferenceDemo && !practiceNodes;
+  const [savedSource, setSource] = useState(() => interactiveDemo ? null : readSource(inferenceDemo));
+  const source = interactiveDemo ? demoInfrastructure : savedSource;
   const [storageError, setStorageError] = useState('');
   const [keyword, setKeyword] = useState(params.get('q') ?? '');
   const [filters, setFilters] = useState(() => {
@@ -240,8 +255,9 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     return Number.isSafeInteger(page) && page>0 ? page : 1;
   });
   const catalogueTop = useRef(isCatalogue && params.has('catalogTop') ? Number(params.get('catalogTop')) : null);
+  const catalogueFocus = useRef(isCatalogue ? params.get('catalogFocus') : null);
   const [pageSize, setPageSize] = useState(page.initialPageSize ?? 10);
-  const [editor, setEditor] = useState(() => !inferenceDemo && params.get('view') === 'create' && page.fields?.length ? { preset: params } : null);
+  const [editor, setEditor] = useState(() => !readOnlyDemo && params.get('view') === 'create' && page.fields?.length ? { preset: params } : null);
   const [fileDeployment, setFileDeployment] = useState(null);
   const [detail, setDetail] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
@@ -263,6 +279,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
   const loadMarker = useRef(null);
 
   const refresh = () => {
+    if (interactiveDemo) return Boolean(demoInfrastructure);
     try {
       setSource(inferenceDemo ? readInferenceDemoInfrastructure() : readInfrastructure());
       setStorageError('');
@@ -279,7 +296,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     };
     if (!inferenceDemo) window.addEventListener('storage', sync);
     return () => { window.removeEventListener('storage', sync); dirtyRef.current = false; };
-  }, [dirtyRef, inferenceDemo]);
+  }, [dirtyRef, inferenceDemo, interactiveDemo]);
 
   const shared = {
     clusters: state.clusters, deployments: state.deployments.filter(row => !row.retiredAt),
@@ -302,7 +319,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         (match ? match(filters[key], row, records) : filterMatch(filters[key], row[key])))) return false;
     if (page.searchRows || !query) return true;
     const searchKeys = page.searchKeys ?? ['name', 'displayName'];
-    const searchable = page.searchMatches ? page.searchMatches(row, query) :
+    const searchable = page.searchMatches ? page.searchMatches(row, query, records) :
       [row.id, ...searchKeys.map(key => row[key])].some(value => String(value ?? '').toLocaleLowerCase().includes(query));
     return searchable;
   });
@@ -318,10 +335,13 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
   const displayed = view === 'cards' && page.loadMore ? filtered.slice(0, pageSize * currentPage) : filtered.slice((pageNumber - 1) * pageSize, pageNumber * pageSize);
   useEffect(()=>{
     const top = catalogueTop.current;
-    if (!source || !displayed.length || top==null || !Number.isSafeInteger(top) || top<0) return undefined;
+    if (!source || top==null || !Number.isSafeInteger(top) || top<0) return undefined;
     const frame = requestAnimationFrame(()=>{
+      const focusId = catalogueFocus.current;
+      if (focusId?.startsWith('model-catalogue-')) document.getElementById(focusId)?.focus({preventScroll:true});
       window.scrollTo({top,behavior:'instant'});
       catalogueTop.current=null;
+      catalogueFocus.current=null;
     });
     return ()=>cancelAnimationFrame(frame);
   },[source,displayed.length]);
@@ -342,7 +362,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
   const detailContext = standalone ? { id: params.get('record'), panel: params.get('panel') } : detail;
   const selectedDetail = inferenceDemo && detailContext?.panel === 'delete' ? undefined : rows.find(row => row.id === detailContext?.id);
   const selectedRows = rows.filter(row => selected.includes(row.id));
-  const writable = !inferenceDemo && Boolean(source && !storageError);
+  const writable = !readOnlyDemo && Boolean(source && !storageError);
   const canDeployFile = writable && !conflict && !state.storageError && canMutate(state.currentRole,{type:'deploymentOperation'});
 
   const listQuery = () => {
@@ -376,7 +396,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     }
   };
   const openEditor = (options = {}) => {
-    if (!inferenceDemo) setEditor(options);
+    if (!readOnlyDemo) setEditor(options);
   };
   const closeEditor = () => {
     dirtyRef.current = false;
@@ -391,8 +411,9 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     pending.current = true;
     setBusy(true);
     try {
-      const next = await changeInfrastructure(pageId, (latest, local, modelSource) => change(latest, { ...shared, ...local }, modelSource));
-      setSource(next);
+      const update = inferenceDemo ? changeDemoInfrastructure : changeInfrastructure;
+      const next = await update(pageId, (latest, local, modelSource) => change(latest, { ...shared, ...local }, modelSource));
+      if (!inferenceDemo) setSource(next);
       if (message) Toast.success(t(message));
       return next;
     } finally {
@@ -442,7 +463,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     });
   };
   const runAction = (action, row, opener) => {
-    if (inferenceDemo && changesInfrastructure(action)) return;
+    if (readOnlyDemo && changesInfrastructure(action)) return;
     if (action.deployModelFile) {
       if (canDeployFile) setFileDeployment({ id:row.id, opener, left:window.scrollX, top:window.scrollY });
       return;
@@ -509,25 +530,33 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
   const renderActions = (row, { allowEdit = true, panelActions = {} } = {}) => {
     const items = [];
     if (!hasNameColumn && page.showDetailsAction !== false) items.push({ key: 'details', name: t('详情'), onClick: () => openDetail(row) });
-    if (!inferenceDemo && allowEdit && page.fields?.length && page.editable && allowed(page.editable, row, records)) {
-      items.push({ key: 'edit', name: t('编辑'), disabled: !writable, onClick: () => openEditor({ row }) });
+    const editingAllowed = allowed(page.editable, row, records);
+    if (allowEdit && page.fields?.length && page.editable && (keepActionsVisible || !inferenceDemo && editingAllowed)) {
+      items.push({ key: 'edit', name: t('编辑'), disabled: !writable || !editingAllowed, onClick: () => openEditor({ row }) });
     }
+    let hasDeleteAction = false;
     for (const action of page.actions ?? []) {
-      if (!allowed(action.when, row, records) || inferenceDemo && changesInfrastructure(action)) continue;
+      if (!allowed(action.visible, row, records)) continue;
+      const actionAllowed = allowed(action.when, row, records);
+      if (!keepActionsVisible && (!actionAllowed || inferenceDemo && changesInfrastructure(action))) continue;
+      if (action.label === '删除') hasDeleteAction = true;
+      const changesRecord = keepActionsVisible ? changesInfrastructure(action) : Boolean(action.apply || action.editor);
       items.push({ key: action.label, name: t(action.label), type: action.danger ? 'danger' : undefined,
-        disabled: action.deployModelFile && !canDeployFile || !writable && Boolean(action.apply || action.editor) ||
+        disabled: !actionAllowed || action.deployModelFile && !canDeployFile || !writable && changesRecord ||
           Boolean(typeof action.disabled === 'function' ? action.disabled(row, records) : action.disabled),
         onClick: opener => panelActions[action.panel] ? panelActions[action.panel]() : runAction(action, row, opener) });
     }
-    if (!inferenceDemo && page.deletable && allowed(page.deletable, row, records)) {
-      items.push({ key: 'delete', name: t('删除'), type: 'danger', disabled: !writable, onClick: () => {
+    const deletingAllowed = allowed(page.deletable, row, records);
+    if (page.deletable && (keepActionsVisible ? !hasDeleteAction : !inferenceDemo && deletingAllowed)) {
+      items.push({ key: 'delete', name: t('删除'), type: 'danger', disabled: !writable || !deletingAllowed, onClick: () => {
         const reason = page.canDelete?.(row, records);
         if (reason) Toast.warning(t(reason));
         else setConfirmation({ row });
       } });
     }
     if (!items.length) return null;
-    return page.actionMenu ? <AdminActionMenu label={`${labelOf(row)} ${t('操作')}`} items={items.map(item=>({node:'item',...item}))}/> : <Space wrap spacing={4}>
+    return page.actionMenu || keepActionsVisible ? <AdminActionMenu label={`${labelOf(row)} ${t('操作')}`}
+      items={items.map(item=>({node:'item',...item}))}>{keepActionsVisible ? t('操作') : undefined}</AdminActionMenu> : <Space wrap spacing={4}>
       {items.map(({ key, name, ...props }) => <Button key={key} theme="borderless" size="small" {...props}>{name}</Button>)}
     </Space>;
   };
@@ -564,14 +593,15 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     };
   });
   if (page.actions?.length || page.editable && page.fields?.length || page.deletable || !hasNameColumn) {
-    columns.push({ key: 'actions', title: '操作', width: page.actionWidth ?? 178, render: (_, row) => renderActions(row) });
+    columns.push({ key: 'actions', title: '操作', width: keepActionsVisible ? 88 : page.actionWidth ?? 178,
+      fixed: keepActionsVisible ? 'right' : undefined, render: (_, row) => renderActions(row) });
   }
-  const selectable = (!inferenceDemo || pageId === 'ops-benchmarks') && (page.rowSelection || page.batchActions?.length > 0);
+  const selectable = (!inferenceDemo || keepActionsVisible) && (page.rowSelection || page.batchActions?.length > 0);
   const rowSelection = selectable ? { selectedRowKeys: selected, onChange: setSelected,
     getCheckboxProps: row => ({ disabled: !allowed(page.rowSelection, row, records) }) } : undefined;
   const tableWidth = page.tableWidth ?? columns.reduce((width, column) => width + (column.width ?? 106), selectable ? 42 : 0);
   const info = detailContext?.fields ?? page.detail ?? page.columns;
-  const widgetProps = { pageId, page, records, rows, filtered, selectedRows, clearSelection: () => setSelected([]), params, navigate, listQuery, commit, refresh, openDetail, openEditor, closeEditor, dispatch: inferenceDemo ? undefined : dispatch, t, busy: busy || inferenceDemo, inferenceDemo };
+  const widgetProps = { pageId, page, records, rows, filtered, selectedRows, clearSelection: () => setSelected([]), params, navigate, listQuery, commit, refresh, openDetail, openEditor, closeEditor, dispatch: readOnlyDemo ? undefined : dispatch, t, busy: busy || readOnlyDemo, inferenceDemo, interactiveDemo, writable };
   const renderDetail = selectedDetail && (Detail && !detailContext?.fields ?
     <Detail {...widgetProps} detail={detailContext} row={selectedDetail} panel={detailContext.panel} close={closeDetail} standalone={standalone}
       renderActions={renderActions}/> :
@@ -580,7 +610,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         <Typography.Text className="infra-detail-value" copyable={column.copyable}>{display(column, selectedDetail, records)}</Typography.Text>,
     }))}/>);
   const runBatch = action => {
-    if (!selectedRows.length || inferenceDemo && !action.download || action.when && !action.when(selectedRows, records)) return;
+    if (!selectedRows.length || readOnlyDemo && !action.download || action.when && !action.when(selectedRows, records)) return;
     if (action.download) {
       try { saveFile(action.download(selectedRows, records, page.columns.filter(column => !hidden.includes(column.key)))); }
       catch (issue) { Toast.error(issue.message); }
@@ -594,9 +624,9 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
       : action ? `对「${labelOf(confirmation.row)}」执行${action.label}？` : confirmation
         ? `删除「${labelOf(confirmation.row)}」？` : '');
   const pageActions = <Space wrap>
-    {Header && (!inferenceDemo || pageId === 'ops-nodes') && <Header {...widgetProps}/>}
+    {Header && (!inferenceDemo || keepActionsVisible) && <Header {...widgetProps}/>}
     {page.quickLinks?.map(link => <Button key={link.page} onClick={() => navigate(link.page)}>{t(link.label)}</Button>)}
-    {!inferenceDemo && page.createLabel && !page.hideCreate && <Button type="primary" theme="solid" icon={<IconPlus/>} disabled={!writable}
+    {(!inferenceDemo || keepActionsVisible) && page.createLabel && !page.hideCreate && <Button type="primary" theme="solid" icon={<IconPlus/>} disabled={!writable}
       onClick={() => openEditor()}>{t(page.createLabel)}</Button>}
     {page.batchInToolbar && page.batchActions?.map(action => <Button key={action.label} type={action.danger ? 'danger' : 'primary'}
       disabled={!writable || !selectedRows.length || !allowed(action.when, selectedRows, records)}
@@ -647,12 +677,12 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         </Button>}
         {page.actionsInToolbar && <div className="infra-toolbar-actions">{pageActions}</div>}
       </div>
-      {Extra && (!inferenceDemo || pageId === 'ops-benchmarks') && <Extra {...widgetProps}/>}
-      {selectedRows.length > 0 && !page.batchInToolbar && !page.hideSelectionSummary && <Space wrap className="infra-batch-actions">
-        <Typography.Text>{`已选 ${selectedRows.length} 条`}</Typography.Text>
+      {Extra && (!inferenceDemo || keepActionsVisible) && <Extra {...widgetProps}/>}
+      {(selectedRows.length > 0 || keepActionsVisible && page.batchActions?.length > 0) && !page.batchInToolbar && !page.hideSelectionSummary && <Space wrap className="infra-batch-actions">
+        {selectedRows.length > 0 && <Typography.Text>{`已选 ${selectedRows.length} 条`}</Typography.Text>}
         {page.batchActions?.map(action => <Button key={action.label} type={action.danger ? 'danger' : 'primary'}
-          disabled={(!writable && !(inferenceDemo && action.download)) || !allowed(action.when, selectedRows, records)} onClick={() => runBatch(action)}>{t(action.label)}</Button>)}
-        <Button theme="borderless" onClick={() => setSelected([])}>{t('清空选择')}</Button>
+          disabled={!selectedRows.length || (!writable && !(inferenceDemo && action.download)) || !allowed(action.when, selectedRows, records)} onClick={() => runBatch(action)}>{t(action.label)}</Button>)}
+        {selectedRows.length > 0 && <Button theme="borderless" onClick={() => setSelected([])}>{t('清空选择')}</Button>}
       </Space>}
       {view === 'cards' ? displayed.length > 0 ? <div className="infra-card-grid">
         {displayed.map(row => CardView ? <CardView key={row.id} {...widgetProps} row={row} actions={renderActions(row)}/> :
@@ -662,9 +692,11 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
               .map(column => ({ key: column.label, value: display(column, row, records) }))}/>
           </Card>)}
       </div> : EmptyView ? <EmptyView {...widgetProps} hasFilters={hasFilters}/> : <Empty description={t('没有符合条件的记录')}/> :
-      <div className="infra-table-scroll" role="region" aria-labelledby={headingId} tabIndex={0}>
-        <div style={{ minWidth: tableWidth }}>
+      <div className="infra-table-scroll" role="region" aria-labelledby={headingId} tabIndex={0}
+        onKeyDown={keepActionsVisible ? scrollTableWithArrowKeys : undefined}>
+        <div style={keepActionsVisible ? undefined : { minWidth: tableWidth }}>
           <AdminTable aria-labelledby={headingId} columns={columns} dataSource={displayed}
+            scroll={keepActionsVisible ? { x: `max(100%, ${tableWidth}px)` } : undefined}
             rowSelection={rowSelection}
             expandedRowRender={ExpandedRow ? row => <ExpandedRow {...widgetProps} row={row}/> : undefined}
             expandedRowKeys={ExpandedRow ? expanded : undefined}
@@ -687,7 +719,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
       className="infra-sheet" width={page.detailWidth ?? 'min(720px, 100vw)'} visible onCancel={closeDetail} closeOnEsc={!editor}>
       {renderDetail}
     </AdminSideSheet>)}
-    {editor && source && !inferenceDemo && (Editor ? <Editor {...widgetProps} editor={editor} page={editorPage} onSave={save} onClose={closeEditor} dirtyRef={dirtyRef}/> :
+    {editor && source && !readOnlyDemo && (Editor ? <Editor {...widgetProps} editor={editor} page={editorPage} onSave={save} onClose={closeEditor} dirtyRef={dirtyRef}/> :
       <InfrastructureForm page={editorPage} row={editor.row} records={records} preset={editor.preset}
         Fields={Fields} FormNotice={FormNotice} t={t} onSave={save} onClose={closeEditor}
         previous={editor.previous} wasDirty={editor.changed} dirtyRef={dirtyRef} busy={busy}/>)}

@@ -14,6 +14,7 @@ import { API_PREFIX, isApiPath } from '../api-path.js';
 import { commercialModelWrite, deploymentLicense, LICENSE_UNAVAILABLE } from '../src/deployment-license.mjs';
 import { effectiveInstalledLicense, licenseDetails, readInstalledLicense, saveInstalledLicense, verifyDeploymentLicense } from './deployment-license.js';
 import { auditLogDetail, auditLogPage } from './audit-log.js';
+import { adminAnnouncements, changeAnnouncement, tenantAnnouncements } from './announcements.js';
 import { PRIVATE_SITE } from '../src/site-config.mjs';
 import { isTenantRouteCall, validRouteOptions } from '../src/tenant-routing.mjs';
 import { readPublishedSiteSetting, savePublishedSiteSetting, validateAgreements } from './site-settings.js';
@@ -244,6 +245,7 @@ async function route(request, env, requestId) {
   const tenantResources = /^\/tenants\/([A-Za-z0-9:_.-]{1,200})\/(workspace|commands|invitations)$/.exec(path);
   const applicationPaths = ['/application','/application/open','/application/commands'];
   const loginField = LOGIN_FIELDS.get(path);
+  const announcementPath = path === '/announcements' || path === '/market/announcements';
   const agreementPath = path === '/site-agreements' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
   const portalPath = path === PORTAL_HOME_ENDPOINT && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
   const spacePolicyPath = path === '/project-space-policy' && (PRIVATE_SITE || env.MOMA_PRIVATE_SITE === '1');
@@ -251,7 +253,7 @@ async function route(request, env, requestId) {
   const newServices = path === '/model-services-new';
   const serviceSalesPath = path === '/model-service-sales';
   const requirementsPath = path === '/docs/model-operations';
-  const known = path === '/channel-health' || requirementsPath || newServices || serviceSalesPath || path===CHAT_COMPLETIONS || agreementPath || portalPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || tenantResources || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
+  const known = path === '/channel-health' || requirementsPath || newServices || serviceSalesPath || path===CHAT_COMPLETIONS || announcementPath || agreementPath || portalPath || spacePolicyPath || loginField || marketPaths.includes(path) || applicationPaths.includes(path) || tenantResources || trafficPath || trafficHistoryPath || auditPath || credentialPath || packagePath || ['/deployment/license','/auth/logout','/auth/me','/materials','/services','/suppliers','/health','/model-operations','/model-operations/commands','/channels/consistency'].includes(path) || path.startsWith('/simulation/') || resource || dictionary;
   if (!known) fail(404, 'NOT_FOUND', 'API 不存在');
   if (!env.MODEL_OPS_DB) fail(503, 'DATABASE_UNAVAILABLE', '模型运营数据库尚未绑定');
   const db = env.MODEL_OPS_DB;
@@ -307,11 +309,28 @@ async function route(request, env, requestId) {
       fail(400,'INVALID_INPUT','请填写模型与文本消息，模拟接口仅支持非流式文本请求');
     }
     return json(await customerInvocation(db,await digest(credential),{...body,requestId},
-      request.headers.get('cf-connecting-ip'),PRIVATE_SITE || env.MOMA_PRIVATE_SITE==='1'));
+      request.headers.get('cf-connecting-ip'),PRIVATE_SITE || env.MOMA_PRIVATE_SITE==='1',license));
   }
   if (!['GET','POST','PATCH','DELETE'].includes(method)) fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
   if (method !== 'GET') {
     if (request.headers.get('origin') !== url.origin || request.headers.get('x-moma-request') !== '1') fail(403, 'FORBIDDEN', '请求来源无效');
+  }
+  if (announcementPath) {
+    if (method !== 'GET' && method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
+    if (path === '/market/announcements') {
+      const session = await marketSession(db, request, license);
+      if (!session) fail(401, 'TENANT_SESSION_REQUIRED', '请先登录租户控制台');
+      if (method === 'GET') return json(await tenantAnnouncements(db, session));
+      const body = await bodyJson(request, 1_500_000);
+      fields(body, ['accountId', 'ids']);
+      return json(await tenantAnnouncements(db, session, body));
+    }
+    const actor = await authenticate(request, db);
+    if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅平台管理员可管理公告');
+    if (method === 'GET') return json(await adminAnnouncements(db, actor));
+    const body = await bodyJson(request);
+    fields(body, ['accountId', 'action', 'id', 'revision', 'title', 'body', 'startsAt', 'endsAt']);
+    return json(await changeAnnouncement(db, actor, body, request.headers.get('idempotency-key')));
   }
   if (agreementPath) {
     const key = 'site-agreements';
@@ -539,7 +558,14 @@ async function route(request, env, requestId) {
     if (actor.role !== '平台管理员') fail(403,'FORBIDDEN','只有系统管理员可以管理指定租户的资源');
     const [,tenantId,resource] = tenantResources;
     const session = await adminTenantSession(db,actor,tenantId,license);
-    if (resource === 'workspace' && method === 'GET') return json(await tenantWorkspace(db,session));
+    if (resource === 'workspace' && method === 'GET') {
+      const workspace = await tenantWorkspace(db,session);
+      if (session.tenant.internal) {
+        workspace.canCreateProject = false;
+        workspace.projects = workspace.projects.map(project => ({ ...project, canManage:false, canEdit:false }));
+      }
+      return json(workspace);
+    }
     if (resource === 'workspace' || method !== 'POST') fail(405,'METHOD_NOT_ALLOWED','请求方法不支持');
     const body = await bodyJson(request);
     if (resource === 'invitations') {
@@ -549,6 +575,9 @@ async function route(request, env, requestId) {
     fields(body,['operationId','tenantId','expectedRevision','action','data']);
     if (!['organization','projectCreate','projectUpdate','projectRoute','keys'].includes(body.action)) {
       fail(403,'FORBIDDEN','此入口仅支持组织及项目管理');
+    }
+    if (session.tenant.internal && body.action !== 'organization') {
+      fail(403,'FORBIDDEN','企业内用项目请在用户控制台管理');
     }
     if (body.action === 'projectUpdate' && body.data?.type === 'exit') fail(403,'FORBIDDEN','当前身份没有项目成员关系');
     return json(await tenantCommand(db,session,body));

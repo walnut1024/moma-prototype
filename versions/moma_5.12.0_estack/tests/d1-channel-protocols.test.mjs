@@ -104,18 +104,19 @@ test('HTTP/D1 derives new connection endpoints and enforces separate upstream ke
     assert.equal(JSON.parse(stored.record_json).endpointPath, path);
   }
 
-  await t.test('self-hosted connections may omit credentials and third-party connections require them', async () => {
+  await t.test('manual directory creation rejects built-in inference and retains legacy connection authentication', async () => {
     const profile = {name:'D1 自有推理服务商', code:'d1-self-hosted', sourceType:'selfHosted'};
     const providerCreated = await command('provider', {operation:'create', values:profile});
     assert.equal(providerCreated.status, 200, await providerCreated.clone().text());
     state = await read();
     const provider = state.providers.find(row => row.code === profile.code);
-    const selfHosted = {providerId:provider.id, channelSourceType:'selfHosted', modelProtocol:'openai',
+    const selfHosted = {providerId:provider.id, channelSourceType:undefined, modelProtocol:'openai',
       baseUrl:'http://self-hosted.example.invalid/v1', authMode:'none'};
     const badCases = [
       [{modelProtocol:'openai'}, /独立密钥数量/],
       [{modelProtocol:'openai', authMode:'none'}, /仅自有模型推理服务/],
       [{...selfHosted, channelSourceType:'thirdParty'}, /匹配连接类型/],
+      [{...selfHosted, channelSourceType:'selfHosted'}, /内置模型推理服务中选择模型实例/],
     ];
     for (const [options, error] of badCases) {
       const rejected = await create(options, 'D1 拒绝第三方无密钥', []);
@@ -128,7 +129,7 @@ test('HTTP/D1 derives new connection endpoints and enforces separate upstream ke
     assert.equal(withoutKeys.status, 200, await withoutKeys.clone().text());
     state = await read();
     const endpoint = state.endpoints.find(row => row.name === 'D1 自有推理无密钥');
-    assert.equal(endpoint.channelSourceType, 'selfHosted');
+    assert.equal(endpoint.channelSourceType, undefined);
     assert.equal(endpoint.authMode, 'none');
     assert.equal(connectionKeys(endpoint, provider, true).length, 0);
     const stored = JSON.parse(await local.db.prepare('SELECT record_json FROM channels WHERE id=?')

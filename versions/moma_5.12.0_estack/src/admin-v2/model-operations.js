@@ -49,6 +49,7 @@ import { modelOperationsExamplesTransaction } from './model-operations-examples.
 import { CHANNEL_SOURCE_TYPES, channelListType, channelProtocolPaths, prepareListedChannelInterface } from './channel-connection-directory.js';
 import { CHANNEL_INTERFACES } from './channel-interface.js';
 import { serviceMappingTransaction, mappingSourceVersion } from './service-model-mappings.js';
+import { BUILTIN_INFERENCE_PROVIDER_ID, BUILTIN_INFERENCE_PROVIDER_NAME, inferenceConnectionTargets, inferenceProviderAvailable } from './inference-connection-targets.js';
 
 export { providerCode } from './provider-management.js';
 export const callModelId = (provider, model) => `${providerCode(provider)}/${modelCode(model)}`;
@@ -621,7 +622,40 @@ export function operationsTransaction(state, action) {
     update('endpoints', endpoint.id, { directoryNote: channelDirectoryNote(data.note) });
     objectId = endpoint.id;
     label = '保存连接内部备注';
+  } else if (operation === 'channelDirectoryCreateInference') {
+    if (!data || typeof data.name !== 'string' || Object.keys(data).some(key => !['instanceId', 'name', 'note', 'creationId'].includes(key)) ||
+      typeof data.instanceId !== 'string' || !data.instanceId || data.instanceId.length > 200 ||
+      typeof data.creationId !== 'string' || !/^[a-f0-9-]{36}$/.test(data.creationId)) throw Error('请选择有效的推理实例');
+    const note = channelDirectoryNote(data.note ?? '');
+    const previous = working.endpoints.find(row => row.directoryCreationId === data.creationId && !row.deletedAt);
+    if (previous) {
+      if (previous.inferenceSource?.instanceId !== data.instanceId || previous.name !== data.name?.trim() || previous.directoryNote !== note) {
+        throw Error('创建标识已使用，请重新打开新建连接');
+      }
+      return { type: 'batch', objectId: previous.id, label: '核对内置模型推理连接', changes: [] };
+    }
+    let provider = working.providers.find(row => row.id === BUILTIN_INFERENCE_PROVIDER_ID);
+    if (!inferenceProviderAvailable(provider)) throw Error('内置模型推理服务商不可用');
+    const target = inferenceConnectionTargets(working).find(row => row.id === data.instanceId);
+    if (!target) throw Error('推理实例或服务端点已变化，请刷新后重新选择');
+    if (working.endpoints.some(row => !row.deletedAt && row.inferenceSource?.endpointId === target.source.endpointId)) {
+      throw Error('此部署服务端点已接入，请使用已有连接');
+    }
+    if (!provider) {
+      provider = { id: BUILTIN_INFERENCE_PROVIDER_ID, code: 'builtin-inference', name: BUILTIN_INFERENCE_PROVIDER_NAME,
+        status: '已启用', builtinCatalogue: 'inference', sourceType: 'selfHosted', catalogModelIds: [], catalogModels: [], catalogConnections: [], apiKeys: [] };
+      add('providers', provider);
+    }
+    const config = prepareListedChannelInterface({ ...target, allowHttp: true });
+    const created = providerOp('supplierChannelCreate', provider.id, { ...config, name: data.name, authMode: 'none',
+      models: [{ libraryId: target.libraryId, upstreamModelId: target.upstreamModelId, scenarios: [] }] });
+    const endpoint = created.changes.find(change => change.type === 'add' && change.collection === 'endpoints').record;
+    update('endpoints', endpoint.id, { directoryCreationId: data.creationId, directoryNote: note,
+      channelSourceType: 'selfHosted', modelProtocol: config.modelProtocol, inferenceSource: target.source });
+    objectId = endpoint.id;
+    label = '接入内置模型推理';
   } else if (operation === 'channelDirectoryCreate') {
+    if (data.channelSourceType === 'selfHosted') throw Error('请在内置模型推理服务中选择模型实例');
     const provider = working.providers.find(row => row.id === data.providerId && !row.deletedAt && !row.profileRemovedAt);
     if (!provider || provider.status !== '已启用') throw Error('请选择已启用的服务商');
     let endpointPath = data.endpointPath;

@@ -11,6 +11,7 @@
 .license-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px 28px; margin:0; padding:23px 24px 25px; }
 .license-facts dt { margin:0 0 5px; }
 .license-facts dd { display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin:0; color:#202630; font-size:14px; line-height:22px; font-weight:500; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.license-menu-preview { display:flex; padding:14px 24px; border-top:1px solid var(--semi-color-border); }
 .license-dialog { top:128px; }
 .license-form { display:grid; gap:8px; }
 .license-form label { font-weight:600; }
@@ -25,5 +26,6 @@
   .license-summary-info { gap:10px; }
   .license-summary-copy h2 { font-size:18px; line-height:26px; }
   .license-facts { padding:18px; gap:16px; }
+  .license-menu-preview { padding-inline:18px; }
   .license-dialog { top:72px; }
 }

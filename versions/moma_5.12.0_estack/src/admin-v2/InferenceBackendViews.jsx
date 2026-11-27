@@ -10,7 +10,7 @@ import InferenceBackendYamlInput from './InferenceBackendYamlInput';
 import { Choice, serviceOperationsUi } from './ServiceUI';
 import { useChannelText } from './channel-language';
 import {
-  backendAvailableVersions, backendCommandPresets, backendFormFrameworks, backendFrameworkIndex,
+  backendAvailableVersions, backendCommandPresets, backendEditableVersionName, backendFormFrameworks, backendFrameworkIndex,
   backendVersionRuntime, backendVersions, backendYaml, backendYamlEditorDraft, backendYamlFieldHints,
   backendYamlIssueLocation, backendYamlTemplate,
   communityBackendCandidates, enableCommunityBackend, initialBackendDraft, saveInferenceBackend, updateBackendVersionDraft, validateBackendVersionEntries,
@@ -25,21 +25,22 @@ const nameWithoutSuffix = name => name.replace(/-custom$/, '');
 const sourceColor = { 内置: 'blue', 社区: 'cyan', 自定义: 'purple' };
 const frameworkColor = { CUDA: 'green', ROCm: 'red', CANN: 'orange', DTK: 'pink', MUSA: 'cyan', CoreX: 'purple', MACA: 'blue', Neuware: 'yellow' };
 
-function BackendMarket({ records, commit, busy, empty }) {
+function BackendMarket({ records, commit, busy, writable, empty }) {
   const t = useChannelText();
   const [open, setOpen] = useState(false);
   return <>
-    <Button onClick={() => setOpen(true)} icon={<IconGlobe aria-hidden="true"/>}>
+    <Button disabled={!writable || busy} onClick={() => setOpen(true)} icon={<IconGlobe aria-hidden="true"/>}>
       {t(empty ? '浏览社区市场' : '社区市场')}
     </Button>
-    {open && <InferenceBackendCommunity records={communityBackendCandidates(records['ops-inference-backends'] || [])}
+    {open && writable && <InferenceBackendCommunity records={communityBackendCandidates(records['ops-inference-backends'] || [])}
       busy={busy} onClose={() => setOpen(false)} onSetEnabled={row =>
         commit(latest => enableCommunityBackend(latest, row), '社区后端已启用')}/>}
   </>;
 }
 
 export function InferenceBackendHeader(props) {
-  return <Space wrap><InferenceBackendSource actorRole={props.records.actorRole} onSaved={props.refresh}/><BackendMarket {...props}/></Space>;
+  return <Space wrap><InferenceBackendSource actorRole={props.records.actorRole} onSaved={props.refresh}
+    disabled={!props.writable}/><BackendMarket {...props}/></Space>;
 }
 
 function BackendEmpty({ hasFilters, ...props }) {
@@ -72,21 +73,21 @@ function BackendCard({ row, actions, openDetail }) {
   </Card>;
 }
 
-function BackendVersionDetails({ row, openEditor, close, busy }) {
+function BackendVersionDetails({ row, openEditor, close, busy, writable }) {
   const t = useChannelText();
   const [framework, setFramework] = useState('');
   const versions = backendAvailableVersions(row).sort((left, right) => right.version.localeCompare(left.version, 'en', { numeric: true }));
   const filtered = framework ? versions.filter(entry => entry.frameworks.includes(framework)) : versions;
   const edit = () => {
     close();
-    openEditor({ row, title: '编辑后端' });
+    openEditor({ row, title: '编辑后端', addVersion: true });
   };
   return <div className="inference-backend-version-list">
     <div className="inference-backend-inline-toolbar">
       <Choice label="按框架过滤" placeholder={t('按框架过滤')} showClear
         value={framework || undefined} onChange={value => setFramework(value || '')}
         options={backendFormFrameworks.map(([value, vendor]) => [value, vendor ? `${value} · ${t(vendor)}` : value])}/>
-      <Button icon={<IconPlus aria-hidden="true"/>} theme="borderless" disabled={busy} onClick={edit}>{t('添加版本')}</Button>
+      <Button icon={<IconPlus aria-hidden="true"/>} theme="borderless" disabled={busy || !writable} onClick={edit}>{t('添加版本')}</Button>
     </div>
     {filtered.map(entry => {
       const runtime = backendVersionRuntime(row, entry);
@@ -161,16 +162,17 @@ function BackendListEditor({ label, items, setItems, environment = false, help }
   </fieldset>;
 }
 
-function BackendBasicFields({ draft, update, row }) {
+function BackendBasicFields({ draft, update, row, issue }) {
   const t = useChannelText();
   const builtIn = row?.source === '内置';
   const preset = row && backendCommandPresets[row.name];
   return <section className="inference-backend-fields">
-    <BackendField label={t('名称')} required>{props => <Input {...props} disabled={Boolean(row)}
+    <BackendField label={t('名称')} required error={issue?.yamlPath?.[0] === 'backend_name' ? t(issue.message) : undefined}>{props => <Input {...props} disabled={Boolean(row)}
       value={draft.name} addonAfter={!row || row.source === '自定义' && row.name.endsWith('-custom') ? '-custom' : undefined}
       onChange={name => update({ name })}/>}</BackendField>
     {!builtIn && <>
-      <BackendField label={t('健康检查路径')}>{props => <Input {...props} value={draft.healthPath} placeholder="/v1/models"
+      <BackendField label={t('健康检查路径')} error={issue?.yamlPath?.[0] === 'health_check_path' ? t(issue.message) : undefined}>
+        {props => <Input {...props} value={draft.healthPath} placeholder="/v1/models"
         onChange={healthPath => update({ healthPath })}/>}</BackendField>
       <BackendField label={t('默认执行命令')} help={t('部署时替换 {{model_path}}、{{port}}、{{worker_ip}} 和 {{model_name}}。')}>
         {props => <TextArea {...props} value={draft.command} placeholder={defaultCommand} rows={2} onChange={command => update({ command })}/>}
@@ -198,7 +200,10 @@ function BackendEditorVersions({ draft, update, row, versionsOpen, setVersionsOp
   const preset = row && backendCommandPresets[row.name];
   const issueAt = (index, field) => issue?.versionIndex === index && issue.versionField === field ? t(issue.message) : undefined;
   const frameworks = backendFormFrameworks.map(([value, vendor]) => ({ value, label: vendor ? `${value} · ${t(vendor)}` : value }));
-  const choices = [...backendVersions(row).filter(entry => entry.sourceManaged), ...draft.versionEntries].map(entry => entry.version.trim()).filter(Boolean);
+  const choices = [
+    ...backendVersions(row).filter(entry => entry.sourceManaged).map(entry => entry.version),
+    ...draft.versionEntries.map(entry => backendEditableVersionName(entry.version, source)).filter(Boolean),
+  ];
   const add = () => {
     try {
       validateBackendVersionEntries(draft.versionEntries, source);
@@ -206,10 +211,10 @@ function BackendEditorVersions({ draft, update, row, versionsOpen, setVersionsOp
       update({ versionEntries: [...draft.versionEntries, blankVersion()] });
     } catch (error) { onError(error); }
   };
-  const patch = (index, change) => update(updateBackendVersionDraft(draft, index, change));
+  const patch = (index, change) => update(updateBackendVersionDraft(draft, index, change, source));
   const remove = index => {
     const versionEntries = draft.versionEntries.filter((_, position) => position !== index);
-    const version = draft.version === draft.versionEntries[index].version ? '' : draft.version;
+    const version = draft.version === backendEditableVersionName(draft.versionEntries[index].version, source) ? '' : draft.version;
     setVersionsOpen(previous => {
       if (previous == null || Number(previous) === index) return null;
       return Number(previous) > index ? String(Number(previous) - 1) : previous;
@@ -225,13 +230,14 @@ function BackendEditorVersions({ draft, update, row, versionsOpen, setVersionsOp
     </div>
     {draft.versionEntries.map((entry, index) => {
       const key = String(index);
-      const versionLabel = entry.version ? `${entry.version}${inherited ? '-custom' : ''}` : t('新版本');
+      const savedVersion = backendEditableVersionName(entry.version, source);
+      const versionLabel = savedVersion || t('新版本');
       const canRemove = inherited || draft.versionEntries.length > 1;
-      return <div key={key} className={`inference-backend-edit-version${canRemove ? ' inference-backend-edit-version-removable' : ''}`}>
+      return <div key={key} className="inference-backend-edit-version inference-backend-edit-version-removable">
         <Collapse activeKey={versionsOpen === key ? [key] : []} onChange={keys => setVersionsOpen(keys[0] ?? null)}>
           <AdminCollapsePanel itemKey={key} header={<Space wrap>
               <Text strong>{versionLabel}</Text>
-              {entry.version && entry.version === draft.version && <Tag size="small" color="blue">{t('默认版本')}</Tag>}
+              {savedVersion && savedVersion === draft.version && <Tag size="small" color="blue">{t('默认版本')}</Tag>}
             </Space>}>
             <div className="inference-backend-fields">
               <BackendField label={t('版本号')} required error={issueAt(index, 'version')}>{props => <Input {...props} value={entry.version}
@@ -255,8 +261,8 @@ function BackendEditorVersions({ draft, update, row, versionsOpen, setVersionsOp
             </div>
           </AdminCollapsePanel>
         </Collapse>
-        {canRemove && <Button aria-label={`${t('移除版本')} ${versionLabel}`} htmlType="button" type="danger" theme="borderless"
-          size="small" disabled={busy} onClick={() => remove(index)} icon={<IconMinus aria-hidden="true"/>}/>}
+        <Button aria-label={`${t('移除版本')} ${versionLabel}`} htmlType="button" type="danger" theme="borderless"
+          size="small" disabled={busy || !canRemove} onClick={() => remove(index)} icon={<IconMinus aria-hidden="true"/>}/>
       </div>;
     })}
   </section>;
@@ -306,7 +312,10 @@ function BackendEditor({ editor, commit, onClose, dirtyRef, busy }) {
   const [tab, setTab] = useState('form');
   const [draft, setDraft] = useState(() => {
     const values = initialBackendDraft(row, editor.preset);
-    return !row && !values.versionEntries.length ? { ...values, versionEntries: [blankVersion()] } : values;
+    if (!row && !values.versionEntries.length || editor.addVersion) {
+      return { ...values, versionEntries: [...values.versionEntries, blankVersion()] };
+    }
+    return values;
   });
   const [yamlTemplate] = useState(() => row ? backendYaml(row, { forEditor: true }) : backendYamlTemplate);
   const [yaml, setYaml] = useState(yamlTemplate);
@@ -318,7 +327,7 @@ function BackendEditor({ editor, commit, onClose, dirtyRef, busy }) {
   const [copyStatus, setCopyStatus] = useState('');
   const [dirty, setDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
-  const [versionsOpen, setVersionsOpen] = useState(row ? null : '0');
+  const [versionsOpen, setVersionsOpen] = useState(() => editor.addVersion ? String(draft.versionEntries.length - 1) : row ? null : '0');
   useEffect(() => { if (error) message.current?.focus(); }, [error]);
   useLayoutEffect(() => {
     const input = yamlInput.current;
@@ -335,9 +344,9 @@ function BackendEditor({ editor, commit, onClose, dirtyRef, busy }) {
   const touch = () => { dirtyRef.current = true; setDirty(true); setError(''); setVersionIssue(null); };
   const showIssue = issue => {
     setError(issue.message);
-    if (tab === 'form' && Number.isInteger(issue.versionIndex)) {
+    if (tab === 'form') {
       setVersionIssue(issue);
-      setVersionsOpen(String(issue.versionIndex));
+      if (Number.isInteger(issue.versionIndex)) setVersionsOpen(String(issue.versionIndex));
     }
   };
   const update = patch => { setDraft(previous => ({ ...previous, ...patch })); touch(); };
@@ -415,7 +424,7 @@ function BackendEditor({ editor, commit, onClose, dirtyRef, busy }) {
       <form id={formId} onSubmit={submit} className="inference-backend-editor-body">
         {error && <div ref={message} tabIndex={-1}><Banner fullMode={false} type="danger" closeIcon={null} description={t(error)}/></div>}
         {tab === 'form' ? <>
-          <BackendBasicFields draft={draft} update={update} row={row}/>
+          <BackendBasicFields draft={draft} update={update} row={row} issue={versionIssue}/>
           <BackendEditorVersions row={row} draft={draft} update={update} versionsOpen={versionsOpen}
             setVersionsOpen={setVersionsOpen} onError={showIssue} issue={versionIssue} busy={busy}/>
         </> : <div className="inference-backend-fields">

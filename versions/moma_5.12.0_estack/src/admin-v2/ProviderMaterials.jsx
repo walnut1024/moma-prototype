@@ -77,7 +77,7 @@ function ProviderList({ state, ops, providers }) {
       { title: '供应模型数', align: 'right', width: 130, render: (_, row) => <Button theme="borderless" aria-label={`查看 ${row.name} 的供应模型`} onClick={() => open(row)}>{providerMaterialModels(state, row).length}</Button> },
       { title: '操作', width: 145, fixed: 'right', render: (_, row) => <Space>
         <Button theme="borderless" disabled={!ops.can} onClick={() => open(row, true)}>{translateLabel("编辑")}</Button>
-        {!isBuiltinMoma(row) && <Button theme="borderless" type="danger" disabled={!ops.can}
+        {!isBuiltinMoma(row) && row.builtinCatalogue !== 'inference' && <Button theme="borderless" type="danger" disabled={!ops.can}
           aria-label={translateLabel("删除") + ' ' + row.name} onClick={event => {
             trigger.current = event.currentTarget;
             ops.setError('');

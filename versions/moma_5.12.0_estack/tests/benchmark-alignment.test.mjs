@@ -25,7 +25,50 @@ const records = {
   deployableModels: [{ id: 'model-a', categories: ['语言模型'] }],
 };
 const draft = (patch = {}) => ({ ...initialBenchmarkDraft(records), ...benchmarkProfilePatch('自定义'),
-  name: '基准任务', loadPattern: '单次', load: 0.25, requests: 25, duration: 60, ...patch });
+  name: 'benchmark-task', loadPattern: '单次', load: 0.25, requests: 25, duration: 60, ...patch });
+
+test('benchmark matches the name rule and defaults to the first running cluster when none is designated', () => {
+  const clusters = [
+    { id: 'offline', status: '停止', isDefault: true },
+    { ...records.clusters[0], isDefault: false },
+    { id: 'other', status: '运行中' },
+  ];
+  assert.equal(initialBenchmarkDraft({ ...records, clusters }).clusterId, 'cluster-a');
+  for (const name of ['新测试', '-test', 'test.', 'a'.repeat(64)]) {
+    assert.throws(() => saveAlignedBenchmark([], records, draft({ name })), issue =>
+      issue.benchmarkSection === 'basic' && issue.message.includes('63'));
+  }
+  for (const name of ['a', 'Case_1.test', 'a'.repeat(63)]) {
+    assert.equal(saveAlignedBenchmark([], records, draft({ name }))[0].name, name);
+  }
+  const current = { ...saveAlignedBenchmark([], records, draft())[0], name: '已有测试' };
+  const [updated] = saveAlignedBenchmark([current], records, { name: current.name, description: '保留原名' }, current);
+  assert.equal(updated.name, current.name);
+  const cloned = cloneAlignedBenchmark(current, records);
+  assert.equal(saveAlignedBenchmark([], records, cloned)[0].name, 'benchmark-copy');
+});
+
+test('auto-tuning, load percentages and SLO thresholds validate in their respective form sections', () => {
+  for (const [patch, section, pattern] of [
+    [{ loadPattern: '自动调优', minLoad: 1.25 }, 'load', /负载下限/],
+    [{ loadPattern: '自动调优', maxPoints: 1 }, 'load', /最大测量点数/],
+    [{ executionWarmup: 100 }, 'load', /预热比例/],
+    [{ executionCooldown: 100 }, 'load', /冷却比例/],
+    [{ sloTargets: { p95Ttft: '' } }, 'slo', /P95 TTFT/],
+    [{ inputTokens: '' }, 'workload', /输入 Token 长度/],
+    [{ maxErrorPercent: 100 }, 'execution', /错误率上限/],
+  ]) {
+    assert.throws(() => saveAlignedBenchmark([], records, draft(patch)), issue =>
+      issue.benchmarkSection === section && pattern.test(issue.message));
+  }
+  const [row] = saveAlignedBenchmark([], records,
+    draft({ loadPattern: '自动调优', minLoad: 1, maxLoad: 4, maxPoints: 2, executionWarmup: 99, executionCooldown: 0,
+      sloTargets: { p95Ttft: 0 }, pinSeed: false, incrementSeed: false }));
+  assert.equal(row.warmup, 0.99);
+  assert.equal(row.cooldown, 0);
+  assert.equal(row.incrementSeed, true);
+  assert.equal(benchmarkStageInspection(row).targets[0].threshold, 0);
+});
 
 test('selects healthy deployment instances and the main active route target without exposing PD workers', () => {
   const targetIds = benchmarkTargets(records, 'cluster-a', '模型实例').map(item => item.value);
@@ -72,8 +115,8 @@ test('editing a historical route benchmark changes only identity fields even whe
     labels: [{ key:'scope', value:'production' }],
   }))[0];
   const saved = saveAlignedBenchmark([current], { ...records, routes: [] },
-    { name: '新名称', description:'新描述', labels:[{ key:'scope', value:'' }], targetSelection:'removed' }, current, startedAt)[0];
-  assert.deepEqual(saved, { ...current, name:'新名称', description:'新描述', updatedAt:startedAt.toISOString() });
+    { name: 'renamed-test', description:'新描述', labels:[{ key:'scope', value:'' }], targetSelection:'removed' }, current, startedAt)[0];
+  assert.deepEqual(saved, { ...current, name:'renamed-test', description:'新描述', updatedAt:startedAt.toISOString() });
 });
 
 test('deployment links and clones keep the exact replica and require reselection after replacement', () => {
@@ -84,7 +127,7 @@ test('deployment links and clones keep the exact replica and require reselection
   const existing = { ...records, 'ops-benchmarks': [source, { name: `${source.name}-copy` }] };
   const cloned = cloneAlignedBenchmark(source, existing);
   assert.equal(cloned.targetSelection, source.targetSelection);
-  assert.equal(cloned.name, '基准任务-copy-2');
+  assert.equal(cloned.name, 'benchmark-task-copy-2');
   const replacement = { ...records, deployments: [{ ...deployment, instanceReplacements: { 2: { sequence: 1 } } }, second, grouped] };
   assert.equal(isBenchmarkTargetReady(source, replacement), false);
   const changed = cloneAlignedBenchmark(source, replacement);
@@ -153,7 +196,7 @@ test('keeps model and instance choices distinct and shows unavailable models and
   const parentOnly = initialBenchmarkDraft(next, undefined, { targetId: deployment.id, targetSelection: '' });
   assert.equal(parentOnly.targetId, deployment.id);
   assert.equal(parentOnly.targetSelection, '');
-  assert.throws(() => saveAlignedBenchmark([], next, { ...draft(), ...parentOnly, name: '必须选择实例' }), /就绪的模型实例/);
+  assert.throws(() => saveAlignedBenchmark([], next, { ...draft(), ...parentOnly, name: 'instance-required' }), /就绪的模型实例/);
 });
 
 test('applies named preset defaults and checks decimal rates, integer concurrency, ranges and stages', () => {
@@ -270,8 +313,8 @@ test('persists nine thresholds, dataset knobs and percent execution values in YA
   assert.equal(exported.dataset_seed_random, false);
   assert.deepEqual(exported.prefix_buckets, [{ prefix_tokens: 64, prefix_count: 2, bucket_weight: 30 }]);
   assert.throws(() => saveAlignedBenchmark([], records, draft({ tokenDistribution: true, inputMin: 4, inputMax: 2 })), /下限不能大于上限/);
-  const edited = saveAlignedBenchmark([row], records, { ...initialBenchmarkDraft(records, row), name: '新名称', load: 99 }, row)[0];
-  assert.equal(edited.name, '新名称');
+  const edited = saveAlignedBenchmark([row], records, { ...initialBenchmarkDraft(records, row), name: 'renamed-test', load: 99 }, row)[0];
+  assert.equal(edited.name, 'renamed-test');
   assert.equal(edited.load, row.load);
 });
 

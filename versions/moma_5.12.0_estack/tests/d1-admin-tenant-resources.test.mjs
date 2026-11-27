@@ -40,6 +40,7 @@ test('only a system administrator can manage a selected tenant with the actual a
   const view = await request(path+'/workspace',admin.cookie);
   assert.equal(view.status,200,JSON.stringify(view.data));
   assert.equal(view.data.identity.tenantId,'zqzh');
+  assert.equal(view.data.canCreateProject,true);
   assert(view.data.projects.every(row=>!row.tenantId || row.tenantId==='zqzh'));
   const member = view.data.organization.members.find(row=>row.status==='已加入');
   const command = (action,data,tenantId='zqzh')=>request(path+'/commands',admin.cookie,{
@@ -100,10 +101,51 @@ test('only a system administrator can manage a selected tenant with the actual a
   assert.equal((await request(path+'/workspace',scoped.cookie)).status,401);
   const policy = await request('/project-space-policy',admin.cookie);
   assert.equal(policy.status,200,JSON.stringify(policy.data));
+  const designated = await request('/project-space-policy',admin.cookie,{
+    expectedRevision:policy.data.revision, operatingMode:'factory', internalTenantId:tenantId, personalEnabled:true,
+  });
+  assert.equal(designated.status,200,JSON.stringify(designated.data));
+  const designatedView = await request(path+'/workspace',admin.cookie);
+  assert.equal(designatedView.data.canCreateProject,false);
+  const internalCommand = (workspace, action, data)=>request(path+'/commands',admin.cookie,{
+    operationId:randomUUID(),expectedRevision:workspace.data.revision,tenantId,action,data,
+  });
+  const projectChanges = [
+    ['projectCreate',{name:'需要用户控制台创建',administratorId:member.id}],
+    ['projectUpdate',{projectId,type:'settings',input:{name:'需要用户控制台更新'}}],
+    ['projectRoute',{route:{projectId}}],
+    ['keys',{projectId,rows:[],billing:'按量付费'}],
+  ];
+  assert.equal((await internalCommand(designatedView,...projectChanges[0])).status,403);
+  assert.equal((await request('/tenants/grzh/workspace',admin.cookie)).status,200);
   const saved = await request('/project-space-policy',admin.cookie,{
-    expectedRevision:policy.data.revision, operatingMode:'internal', internalTenantId:'zqzh', personalEnabled:false,
+    expectedRevision:designated.data.revision, operatingMode:'internal', internalTenantId:tenantId, personalEnabled:false,
   });
   assert.equal(saved.status,200,JSON.stringify(saved.data));
-  assert.equal((await request(path+'/workspace',admin.cookie)).status,200);
+  const internalView = await request(path+'/workspace',admin.cookie);
+  assert.equal(internalView.status,200);
+  assert.equal(internalView.data.canCreateProject,false);
+  assert(internalView.data.projects.some(row=>row.id===projectId));
+  assert(internalView.data.projects.every(row=>!row.canManage && !row.canEdit));
+  for (const change of projectChanges) assert.equal((await internalCommand(internalView,...change)).status,403);
+  const afterRejected = await request(path+'/workspace',admin.cookie);
+  assert.equal(afterRejected.data.revision,internalView.data.revision);
+  assert.deepEqual(afterRejected.data.projects,internalView.data.projects);
   assert.equal((await request('/tenants/grzh/workspace',admin.cookie)).status,403);
+
+  const organization = {
+    ...internalView.data.organization,
+    departments:[...internalView.data.organization.departments,{id:'dept-extra',name:'内用部门',parentId:'root'}],
+  };
+  const savedOrganization = await internalCommand(internalView,'organization',organization);
+  assert.equal(savedOrganization.status,200,JSON.stringify(savedOrganization.data));
+  assert((await request(path+'/workspace',admin.cookie)).data.organization.departments.some(row=>row.id==='dept-extra'));
+
+  const tenantAdmin = await request('/auth/sign-in',undefined,{identifier:'zqzh',accessCode:password});
+  const customerView = await request('/market/workspace',tenantAdmin.cookie);
+  assert.equal(customerView.data.canCreateProject,true);
+  const customerProject = await request('/market/commands',tenantAdmin.cookie,{
+    operationId:randomUUID(),expectedRevision:customerView.data.revision,tenantId,action:'projectCreate',data:{name:'前台创建的内用项目'},
+  });
+  assert.equal(customerProject.status,200,JSON.stringify(customerProject.data));
 });

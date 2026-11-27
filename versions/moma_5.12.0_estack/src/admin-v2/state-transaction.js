@@ -36,7 +36,7 @@ export function canMutate(role, action) {
   if (role === "只读观察员") return false;
   const collection = action.collection || action.changes?.[0]?.collection || (action.type === "setSettings" ? "settings" : "");
   const allowed = {
-    运营人员: ["providers","endpoints","supplyPrices","models","modelVersions","validations","tenants","projects","memberships","users","organizations","apiKeys","grants","products","prices","orders","announcements"],
+    运营人员: ["providers","endpoints","supplyPrices","models","modelVersions","validations","tenants","projects","memberships","users","organizations","apiKeys","grants","products","prices","orders"],
     运维人员: ["clusters","deployments","routes","limits","fallbacks","releases","caches","alerts","incidents","integrations"],
     财务人员: ["prices","orders","ledger","bills","settlements","adjustments"],
     安全管理员: ["apiKeys"],
@@ -67,6 +67,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   if (directChanges?.some(change => change.type === 'setSettings' && Object.hasOwn(change.changes || {}, 'trafficLimits')
     || change.collection === 'tenants' && Object.hasOwn(change.changes || change.record || {}, 'trafficPolicy'))) throw new Error('限流配置须通过流量运营维护');
   if (action.type === 'tokenPackage' || directChanges?.some(change => ['tokenPackages', 'tokenPackageTypes', 'tokenPackageFactors'].includes(change.collection))) throw new Error('套餐须通过 D1 套餐管理接口维护');
+  if (directChanges?.some(change => change.collection === 'announcements')) throw new Error('公告须通过公告管理维护');
   if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='models' && ['callsEnabled','listingStatus','releaseStage','releaseTenantIds','salesScope','salesPaused','purpose','archivedAt','marketVisible','openScope','tenantIds','commercialDrafts','commercialPublications','materialDraft','materialPublication','lifecycleStopReason','requestGeneration','serviceProviders','serviceMode','serviceModeRevision'].some(key=>Object.hasOwn(change.changes || change.record || {},key)) || change.collection==='modelSalePrices' && ['model','provider'].includes((change.record || change.changes)?.scope || state.modelSalePrices.find(price=>price.id===change.id)?.scope))) throw new Error('模型服务关联及模型刊例价须通过服务管理操作');
   if (action.type !== 'modelOperations' && directChanges?.some(change => change.collection === 'modelTemplates' && ['materialDraft', 'materialPublication'].some(key => Object.hasOwn(change.changes || change.record || {}, key)))) throw new Error('模型资料须通过模型资料维护操作');
   if (action.type!=='modelOperations' && directChanges?.some(change=>change.collection==='endpoints' && Object.hasOwn(change.changes || change.record || {},'frozen'))) throw new Error('连接冻结状态须通过供应管理操作');

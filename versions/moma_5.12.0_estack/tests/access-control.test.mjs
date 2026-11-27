@@ -53,3 +53,18 @@ test('opening, limiting and removing a model preserve other models already grant
   assert.deepEqual(tenant.modelRules,[{modelId:'beta',rpm:30,tpm:1000},existing]);
   assert.deepEqual(apply('remove-model',{modelId:'beta'}),[existing]);
 });
+
+test('internal bulk authorization requires running independently callable services', () => {
+  const tenant = {id:'company',type:'企业',status:'正常'};
+  const state = {tenants:[tenant],models:[],grants:[],spacePolicy:{internalTenantId:tenant.id},marketModelServices:[
+    {id:'running',callId:'running',listed:true,independentService:true},
+    {id:'stopped',callId:'stopped',listed:false,independentService:true},
+    {id:'legacy-wrapper',callId:'legacy',listed:true,independentService:false},
+  ]};
+  const authorize = modelIds => tenantServiceTransaction(state,{
+    tenantId:tenant.id,operation:'open-models',data:{modelIds},
+  }).changes[0].changes.modelRules;
+  assert.throws(()=>authorize(['running','stopped']),/无法授权的模型服务/);
+  assert.throws(()=>authorize(['legacy-wrapper']),/无法授权的模型服务/);
+  assert.deepEqual(authorize(['running']),[{modelId:'running',rpm:null,tpm:null}]);
+});

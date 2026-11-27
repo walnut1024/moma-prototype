@@ -26,6 +26,11 @@ const eventSource = `WITH events AS (
   FROM audit_events e JOIN operations o ON o.id=e.operation_id
   WHERE e.entity_type='application' AND json_type(e.record_json,'$.projectAudit.projectId')='text'
   UNION ALL
+  SELECT e.id, e.operation_id, e.entity_id, e.created_at, e.action, e.record_json, o.command,
+    o.actor_id, NULL, NULL, 'site'
+  FROM audit_events e JOIN operations o ON o.id=e.operation_id
+  WHERE e.entity_type='announcement' AND o.command IN ('announcement.publish','announcement.withdraw')
+  UNION ALL
   SELECT 'space-policy:' || s.id, 'space-policy:' || s.id, 'published',
     json_extract(s.payload_json,'$.createdAt'), '变更个人空间开关', s.payload_json, NULL,
     json_extract(s.payload_json,'$.actorId'), NULL, NULL, 'site'
@@ -133,11 +138,12 @@ async function eventFromRow(db, row) {
 
 function scopedEvent(row, record) {
   const site = row.domain === 'site';
-  const action = site ? 'site.personal_space.configure' : projectCodes.get(row.action);
+  const announcement = site && ['announcement.publish','announcement.withdraw'].includes(row.command);
+  const action = announcement ? row.command : site ? 'site.personal_space.configure' : projectCodes.get(row.action);
   if (!action || !row.entity_id || !Number.isFinite(row.created_at)) return null;
-  const type = site ? 'site' : action.startsWith('project.key.') ? 'project_key'
+  const type = announcement ? 'announcement' : site ? 'site' : action.startsWith('project.key.') ? 'project_key'
     : action.startsWith('project.route.') ? 'project_route' : action.startsWith('project.member.') ? 'project_member' : 'project';
-  const resources = [ref(type, row.entity_id, 'target')];
+  const resources = [{ ...ref(type, row.entity_id, 'target'), ...(announcement && { name:record.objectLabel }) }];
   if (row.project_id && type !== 'project') resources.push(ref('project', row.project_id, 'related'));
   const at = new Date(row.created_at).toISOString();
   return {
@@ -145,10 +151,10 @@ function scopedEvent(row, record) {
     domain:row.domain, occurred_at:at, recorded_at:at,
     actor:{ type:site || row.command ? 'admin_account' : 'customer_user', id:row.actor_id,
       name:record.actorName || (!row.command ? record.actor : undefined), role:record.actorRole },
-    observer:row.domain, source:'unknown', provenance:{ environment:'prototype', mode:'actual' },
+    observer:row.domain, source:announcement ? 'web' : 'unknown', provenance:{ environment:'prototype', mode:'actual' },
     scope:site ? { type:'platform' } : { type:'project', tenant_id:row.tenant_id, project_id:row.project_id },
     stage:'commit', outcome:{ status:record.result === '失败' ? 'failed' : 'succeeded' },
-    resources, changes:site ? [
+    resources, changes:announcement ? [field(type,row.entity_id,'announcement_status',record.before,record.after)] : site ? [
       field(type,row.entity_id,'personal_space_enabled',record.before,record.after),
       ...(record.beforeMode!==record.afterMode ? [field(type,row.entity_id,'operating_mode',record.beforeMode,record.afterMode)] : []),
       ...(record.beforeInternalTenantId!==record.afterInternalTenantId ? [field(type,row.entity_id,'internal_tenant_id',record.beforeInternalTenantId,record.afterInternalTenantId)] : []),

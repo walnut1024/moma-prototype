@@ -88,8 +88,16 @@ async function lifecycleCheck(db, row) {
         JOIN offers o ON o.record_id=${legacyModelServiceOfferId}
         JOIN services owner ON owner.id=o.service_id
         WHERE s.id=? AND o.retired_at IS NULL AND owner.deleted_at IS NULL
-          AND (o.active_sale_price_id IS NOT NULL OR o.listing_stage <> 'unlisted')) AS legacySale`)
-      .bind(row.id,row.controlledOfferId || '',row.id,row.controlledOfferId || '',row.id),
+          AND (o.active_sale_price_id IS NOT NULL OR o.listing_stage <> 'unlisted')) AS legacySale,
+      EXISTS (SELECT 1 FROM model_workspace w, json_each(w.reference_json,'$.tenants') tenant,
+        json_each(tenant.value,'$.modelRules') rule
+        WHERE w.id=1 AND json_extract(rule.value,'$.modelId')=?)
+      OR EXISTS (SELECT 1 FROM model_workspace w, json_each(w.reference_json,'$.tenants') tenant,
+        json_each(w.reference_json,'$.grants') grant, json_each(grant.value,'$.modelIds') model
+        WHERE w.id=1 AND COALESCE(json_type(tenant.value,'$.modelRules'),'null')<>'array'
+          AND json_extract(grant.value,'$.subjectType')='tenant' AND json_extract(grant.value,'$.status')='生效中'
+          AND json_extract(grant.value,'$.subjectId')=json_extract(tenant.value,'$.id') AND model.value=?) AS authorized`)
+      .bind(row.id,row.controlledOfferId || '',row.id,row.controlledOfferId || '',row.id,row.id,row.id),
   ]);
   const cards = JSON.parse(workspace.results[0]?.cards || '{}');
   const offer = offers.results[0];
@@ -110,12 +118,12 @@ async function lifecycleCheck(db, row) {
     ? { id: saleRow ? row.id : offer.record_id, name: row.name, callId: row.callId,
       status: stage === 'gray' ? '灰度在售' : '在售', ...(saleRow && { revision:saleRow.revision }) }
     : null;
-  const { ordered, packaged, legacySale } = references.results[0];
+  const { ordered, packaged, legacySale, authorized } = references.results[0];
   return { marketLinked, marketListed, saleRow, sale, offer, model, key,
     stopIssue: marketListed ? '请先在模型广场取消展示该服务' : '',
     deleteIssue: row.listed ? '请先停止模型服务'
       : saleRow || legacySale ? '该模型服务已配置模型售卖，不能删除'
-        : marketLinked ? '请先解除模型广场关联' : row.grants?.length ? '请先移除租户授权'
+        : marketLinked ? '请先解除模型广场关联' : authorized || row.grants?.length ? '请先移除租户授权'
         : ordered ? '该模型服务仍有有效订单' : packaged ? '该模型服务仍被套餐引用' : '' };
 }
 

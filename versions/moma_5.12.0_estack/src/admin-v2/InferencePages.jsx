@@ -1,7 +1,7 @@
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Descriptions, Dropdown, Input, Space, Table, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Descriptions, Input, Space, Table, Tabs, Tag, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { AdminModal } from './AdminOverlay';
 import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
 import { FilterReset } from '../components/FilterControls';
@@ -15,6 +15,8 @@ import { readInferenceDemoInfrastructure } from './inference-demo-infrastructure
 import { CLUSTER_PROVIDERS, clusterGatherIssue, clusterRemovalIssue, isCloudCluster } from './ops-cluster-domain';
 import { changeInfrastructure, INFRASTRUCTURE_STORAGE, readInfrastructure } from './infrastructure-state';
 import { labelMap, RESOURCE_PAGES } from './ops-resources';
+import { canMutate } from './state-transaction';
+import { useChannelText } from './channel-language';
 import './semi-inference.css';
 
 export { default as ModelDeployments } from './DeploymentManagement';
@@ -23,8 +25,13 @@ const { Text, Paragraph } = Typography;
 
 const clusterStatus = ['运行中', '维护中', '待注册'];
 const clusterTimestamp = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
+const canExpandPools = cluster => isCloudCluster(cluster.provider) && Boolean(cluster.nodePools?.length);
 
-export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refreshShared, params = new URLSearchParams(), inferenceDemo = false }) {
+export function ClusterManagement({
+  state, dispatch, onNavigate, dirtyRef, refreshShared, params = new URLSearchParams(),
+  inferenceDemo = false, interactiveDemo = false, demoInfrastructure, changeDemoInfrastructure,
+}) {
+  const t = useChannelText();
   const formDirty = useRef(false), writing = useRef(false);
   const [pending, setPending] = useState(false);
   const [editor, setEditor] = useState(null);
@@ -41,23 +48,30 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
   const [status, setStatus] = useState('all');
   const [selected, setSelected] = useState([]);
   const [expanded, setExpanded] = useState([]);
-  const [infrastructure, setInfrastructure] = useState(() => {
-    try { return inferenceDemo ? readInferenceDemoInfrastructure() : readInfrastructure(); } catch { return null; }
+  const readOnlyDemo = inferenceDemo && !interactiveDemo;
+  const canWrite = !readOnlyDemo && Boolean(dispatch) && !state.storageError &&
+    canMutate(state.currentRole, { type: 'update', collection: 'clusters' });
+  const writeDisabled = !canWrite || pending;
+  const readResources = () => inferenceDemo ? demoInfrastructure ?? readInferenceDemoInfrastructure() : readInfrastructure();
+  const changeResources = inferenceDemo ? changeDemoInfrastructure : changeInfrastructure;
+  const [localInfrastructure, setInfrastructure] = useState(() => {
+    try { return readResources(); } catch { return null; }
   });
+  const infrastructure = inferenceDemo ? demoInfrastructure ?? localInfrastructure : localInfrastructure;
   const refreshLocal = () => {
-    try { setInfrastructure(inferenceDemo ? readInferenceDemoInfrastructure() : readInfrastructure()); }
+    try { setInfrastructure(readResources()); }
     catch { Toast.error('无法读取运维演示数据。'); }
   };
   const refresh = async () => {
     refreshLocal();
-    if (inferenceDemo) return;
+    if (readOnlyDemo) return;
     try { await refreshShared?.(); setError(''); }
     catch (issue) { Toast.error(issue.message || '刷新工作区失败'); }
   };
   const demoNodes = infrastructure?.['ops-nodes'] ?? [];
   const lookup = id => state.clusters.find(item => item.id === id);
   const detail = params.get('view') === 'detail' ? lookup(params.get('record')) : null;
-  const topology = inferenceDemo ? null : lookup(topologyId || params.get('topology'));
+  const topology = canWrite && changeResources ? lookup(topologyId || params.get('topology')) : null;
   const clusterNodes = id => demoNodes.filter(node => node.clusterId === id);
   const gpuChildren = id => infrastructure?.['ops-gpus']?.filter(gpu => gpu.clusterId === id) ?? [];
   const resourceRecords = { clusters: state.clusters, 'ops-nodes': demoNodes, 'ops-gpus': infrastructure?.['ops-gpus'] ?? [] };
@@ -70,11 +84,18 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
       deploymentCount: state.deployments.filter(deployment => !deployment.retiredAt && deployment.clusterId === item.id).length };
   });
   const rowSelection = selected.filter(id => rows.some(row => row.id === id));
+  const expandableIds = rows.filter(canExpandPools).map(row => row.id);
+  const allPoolsExpanded = expandableIds.length > 0 && expandableIds.every(id => expanded.includes(id));
   const poolCluster = lookup(poolEditor?.clusterId);
   const livePoolNodes = poolId => demoNodes.filter(node => node.nodePoolId === poolId);
   const monitorTitle = monitoringId === 'all' ? '集群监控' : lookup(monitoringId)?.name;
   const showResources = (page, item) => onNavigate(`${page}?clusterId=${encodeURIComponent(item.id)}`);
   const showDetail = (item, tab = 'nodes') => onNavigate(`clusters?view=detail&record=${encodeURIComponent(item.id)}&tab=${tab}`);
+  const showResourceDetail = (page, row, panel) => {
+    const query = new URLSearchParams({ view: 'detail', record: row.id, clusterId: row.clusterId });
+    if (panel) query.set('panel', panel);
+    onNavigate(`${page}?${query}`);
+  };
   useEffect(() => {
     const sync = event => { if (event.key === INFRASTRUCTURE_STORAGE) refreshLocal(); };
     if (!inferenceDemo) window.addEventListener('storage', sync);
@@ -96,7 +117,7 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
     else closeEditor();
   };
   const writeCluster = async nextAction => {
-    if (inferenceDemo) return null;
+    if (!canWrite) return null;
     if (writing.current) return null;
     writing.current = true;
     setPending(true);
@@ -145,7 +166,7 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
     const before = all.find(row => row.id === value.id);
     if (poolEditor.row && JSON.stringify(before) !== JSON.stringify(poolEditor.row)) throw Error('节点池已更新，请关闭后重新打开。');
     if (before && value.replicas < before.replicas) {
-      const records = { ...readInfrastructure(), deployments: state.deployments };
+      const records = { ...readResources(), deployments: state.deployments };
       for (const row of records['ops-nodes']) {
         if (row.clusterId !== poolCluster.id || row.nodePoolId !== value.id || row.poolIndex < value.replicas) continue;
         const issue = RESOURCE_PAGES['ops-nodes'].canDelete(row, records);
@@ -158,11 +179,11 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
     return Boolean(result);
   };
   const syncNodePool = async (cluster, pool) => {
-    if (inferenceDemo || writing.current) return;
+    if (!canWrite || !changeResources || writing.current) return;
     writing.current = true;
     setPending(true);
     try {
-      const next = await changeInfrastructure('ops-nodes', (nodes, records) => {
+      const next = await changeResources('ops-nodes', (nodes, records) => {
         const related = { ...records, deployments: state.deployments };
         const current = nodes.filter(node => node.clusterId === cluster.id && node.nodePoolId === pool.id);
         const removed = current.filter(node => node.poolIndex >= pool.replicas);
@@ -196,12 +217,13 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
   const queueAction = data => { setError(''); setAction(data); };
   const removalIssue = item => {
     if (!infrastructure) return '无法核对集群关联的演示资源，请刷新后重试。';
-    if (clusterNodes(item.id).length || gpuChildren(item.id).length || infrastructure['ops-cache-acceleration'].some(row => row.clusterId === item.id)) {
+    if (clusterNodes(item.id).length || gpuChildren(item.id).length || infrastructure['ops-cache-acceleration']?.some(row => row.clusterId === item.id)) {
       return `${item.name} 仍有关联节点或运维资源。`;
     }
     return clusterRemovalIssue(state, item);
   };
   const runAction = async () => {
+    if (!canWrite) return;
     const target = action.id && lookup(action.id);
     if (action.kind === 'delete') {
       const targets = action.ids.map(lookup);
@@ -217,11 +239,14 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
     }
     if (!target) { setError('集群已不存在。'); return; }
     if (action.kind === 'pool-delete' && livePoolNodes(action.pool.id).length) { setError('请将节点池副本调整为 0 并同步后删除。'); return; }
+    if (action.kind === 'maintenance' && (target.status === '待注册' || target.status === action.status)) {
+      setError('集群状态已变化，请刷新后重试。'); return;
+    }
     const result = action.kind === 'default' ? await writeCluster({ type: 'batch', label: '设置默认集群', changes: state.clusters
       .filter(row => row.isDefault || row.id === target.id).map(row => ({ type: 'update', collection: 'clusters', id: row.id, changes: { isDefault: row.id === target.id } })) })
       : await writeCluster({ type: 'update', id: target.id, changes: action.kind === 'pool-delete'
         ? { nodePools: (target.nodePools || []).filter(row => row.id !== action.pool.id) }
-        : { status: target.status === '维护中' ? '运行中' : '维护中' } });
+        : { status: action.status } });
     if (result) setAction(null);
   };
   const completeRegistration = (target, values) => {
@@ -235,20 +260,19 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
     if (values.kvTransferNic) settings.set('kvTransferNic', values.kvTransferNic);
     onNavigate(`ops-nodes?${settings}`);
   };
-  const poolRows = item => <Table size="small" rowKey="id" dataSource={item.nodePools || []} pagination={false} empty="暂无节点池" columns={[
-    { title: '名称', dataIndex: 'name' }, { title: '实例类型', dataIndex: 'instanceType' },
-    { title: '操作系统镜像', dataIndex: 'osImage' }, { title: '节点', dataIndex: 'replicas',
-      render: (value, pool) => <Space spacing={8}>
-        {`${livePoolNodes(pool.id).filter(node => node.status === '就绪').length} / ${value}`}
-        {!inferenceDemo && <Button size="small" theme="borderless" disabled={pending} aria-label={`调整 ${pool.name} 的副本数`}
-          onClick={() => openPool(item, pool, true)}>调整副本</Button>}
-      </Space> },
-    { title: '创建时间', dataIndex: 'createdAt', render: clusterTimestamp },
-    ...(!inferenceDemo ? [{ title: '操作', key: 'actions', render: (_, pool) => <AdminActionMenu label={`${pool.name} 操作`} disabled={pending} items={[
-      { node: 'item', name: '编辑', onClick: () => openPool(item, pool) },
-      { node: 'item', name: '模拟同步节点', onClick: () => syncNodePool(item, pool) },
-      { node: 'item', name: '删除', type: 'danger', onClick: () => queueAction({ kind: 'pool-delete', id: item.id, pool }) },
-    ]}/> }] : []),
+  const poolRows = item => <Table size="small" rowKey="id" dataSource={item.nodePools || []} pagination={false}
+    empty="暂无节点池" scroll={{ x: 'max(100%, 746px)' }} columns={[
+    { title: '名称', dataIndex: 'name', width: 128 }, { title: '实例类型', dataIndex: 'instanceType', width: 150 },
+    { title: '操作系统镜像', dataIndex: 'osImage', width: 120 }, { title: '节点', dataIndex: 'replicas', width: 112,
+      render: (value, pool) => `${livePoolNodes(pool.id).filter(node => node.status === '就绪').length} / ${value}` },
+    { title: '创建时间', dataIndex: 'createdAt', width: 148, render: clusterTimestamp },
+    { title: '操作', key: 'actions', width: 88, fixed: 'right', render: (_, pool) => <AdminActionMenu label={`${pool.name} 操作`} items={[
+      { node: 'item', name: '调整副本', disabled: writeDisabled, onClick: () => openPool(item, pool, true) },
+      { node: 'item', name: '编辑', disabled: writeDisabled, onClick: () => openPool(item, pool) },
+      { node: 'item', name: '模拟同步节点', disabled: writeDisabled || !changeResources, onClick: () => syncNodePool(item, pool) },
+      { node: 'item', name: '删除', type: 'danger', disabled: writeDisabled || livePoolNodes(pool.id).length > 0,
+        onClick: () => queueAction({ kind: 'pool-delete', id: item.id, pool }) },
+    ]}>操作</AdminActionMenu> },
   ]}/>;
   const columns = [
     { title: '集群名称', dataIndex: 'name', width: 210, sorter: (left, right) => left.name.localeCompare(right.name, 'zh-CN'),
@@ -261,33 +285,41 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
     { title: '部署', dataIndex: 'deploymentCount', width: 88, sorter: (left, right) => left.deploymentCount - right.deploymentCount },
     { title: '节点', dataIndex: 'nodeCount', width: 92, sorter: (left, right) => left.nodeCount - right.nodeCount,
       render: (count, item) => <Button theme="borderless" size="small" onClick={() => showDetail(item)} aria-label={`查看 ${item.name} 的节点`}>{item.readyNodeCount} / {count}</Button> },
-    { title: '状态', dataIndex: 'status', width: 95, render: value => <AdminStatus value={value}/> },
+    { title: '状态', dataIndex: 'status', width: 95, sorter: (left, right) => left.status.localeCompare(right.status, 'zh-CN'),
+      render: (value, item) => item.statusMessage
+        ? <Tooltip content={item.statusMessage}><span tabIndex={0}><AdminStatus value={value}/></span></Tooltip>
+        : <AdminStatus value={value}/> },
     { title: '创建时间', dataIndex: 'createdAt', width: 164, render: clusterTimestamp, sorter: (left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) },
-    { title: '操作', key: 'actions', width: 158, render: (_, item) => <Space>
-      {inferenceDemo ? <Button size="small" theme="borderless" onClick={() => setMonitoringId(item.id)}>指标详情</Button> : <>
-      <Button size="small" theme="borderless" onClick={() => edit(item)}>编辑</Button>
-      <Dropdown trigger="click" clickToHide render={<Dropdown.Menu>
-        <Dropdown.Item onClick={() => setMonitoringId(item.id)}>指标详情</Dropdown.Item>
-        {isCloudCluster(item.provider) ? <Dropdown.Item onClick={() => openPool(item)}>添加节点池</Dropdown.Item>
-          : <Dropdown.Item onClick={() => setRegistrationTarget(item)}>{item.provider === 'Kubernetes' ? '注册集群' : '添加节点'}</Dropdown.Item>}
-        <Dropdown.Item onClick={() => setTopologyId(item.id)}>集群拓扑</Dropdown.Item>
-        {!item.isDefault && <Dropdown.Item onClick={() => queueAction({ kind: 'default', id: item.id })}>设为默认</Dropdown.Item>}
-        {item.status !== '待注册' && <Dropdown.Item onClick={() => queueAction({ kind: 'maintenance', id: item.id })}>{item.status === '维护中' ? '恢复服务' : '进入维护'}</Dropdown.Item>}
-        <Dropdown.Item type="danger" onClick={() => queueAction({ kind: 'delete', ids: [item.id] })}>删除</Dropdown.Item>
-      </Dropdown.Menu>}><Button size="small" theme="borderless" aria-label={`${item.name} 的更多操作`}>更多</Button></Dropdown></>}
-    </Space> },
+    { title: '操作', key: 'actions', width: 88, fixed: 'right', render: (_, item) => <AdminActionMenu label={`${item.name} 操作`} items={[
+      { node: 'item', name: '编辑', disabled: writeDisabled, onClick: () => edit(item) },
+      { node: 'item', name: '指标详情', onClick: () => setMonitoringId(item.id) },
+      { node: 'item', name: '添加节点池', disabled: writeDisabled || !isCloudCluster(item.provider), onClick: () => openPool(item) },
+      { node: 'item', name: '注册集群', disabled: writeDisabled || item.provider !== 'Kubernetes', onClick: () => setRegistrationTarget(item) },
+      { node: 'item', name: '添加节点', disabled: writeDisabled || item.provider === 'Kubernetes' || isCloudCluster(item.provider),
+        onClick: () => setRegistrationTarget(item) },
+      { node: 'item', name: '集群拓扑', disabled: writeDisabled || !changeResources, onClick: () => setTopologyId(item.id) },
+      { node: 'item', name: '设为默认', disabled: writeDisabled || item.isDefault,
+        onClick: () => queueAction({ kind: 'default', id: item.id }) },
+      { node: 'item', name: '进入维护', disabled: writeDisabled || ['待注册', '维护中'].includes(item.status),
+        onClick: () => queueAction({ kind: 'maintenance', id: item.id, status: '维护中' }) },
+      { node: 'item', name: '恢复服务', disabled: writeDisabled || item.status !== '维护中',
+        onClick: () => queueAction({ kind: 'maintenance', id: item.id, status: '运行中' }) },
+      { node: 'item', name: '删除', type: 'danger', disabled: writeDisabled || Boolean(removalIssue(item)),
+        onClick: () => queueAction({ kind: 'delete', ids: [item.id] }) },
+    ]}>操作</AdminActionMenu> },
   ];
   const actionTarget = lookup(action?.id);
   const actionTitle = action?.kind === 'delete' ? '删除集群' : action?.kind === 'default' ? '设为默认集群'
-    : action?.kind === 'pool-delete' ? '删除节点池' : actionTarget?.status === '维护中' ? '恢复集群服务' : '将集群置于维护状态';
+    : action?.kind === 'pool-delete' ? '删除节点池' : action?.status === '运行中' ? '恢复集群服务' : '将集群置于维护状态';
   const actionObject = action?.kind === 'delete' ? action.ids.map(id => lookup(id)?.name).filter(Boolean).join('、') : action?.pool?.name || actionTarget?.name;
   return <div className="admin-page-stack">
     <AdminPageHeading title={detail ? detail.name : '集群'}>
-      {detail ? <Space><Button onClick={() => onNavigate('clusters')}>返回列表</Button>{!inferenceDemo && <>
-        <Button onClick={() => edit(detail)}>编辑集群</Button>
-        <Button onClick={() => setTopologyId(detail.id)}>集群拓扑</Button></>}</Space>
-        : <Space><Button onClick={() => setMonitoringId('all')}>监控</Button>{!inferenceDemo &&
-          <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={() => edit()}>添加集群</Button>}</Space>}
+      {detail ? <Space><Button onClick={() => onNavigate('clusters')}>返回列表</Button>
+        <Button disabled={writeDisabled} onClick={() => edit(detail)}>编辑集群</Button>
+        <Button disabled={writeDisabled || !changeResources} onClick={() => setTopologyId(detail.id)}>集群拓扑</Button></Space>
+        : <Space>{!inferenceDemo && <Text link={{ href: '?demo=inference-interactive#/admin-2/clusters' }}>{t('进入可操作演示')}</Text>}
+          <Button onClick={() => setMonitoringId('all')}>监控</Button>
+          <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={writeDisabled} onClick={() => edit()}>添加集群</Button></Space>}
     </AdminPageHeading>
     {detail ? <>
       <Card><Space wrap><Choice label="切换集群" options={state.clusters.map(item => [item.id, item.name])} value={detail.id}
@@ -309,17 +341,18 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
         onChange={tab => showDetail(detail, tab)}>
         <Tabs.TabPane tab="节点" itemKey="nodes"><Card>
           <ClusterResourceTable key={detail.id} kind="nodes" rows={clusterNodes(detail.id)} records={resourceRecords} onRefresh={refresh}
-            onDetail={row => onNavigate(`ops-nodes?view=detail&record=${encodeURIComponent(row.id)}&clusterId=${encodeURIComponent(detail.id)}`)}/>
-          <Space><Button onClick={() => showResources('ops-nodes', detail)}>节点列表</Button>{!inferenceDemo && !isCloudCluster(detail.provider) &&
-            <Button theme="solid" onClick={() => setRegistrationTarget(detail)}>{detail.provider === 'Kubernetes' ? '注册集群' : '添加节点'}</Button>}</Space>
+            onDetail={(row, panel) => showResourceDetail('ops-nodes', row, panel)}/>
+          <Space><Button onClick={() => showResources('ops-nodes', detail)}>节点列表</Button>
+            <Button theme="solid" disabled={writeDisabled || isCloudCluster(detail.provider)}
+              onClick={() => setRegistrationTarget(detail)}>{detail.provider === 'Kubernetes' ? '注册集群' : '添加节点'}</Button></Space>
         </Card></Tabs.TabPane>
         <Tabs.TabPane tab="GPU" itemKey="gpus"><Card>
           <ClusterResourceTable key={detail.id} kind="gpus" rows={gpuChildren(detail.id)} records={resourceRecords} onRefresh={refresh}
-            onDetail={row => onNavigate(`ops-gpus?view=detail&record=${encodeURIComponent(row.id)}&clusterId=${encodeURIComponent(detail.id)}`)}/>
+            onDetail={(row, panel) => showResourceDetail('ops-gpus', row, panel)}/>
           <Space><Button onClick={() => showResources('ops-gpus', detail)}>GPU 列表</Button></Space>
         </Card></Tabs.TabPane>
-        {isCloudCluster(detail.provider) && <Tabs.TabPane tab="节点池" itemKey="pools"><Card>{poolRows(detail)}{!inferenceDemo &&
-          <Button theme="solid" onClick={() => openPool(detail)}>添加节点池</Button>}</Card></Tabs.TabPane>}
+        {isCloudCluster(detail.provider) && <Tabs.TabPane tab="节点池" itemKey="pools"><Card>{poolRows(detail)}
+          <Button theme="solid" disabled={writeDisabled} onClick={() => openPool(detail)}>添加节点池</Button></Card></Tabs.TabPane>}
       </Tabs>
     </> : <>
       {params.get('view') === 'detail' && <Banner type="warning" closeIcon={null} description="集群不存在，请返回列表核对。"/>}
@@ -335,14 +368,17 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
           <Choice label="集群状态" options={[[ 'all', '全部状态' ], ...clusterStatus.map(value => [value, value])]} value={status} onChange={setStatus}/>
           <FilterReset onClick={() => { setQuery(''); setProvider('all'); setStatus('all'); setSelected([]); }}/>
           <Button onClick={refresh}>刷新</Button>
-          {rows.some(item => item.nodePools?.length > 0) && <Button onClick={() => setExpanded(expanded.length ? [] : rows.filter(item => item.nodePools?.length).map(item => item.id))}>{expanded.length ? '收起全部' : '展开全部'}</Button>}
-          {!inferenceDemo && <Button type="danger" disabled={rowSelection.length === 0} onClick={() => queueAction({ kind: 'delete', ids: rowSelection })}>
+          <Button disabled={!expandableIds.length} onClick={() => setExpanded(previous => allPoolsExpanded
+            ? previous.filter(id => !expandableIds.includes(id)) : [...new Set([...previous, ...expandableIds])])}>
+            {allPoolsExpanded ? '收起全部' : '展开全部'}</Button>
+          <Button type="danger" disabled={writeDisabled || !rowSelection.length || rows.some(row => rowSelection.includes(row.id) && removalIssue(row))}
+            onClick={() => queueAction({ kind: 'delete', ids: rowSelection })}>
             批量删除{rowSelection.length > 0 ? ` (${rowSelection.length})` : ''}
-          </Button>}
+          </Button>
         </div>
-        <Table columns={columns} dataSource={rows} rowKey="id" scroll={{ x: 1050 }} expandedRowRender={poolRows}
-          rowExpandable={item => Boolean(item.nodePools?.length)} expandedRowKeys={expanded} onExpandedRowsChange={setExpanded}
-          rowSelection={inferenceDemo ? undefined : { selectedRowKeys: rowSelection, onChange: setSelected }}
+        <Table columns={columns} dataSource={rows} rowKey="id" scroll={{ x: 'max(100%, 1080px)' }} expandedRowRender={poolRows}
+          rowExpandable={canExpandPools} expandedRowKeys={expanded} onExpandedRowsChange={setExpanded}
+          rowSelection={readOnlyDemo ? undefined : { selectedRowKeys: rowSelection, onChange: setSelected }}
           pagination={{ pageSize: 10, size: 'small', showTotal: true, showSizeChanger: true }} empty="没有符合条件的集群"/>
       </Card>
     </>}
@@ -367,6 +403,7 @@ export function ClusterManagement({ state, dispatch, onNavigate, dirtyRef, refre
     {poolEditor && poolCluster && <NodePoolEditor cluster={poolCluster} pool={poolEditor.row} resize={poolEditor.resize} busy={pending}
       onSave={updatePool} onClose={() => !writing.current && setPoolEditor(null)}/>}
     {topology && <ClusterTopology key={topology.id} cluster={topology} nodes={clusterNodes(topology.id)} onRowsChange={setInfrastructure} dirtyRef={dirtyRef}
+      changeResources={changeResources} persistColumnPrefs={!inferenceDemo}
       onSaveLayers={async topologyLayers => {
         const issue = clusterGatherIssue(state.deployments, topology.id, topologyLayers);
         if (issue) throw Error(issue);

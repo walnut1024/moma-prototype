@@ -1,6 +1,7 @@
 import { enterpriseGrant } from './enterprise.js';
 import { activeCustomer, offerGrayTenants, offerStage, providerOffer, offerKey, salesCustomer, serviceCallsEnabled, serviceReferences } from '../service-access.mjs';
 import { tenantQuotaEnabled } from '../tenant-service-policy.mjs';
+import { internalSpace } from '../operating-space.mjs';
 
 export const TENANT_SERVICE_LEVELS = ['L0','L1','L2','L3','L4','L5'];
 export const tenantModelHasTpm = model => ['text','multimodal','embedding','rerank'].includes(model?.type);
@@ -19,6 +20,11 @@ export function tenantModelCatalogue(state, tenantId) {
     }
     catalogue.set(modelId,row);
   }
+  if (internalSpace(state.spacePolicy, state.tenants?.find(tenant => tenant.id === tenantId))) {
+    for (const service of state.marketModelServices || []) {
+      catalogue.set(service.id, { service, calls:new Set([service.callId]), availability:service.listed && service.independentService ? '服务中' : '' });
+    }
+  }
   return catalogue;
 }
 
@@ -27,7 +33,7 @@ export function tenantModelRules(state, tenant, catalogue) {
   const grant = enterpriseGrant(state,tenant.id);
   const ids = Array.isArray(grant?.modelIds)
     ? (grant.status==='生效中' ? grant.modelIds : [])
-    : [...catalogue].filter(([,model])=>model.availability).map(([id])=>id);
+    : [...catalogue].filter(([,model])=>model.availability && !model.service).map(([id])=>id);
   return [...new Set(ids)].map(modelId=>({modelId,rpm:null,tpm:null}));
 }
 

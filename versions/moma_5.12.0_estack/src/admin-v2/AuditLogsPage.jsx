@@ -25,10 +25,13 @@ const auditModules = {
   'supplier_key.replace': '模型运营 / 模型接入',
   'model_supply.disable': '模型运营 / 模型接入',
   'model_sale.stop_with_service': '商业运营 / 模型销售',
+  'announcement.publish': '平台管理 / 公告管理',
+  'announcement.withdraw': '平台管理 / 公告管理',
 };
 const fieldLabels = { active_version: '生效路由版本', strategy: '路由策略', channel_weights: '上游模型权重', status: '关联上游模型状态',
   configuration_version: '配置版本', active_key_id: '首位密钥 ID', enabled: '上游模型状态', validation_id: '验证记录 ID', personal_space_enabled: '开放个人空间',
-  mapping_pending: '关联上游模型变更', service_running: '模型服务状态', sale_status: '售卖状态', marketVisible: '可见性', salesScope: '销售对象' };
+  mapping_pending: '关联上游模型变更', service_running: '模型服务状态', sale_status: '售卖状态', marketVisible: '可见性', salesScope: '销售对象',
+  announcement_status: '公告状态' };
 const itemLabels = { succeeded: '已停用', unchanged: '无变化', unknown: '原状态未记录' };
 const roleLabels = { target: '操作目标', changed: '实际变更', related: '关联对象' };
 const actorName = actor => actor.name || actor.id || '未记录';
@@ -51,6 +54,7 @@ function fieldValue(field, value) {
   if (data == null) return '未设置';
   if (field === 'enabled' || field === 'personal_space_enabled') return data ? '已启用' : '已停用';
   if (field === 'service_running') return data ? '服务中' : '已停服';
+  if (field === 'announcement_status') return { draft:'草稿', scheduled:'待生效', active:'生效中', expired:'已到期', withdrawn:'已撤回' }[data];
   if (field === 'mapping_pending') return data ? '待应用' : '无待应用变更';
   if (field === 'strategy') return ROUTING_STRATEGIES[data] || data;
   if (field === 'active_version' || field === 'configuration_version') return 'v' + data;

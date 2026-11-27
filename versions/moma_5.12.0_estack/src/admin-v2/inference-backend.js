@@ -236,7 +236,7 @@ export function initialBackendDraft(row, preset = {}) {
   const source = row?.source || '自定义';
   return {
     name: source === '自定义' ? removeSuffix(row?.name) : text(row?.name),
-    description: row?.description || '', version: source === '社区' ? removeSuffix(row?.version) : text(row?.version),
+    description: row?.description || '', version: text(row?.version),
     command: row?.command || '', entrypoint: row?.entrypoint || '', healthPath: row?.healthPath || '',
     parameterFormat: storedFormat(row?.parameterFormat), parameters: parameterLines(row?.parameters),
     commonParameters: parameterLines(row?.commonParameters), env: backendEnvironmentRows(row?.env),
@@ -249,15 +249,15 @@ export function initialBackendDraft(row, preset = {}) {
   };
 }
 
-export function updateBackendVersionDraft(draft, index, changes) {
+export function updateBackendVersionDraft(draft, index, changes, source = '自定义') {
   const previous = draft.versionEntries[index];
   const versionEntries = draft.versionEntries.map((entry, position) => index === position ? { ...entry, ...changes } : entry);
-  const version = draft.version && previous.version === draft.version && changes.version != null
-    ? changes.version : draft.version;
+  const version = draft.version && backendEditableVersionName(previous.version, source) === draft.version && changes.version != null
+    ? backendEditableVersionName(changes.version, source) : draft.version;
   return { versionEntries, version };
 }
 
-function editableVersionName(value, source, mode) {
+export function backendEditableVersionName(value, source, mode = 'form') {
   const version = text(value);
   return version && source !== '自定义' && mode === 'form' ? `${removeSuffix(version)}${customSuffix}` : version;
 }
@@ -273,7 +273,7 @@ export function validateBackendVersionEntries(entries, source = '自定义', mod
   const versions = new Set();
   for (const [index, entry] of entries.entries()) {
     const label = `版本 ${index + 1}`;
-    const version = editableVersionName(entry?.version, source, mode);
+    const version = backendEditableVersionName(entry?.version, source, mode);
     if (!version || version === customSuffix) throw versionFieldIssue(index, 'version', `请填写${label}的版本号。`);
     if (!backendVersionPattern.test(version)) throw versionFieldIssue(index, 'version', `${label}仅可使用字母、数字、点、下划线和连字符。`);
     if (source !== '自定义' && !version.endsWith(customSuffix)) throw versionFieldIssue(index, 'version', `${label}须以 -custom 结尾。`);
@@ -324,7 +324,7 @@ function prepareBackendDraft(draft, previous, mode) {
   const previousVersions = backendVersions(previous);
   const locked = previousVersions.filter(entry => entry.sourceManaged);
   const custom = draft.versionEntries.map(entry => normalizeEntry({
-    version: editableVersionName(entry.version, source, mode), image: text(entry.image), framework: frameworkName(entry.framework),
+    version: backendEditableVersionName(entry.version, source, mode), image: text(entry.image), framework: frameworkName(entry.framework),
     command: text(entry.command), entrypoint: text(entry.entrypoint), env: storedEnv(entry.env, `版本 ${entry.version} 的环境变量`), sourceManaged: false,
   }));
   const nextEntries = [...locked, ...custom];
@@ -333,7 +333,7 @@ function prepareBackendDraft(draft, previous, mode) {
     throw yamlFieldIssue('自定义版本不能覆盖来源维护的版本。', 'version_configs', custom.find(entry => locked.some(saved => saved.version === entry.version))?.version);
   }
   const selected = text(draft.version);
-  const version = source === '内置' ? previous.version : versionNames.has(selected) ? selected : editableVersionName(selected, source, mode);
+  const version = source === '内置' ? previous.version : versionNames.has(selected) ? selected : backendEditableVersionName(selected, source, mode);
   if (source === '内置' && mode === 'yaml' && selected && selected !== previous.version) throw yamlFieldIssue('内置后端的默认版本由系统管理。', 'default_version');
   if (version && !versionNames.has(version)) throw yamlFieldIssue(`默认版本 ${version} 不在版本列表中。`, 'default_version');
   const removedVersions = previousVersions.filter(entry => !versionNames.has(entry.version));
@@ -592,7 +592,7 @@ export function enableCommunityBackend(latest, candidate, now = new Date()) {
 export const INFERENCE_BACKEND_PAGE = {
   title: '推理后端',
   createLabel: '添加后端',
-  searchPlaceholder: '名称查询', searchKeys: ['name', 'description'],
+  searchPlaceholder: '名称查询', searchKeys: ['name'],
   views: ['cards'], loadMore: true, loadOnScroll: true, initialPageSize: 24, actionsInToolbar: true, hideResetFilter: true,
   actionMenu: true, detailModal: '版本列表', detailWidth: 'min(600px, calc(100vw - 32px))',
   columns: [field('name', '名称')],
@@ -602,7 +602,7 @@ export const INFERENCE_BACKEND_PAGE = {
   showRow: row => row.source !== '社区' || isEnabled(row),
   actions: [
     { label: '导出 YAML', download: row => ({ name: `${row.name.replace(/[\\/]/g, '-')}.yaml`, content: backendYaml(row), type: 'application/yaml' }) },
-    { label: '删除', danger: true, when: platformCommunity,
+    { label: '删除', danger: true, visible: platformCommunity, when: platformCommunity, disabled: deleteIssue,
       confirm: row => `删除「${row.name}」？可在社区市场重新启用。`,
       apply: (row, records) => {
         const issue = deleteIssue(row, records);

@@ -5,7 +5,7 @@ import { AutoComplete, Banner, Button, Checkbox, Empty, Input, Modal, Progress, 
 import { AdminSideSheet as SideSheet } from '../admin-v2/AdminOverlay';
 import { useTenantData } from '../useTenantData';
 import { maskApiKey, parseIpAllowlist } from '../api-key-utils.mjs';
-import { projectModelEnabled } from '../project-access.mjs';
+import { projectServiceEnabled } from '../project-access.mjs';
 import { parseBudgetAmount } from '../project-call.mjs';
 import { projectMoney, projectTime } from './ProjectConfiguration';
 import { DEFAULT_PAGE_SIZE, FilterPagination } from './FilterControls';
@@ -70,7 +70,11 @@ function ApiKeys({ billing, subscription, project, onModels }) {
   const [secretFeedback, setSecretFeedback] = useState('');
   const [budgetAmount, setBudgetAmount] = useState('');
   const [expiry, setExpiry] = useState('');
-  const editModels = [...new Map((tenant.projectServices || []).filter(row=>projectModelEnabled(project,row.modelKey) && (!subscription?.modelIds || subscription.modelIds.includes(row.modelKey))).map(row=>[row.modelId,[row.modelId,row.typeLabel || row.type]])).values()];
+  const editModels = [...new Map((tenant.projectServices || []).filter(row=>projectServiceEnabled(project,row) &&
+    (!subscription?.modelIds || subscription.modelIds.includes(row.modelKey))).map(row=>{
+    const model = row.internal && row.independentService ? row.callId : row.modelId;
+    return [model,[model,row.typeLabel || row.type]];
+  })).values()];
   const keys=tenant.keys.filter(row=>row.projectId===project.id && (row.billingType || '按量付费')===billing && (row.subscriptionId || '')===(subscription?.id || '')).map(row=>({...row,key:row.secretPreview || '****',desc:row.description,created:row.createdAt,enabled:row.status==='有效',models:row.modelIds?.map(id=>tenant.models.find(model=>model.id===id)?.modelId || id) || [],ips:row.ipAllowlist || []}));
   const [saving, setSaving] = useState(false);
   const setKeys = async rows => {

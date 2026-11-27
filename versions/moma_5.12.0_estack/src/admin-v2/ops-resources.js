@@ -132,10 +132,37 @@ export function ipv4(value) {
   return parts.length === 4 && parts.every(part => /^(0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255);
 }
 
+export const dockerWorkerRegistrationDefaults = {
+  values: { ip: '', externalIp: '', kvTransferNic: '', modelPath: '', cachePath: '',
+    dataVolume: 'gpustack-data', containerName: 'gpustack-worker', dtkVersion: '25.04' },
+  overrides: { dataVolume: true, containerName: true },
+};
+
+export function dockerWorkerRegistrationArgs(values, overrides, vendors) {
+  const active = Object.fromEntries(Object.keys(dockerWorkerRegistrationDefaults.values)
+    .filter(key => overrides[key] && (key !== 'kvTransferNic' || vendors.includes('NVIDIA')))
+    .map(key => [key, values[key].trim()]));
+  const { ip, externalIp, kvTransferNic, modelPath, cachePath, dataVolume, containerName } = active;
+  const modelPaths = modelPath?.split(',').map(path => path.trim()) ?? [];
+  const absolute = value => /^\/[\w./-]+$/.test(value) && !value.split('/').includes('..');
+  const name = value => /^[\w][\w.-]*$/.test(value);
+  const errors = {
+    ip: ip !== undefined && !ipv4(ip) ? '请输入有效的节点 IPv4 地址。' : '',
+    externalIp: externalIp !== undefined && !ipv4(externalIp) ? '请输入有效的外部 IPv4 地址。' : '',
+    cachePath: cachePath !== undefined && !absolute(cachePath) ? '请输入有效的绝对缓存路径。' : '',
+    modelPath: modelPaths.some(path => !absolute(path)) ? '请输入有效的绝对模型路径，多条以英文逗号分隔。' : '',
+    kvTransferNic: kvTransferNic !== undefined && !/^[\w.-]+$/.test(kvTransferNic) ? '请输入有效的 KV 传输网卡名称。' : '',
+    dataVolume: dataVolume !== undefined && !absolute(dataVolume) && !name(dataVolume) ? '请输入有效的数据卷名称或绝对路径。' : '',
+    containerName: containerName !== undefined && !name(containerName) ? '请输入有效的容器名称。' : '',
+  };
+  return { active, modelPaths, errors };
+}
+
 const clusters = records => (records.clusters || []).map(row => ({ value: row.id, label: row.name }));
 const clusterName = (value, _row, records) => records.clusters?.find(row => row.id === value)?.name;
 const registrationOnly = (_draft, _records, row) => !row;
-const nodeName = (value, _row, records) => records['ops-nodes'].find(row => row.id === value)?.name;
+const nodeName = (value, row, records) => records['ops-nodes']?.find(node =>
+  node.id === value && (row.clusterId == null || node.clusterId === row.clusterId))?.name;
 const percent = value => value == null ? '—' : `${value}%`;
 const gib = value => value == null ? '—' : `${value} GiB`;
 export const gpuMemoryUtilization = row => row.vram > 0 && (row.vramUsed != null || row.vramAllocated != null)
@@ -410,8 +437,10 @@ export const RESOURCE_PAGES = {
     title: 'GPU',
     detailRoute: true,
     columnSettings: true,
+    actionMenu: true,
     searchPlaceholder: '搜索设备名称、编号或节点',
-    searchKeys: ['name', 'index', 'nodeId'],
+    searchMatches: (row, query, records = {}) => [row.id, row.name, row.index, row.nodeId, nodeName(row.nodeId, row, records)]
+      .some(value => String(value ?? '').toLocaleLowerCase().includes(query)),
     filters: [
       { key: 'clusterId', label: '集群', options: clusters },
       { key: 'nodeId', label: '节点', options: (records, filters) => records['ops-nodes']
@@ -431,6 +460,10 @@ export const RESOURCE_PAGES = {
       { key: 'vram', label: '总显存', format: gib }, { key: 'vramUsed', label: '已用显存', format: gib },
       { key: 'vramAllocated', label: '已分配显存', format: gib }, { key: 'utilization', label: '核心使用率', format: percent },
       { key: 'sampledAt', label: '采样时间', format: timestamp },
+    ],
+    actions: [
+      { label: '详情', panel: 'overview' },
+      { label: '指标详情', panel: 'metrics' },
     ],
     seed: sampleGpus,
   },

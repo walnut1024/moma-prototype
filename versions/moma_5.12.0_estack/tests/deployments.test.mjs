@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistAdminAction, STORAGE_KEY } from '../src/admin-v2/store.js';
 import { canRecreateInstance, deploymentCanServe, deploymentInstances, deploymentPreflight, deploymentGpu, deploymentTablePage } from '../src/admin-v2/deployments.js';
-import { compatibleDeploymentVersions, deploymentCompatibilityWarnings, deploymentParameterSuggestions, deploymentSubmissionIssue,
+import { compatibleDeploymentVersions, deploymentBackendVersion, deploymentCompatibilityWarnings, deploymentParameterSuggestions, deploymentSubmissionIssue,
   mergeDeploymentBackendDefaults } from '../src/admin-v2/deployment-options.js';
 import { pdRoleRecipe, pdRouterCommand, pdRouterExample } from '../src/admin-v2/deployment-pd-recipes.js';
 const values = { name:'知识问答服务', deploymentId:'qwen-test-prod', modelId:'model-1', runtimeId:'artifact-vllm', weightId:'', weightPath:'/models/deepseek', clusterId:'cluster-nj-a', namespace:'inference', replicas:2, gpuPerReplica:2, tensorParallel:2, pipelineParallel:1, maxModelLen:'', gpuMemoryUtilization:0.9, startupTimeout:600 };
@@ -19,10 +19,92 @@ test('create atomically reserves resources and keeps model publishing and prices
 });
 test('preflight rejects wrong model, base images, broken weights, malformed paths and parallelism',()=>{
  const seed=createAdminSeed();
- for(const data of [{modelId:'missing'},{runtimeId:'artifact-ds'},{runtimeId:'artifact-base'},{weightId:'artifact-vllm'},{weightPath:'/models/../secrets'},{weightPath:'/models/name;curl'},{tensorParallel:1},{replicas:1.5},{replicas:0},{gpuMemoryUtilization:0},{namespace:'Production!'},{startupTimeout:7201}]) assert.throws(()=>deploymentPreflight(seed,{...values,...data}));
+ for(const data of [{modelId:'missing'},{runtimeId:'artifact-ds'},{runtimeId:'artifact-base'},{weightId:'artifact-vllm'},{weightPath:'/models/../secrets'},{weightPath:'/models/name;curl'},{tensorParallel:1},{replicas:1.5},{replicas:-1},{gpuMemoryUtilization:0},{namespace:'Production!'},{startupTimeout:7201}]) assert.throws(()=>deploymentPreflight(seed,{...values,...data}));
  const unsupported=seed.models.find(model=>!['text','multimodal','embedding','rerank'].includes(model.type));assert.throws(()=>deploymentPreflight(seed,{...values,modelId:unsupported.id}),/不支持/);
  seed.artifacts.find(item=>item.id==='artifact-ds').modelId='another';assert.throws(()=>deploymentPreflight(seed,{...values,weightId:'artifact-ds'}),/不匹配/);
 });
+
+const modelFileValues = { ...values, modelFileId:'file-deepseek', placement:'指定节点', placementTargets:['worker-nj-a-01'] };
+
+test('model file deployments may specify GPUs on their bound node', () => {
+  const seed = createAdminSeed();
+  const placementTargets = ['gpu-1','gpu-2'];
+  const checked = deploymentPreflight(seed,{...modelFileValues,placement:'指定 GPU',placementTargets});
+  assert.equal(checked.modelFileId,modelFileValues.modelFileId);
+  assert.deepEqual(checked.placementTargets,placementTargets);
+  assert.throws(()=>deploymentPreflight(seed,{...modelFileValues,placement:'指定 GPU',placementTargets:[]}),/调度目标/);
+  for (const patch of [
+    {placement:'自动调度'}, {placementTargets:['worker-nj-a-01','worker-nj-a-02']},
+    {weightId:'artifact-ds'}, {modelFileId:'invalid file id'},
+  ]) assert.throws(()=>deploymentPreflight(seed,{...modelFileValues,...patch}),/模型文件须关联所在节点/);
+});
+
+test('an unscheduled zero-replica file deployment stays stopped until explicitly started', () => {
+  const seed = createAdminSeed();
+  const allocatedBefore = clusterGpu(seed);
+  assert.throws(()=>deploymentPreflight(seed,{...modelFileValues,replicas:''}),/副本数/);
+  assert.throws(()=>deploymentPreflight(seed,{...modelFileValues,replicas:false}),/副本数/);
+
+  let state = act(seed,'create',{...modelFileValues,replicas:'0'});
+  const {id} = state.deployments[0];
+  assert.equal(state.deployments[0].status,'停止');
+  assert.equal(state.deployments[0].replicas,0);
+  assert.equal(state.deployments[0].readyReplicas,0);
+  assert.equal(state.deployments[0].endpointId,null);
+  assert.equal(clusterGpu(state),allocatedBefore);
+  assert.deepEqual(deploymentInstances([state.deployments[0]]),[]);
+  const resumed = act(state,'start',{},id);
+  assert.equal(resumed.deployments[0].replicas,1);
+  assert.equal(resumed.deployments[0].status,'部署中');
+  assert.equal(clusterGpu(resumed),allocatedBefore+modelFileValues.gpuPerReplica);
+  assert.throws(()=>act(state,'restart',{},id),/仅运行中/);
+  assert.throws(()=>act(state,'stop',{},id),/已经停止/);
+  assert.throws(()=>act(state,'check',{},id),/没有待检查/);
+
+  state = act(state,'update',{replicas:1,maxModelLen:1024},id);
+  assert.equal(state.deployments[0].replicas,1);
+  assert.equal(state.deployments[0].status,'停止');
+  assert.equal(clusterGpu(state),allocatedBefore);
+  state = act(state,'start',{},id);
+  assert.equal(state.deployments[0].status,'部署中');
+  assert.equal(clusterGpu(state),allocatedBefore+modelFileValues.gpuPerReplica);
+  state = act(state,'check',{},id);
+  const {endpointId} = state.deployments[0];
+  assert.equal(state.endpoints.find(row=>row.id===endpointId)?.status,'运行中');
+
+  state = act(state,'update',{replicas:0},id);
+  assert.equal(state.deployments[0].status,'停止');
+  assert.equal(state.deployments[0].readyReplicas,0);
+  assert.equal(state.endpoints.find(row=>row.id===endpointId)?.status,'停用');
+  assert.equal(clusterGpu(state),allocatedBefore);
+});
+
+test('ordinary deployments can save and scale to zero, with allocation restored only on start', () => {
+  const seed = createAdminSeed();
+  const allocated = clusterGpu(seed);
+  const stopped = act(seed,'create',{...values,replicas:0});
+  assert.equal(stopped.deployments[0].status,'停止');
+  assert.equal(clusterGpu(stopped),allocated);
+  const {id} = stopped.deployments[0];
+  const active = act(act(stopped,'start',{},id),'check',{},id);
+  assert.equal(active.deployments[0].replicas,1);
+  assert.equal(clusterGpu(active),allocated+values.gpuPerReplica);
+  const scaled = act(active,'scale',{replicas:'0'},id);
+  assert.equal(scaled.deployments[0].status,'停止');
+  assert.equal(scaled.deployments[0].replicas,0);
+  assert.equal(clusterGpu(scaled),allocated);
+  assert.equal(scaled.endpoints.find(endpoint=>endpoint.id===active.deployments[0].endpointId)?.status,'停用');
+});
+
+test('automatically resolves the preferred compatible backend version without replacing explicit selection', () => {
+  const compatibleVersions = [{version:'0.25.0'},{version:'0.27.1'}];
+  assert.equal(deploymentBackendVersion({version:'0.27.1',compatibleVersions},'')?.version,'0.27.1');
+  assert.equal(deploymentBackendVersion({version:'0.24.0',compatibleVersions},'')?.version,'0.25.0');
+  assert.equal(deploymentBackendVersion({version:'0.27.1',compatibleVersions},'0.25.0')?.version,'0.25.0');
+  assert.equal(deploymentBackendVersion({version:'0.27.1',compatibleVersions},'0.24.0'),undefined);
+  assert.equal(deploymentBackendVersion(undefined,''),undefined);
+});
+
 test('checks backend versions against known device frameworks without treating unknown vendors as unavailable', () => {
   const versions = [{version:'current',frameworks:['CUDA','ROCm']},{version:'ascend',frameworks:['CANN']},{version:'unknown',frameworks:[]}];
   assert.deepEqual(compatibleDeploymentVersions(versions,[{vendor:'NVIDIA'}]),[versions[0],versions[2]]);

@@ -3,9 +3,9 @@ import { Banner, Button, Checkbox, Descriptions, Input, Popover, Select, Space, 
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import TableFieldHelp from '../components/TableFieldHelp';
-import { changeInfrastructure } from './infrastructure-state';
-import { defaultTopologyLayers, gpuMemoryUtilization, GPU_VENDORS, ipv4, labelMap, labelPairs, resourceLoad, RESOURCE_PAGES, topologyLabelKeys, topologyLocation, validateTopologyLayers, workerLabelOptions, workerLabelsMatch } from './ops-resources';
+import { defaultTopologyLayers, dockerWorkerRegistrationArgs, dockerWorkerRegistrationDefaults, gpuMemoryUtilization, GPU_VENDORS, labelMap, labelPairs, resourceLoad, RESOURCE_PAGES, topologyLabelKeys, topologyLocation, validateTopologyLayers, workerLabelOptions, workerLabelsMatch } from './ops-resources';
 import AdminStatus from './AdminStatus';
+import AdminActionMenu from './AdminActionMenu';
 
 const { Paragraph, Text } = Typography;
 const options = values => values.map(value => ({ value, label: value }));
@@ -31,9 +31,8 @@ const dockerOptions = [
   ['modelPath', '指定模型目录'], ['kvTransferNic', '指定 KV 传输网卡'],
   ['dataVolume', '指定数据卷'], ['containerName', '指定容器名称'],
 ];
-const absoluteDirectory = value => /^\/[\w./-]+$/.test(value) && !value.split('/').includes('..');
-
 export function ClusterRegistration({ cluster, clusters, onClose, onFinish, busy, error }) {
+  const formId = useId();
   const [choice, setChoice] = useState(cluster?.id || clusters.find(item => item.isDefault)?.id || clusters[0]?.id || '');
   const target = clusters.find(item => item.id === choice);
   const isKubernetes = target?.provider === 'Kubernetes';
@@ -42,28 +41,24 @@ export function ClusterRegistration({ cluster, clusters, onClose, onFinish, busy
   const [step, setStep] = useState(0);
   const [vendors, setVendors] = useState([]);
   const [checked, setChecked] = useState(false);
-  const [args, setArgs] = useState({ ip: '', externalIp: '', kvTransferNic: '', modelPath: '', cachePath: '',
-    dataVolume: 'gpustack-data', containerName: 'gpustack-worker', dtkVersion: '25.04' });
-  const [overrides, setOverrides] = useState({ ip: true, dataVolume: true, containerName: true });
+  const [args, setArgs] = useState(dockerWorkerRegistrationDefaults.values);
+  const [overrides, setOverrides] = useState(dockerWorkerRegistrationDefaults.overrides);
   const [validation, setValidation] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const active = steps[step];
   const shownOptions = dockerOptions.filter(([key]) => key !== 'kvTransferNic' || vendors.includes('NVIDIA'));
-  const { ip, externalIp, modelPath, cachePath, kvTransferNic, dataVolume = 'gpustack-data', containerName = 'gpustack-worker' } = isKubernetes ? {} : Object.fromEntries(
-    shownOptions.filter(([key]) => overrides[key]).map(([key]) => [key, args[key].trim()]));
-  const modelPaths = modelPath?.split(',').map(path => path.trim()) ?? [];
-  const argsIssue = [ip, externalIp].some(value => value !== undefined && !ipv4(value)) ? '启用地址覆盖后须提供有效的 IPv4 地址。'
-    : [...modelPaths, cachePath].some(value => value !== undefined && !absoluteDirectory(value)) ? '启用目录覆盖后须填写有效的绝对路径。'
-      : kvTransferNic !== undefined && !/^[\w.-]+$/.test(kvTransferNic) ? '请输入有效的 KV 传输网卡名称。'
-        : !/^[\w][\w.-]*$/.test(containerName) || (!absoluteDirectory(dataVolume) && !/^[\w][\w.-]*$/.test(dataVolume))
-          ? '请输入有效的容器名称和数据卷名称或绝对路径。' : '';
-  const validArgs = argsIssue ? [] : [
-    `docker run --name ${containerName}`, `--volume ${dataVolume}:/var/lib/gpustack`,
+  const { active: argumentsInUse, modelPaths, errors: argumentErrors } = dockerWorkerRegistrationArgs(args, overrides, vendors);
+  const { ip, externalIp, cachePath, kvTransferNic, dataVolume, containerName } = isKubernetes ? {} : argumentsInUse;
+  const firstArgumentError = Object.keys(argumentErrors).find(key => argumentErrors[key]);
+  const validArgs = firstArgumentError ? [] : [
+    'docker run', containerName && `--name ${containerName}`, dataVolume && `--volume ${dataVolume}:/var/lib/gpustack`,
     ...modelPaths.map(path => `--volume ${path}:${path}`), cachePath && `--volume ${cachePath}:/var/lib/gpustack/cache`,
     kvTransferNic && `--env 'GPUSTACK_KV_TRANSFER_IFNAME=${kvTransferNic}'`, 'gpustack/gpustack:v2.3.1',
     "--server-url https://gpustack.demo.invalid --token '<注册令牌>'",
     ip && `--worker-ip ${ip}`, externalIp && `--advertise-address ${externalIp}`,
   ].filter(Boolean);
-  const setArg = (key, value) => { setValidation(''); setArgs(current => ({ ...current, [key]: value })); };
+  const clearFieldError = key => setFieldErrors(current => ({ ...current, [key]: '' }));
+  const setArg = (key, value) => { clearFieldError(key); setArgs(current => ({ ...current, [key]: value })); };
   const command = isKubernetes
     ? `# 演示注册清单 · 硬件 ${vendors.join(' / ')}\nkubectl apply -f https://gpustack.demo.invalid/manifests/${encodeURIComponent(target?.clusterId || 'cluster')}.yaml`
     : ['# 演示 · 硬件 ' + vendors.join(' / ') + (vendors.includes('Hygon') ? ` · DTK ${args.dtkVersion}` : ''),
@@ -71,8 +66,13 @@ export function ClusterRegistration({ cluster, clusters, onClose, onFinish, busy
   const advance = () => {
     if (!target) { setValidation('请选择仍可用的集群。'); return; }
     if (active === '运行指令') return onFinish(target, { ip, externalIp, kvTransferNic, hardware: vendors[0] });
-    if (active === '指定参数' && argsIssue) { setValidation(argsIssue); return; }
+    if (active === '指定参数' && firstArgumentError) {
+      setFieldErrors(argumentErrors);
+      document.getElementById(`${formId}-${firstArgumentError}`)?.focus();
+      return;
+    }
     setValidation('');
+    setFieldErrors({});
     setStep(value => value + 1);
   };
   const disabled = busy || active === '选择集群' && !target || active.startsWith('选择') && active !== '选择集群' && !vendors.length || active === '检查环境' && !checked;
@@ -97,10 +97,13 @@ export function ClusterRegistration({ cluster, clusters, onClose, onFinish, busy
           optionList={options(['25.04', '26.04'])} onChange={value => setArg('dtkVersion', value)}/>}</ResourceField>}
         {shownOptions.map(([key, label]) => <ResourceField key={key} label={label}>{id => <Space wrap>
           <Switch aria-labelledby={id} checked={Boolean(overrides[key])} onChange={value => {
-            setValidation(''); setOverrides(current => ({ ...current, [key]: value }));
+            clearFieldError(key); setOverrides(current => ({ ...current, [key]: value }));
           }}/>
-          {overrides[key] && <Input aria-labelledby={id} value={args[key]}
+          {overrides[key] && <Input id={`${formId}-${key}`} aria-labelledby={id} value={args[key]}
+            aria-required="true" aria-invalid={Boolean(fieldErrors[key])} validateStatus={fieldErrors[key] ? 'error' : 'default'}
+            aria-describedby={fieldErrors[key] ? `${formId}-${key}-error` : undefined}
             placeholder={key === 'modelPath' ? '多条路径以英文逗号分隔' : undefined} onChange={value => setArg(key, value)}/>}
+          {overrides[key] && fieldErrors[key] && <Text type="danger" id={`${formId}-${key}-error`}>{fieldErrors[key]}</Text>}
         </Space>}</ResourceField>)}
       </>}
       {active === '运行指令' && <>
@@ -171,9 +174,8 @@ export function ClusterResourceTable({ kind, rows, records, onDetail, onRefresh 
   const devices = kind === 'gpus';
   const schema = RESOURCE_PAGES[devices ? 'ops-gpus' : 'ops-nodes'];
   const normalized = query.trim().toLowerCase();
-  const data = rows.filter(row => devices
-    ? [row.name, row.index, row.nodeId].some(value => String(value ?? '').toLowerCase().includes(normalized))
-    : schema.searchMatches(row, normalized) && workerLabelsMatch(row.labels, labels));
+  const data = rows.filter(row => schema.searchMatches(row, normalized, records) &&
+    (devices || workerLabelsMatch(row.labels, labels)));
   const columns = schema.columns.map(column => {
     const readSortValue = row => column.sortValue?.(row, records) ?? row[column.key];
     return {
@@ -198,15 +200,21 @@ export function ClusterResourceTable({ kind, rows, records, onDetail, onRefresh 
       },
     };
   });
+  columns.push({ title: '操作', key: 'actions', width: 88, fixed: 'right', render: (_, row) =>
+    <AdminActionMenu label={`${row.name} 操作`} items={[
+      { node: 'item', name: '详情', onClick: () => onDetail(row) },
+      { node: 'item', name: '指标详情', onClick: () => onDetail(row, 'metrics') },
+    ]}>操作</AdminActionMenu> });
+  const tableWidth = columns.reduce((total, column) => total + column.width, 0);
   return <div className="admin-page-stack">
     <Space wrap><Input value={query} onChange={value => { setQuery(value); setPage(1); }} aria-label={devices ? '搜索集群 GPU' : '搜索集群节点'}
-      placeholder={devices ? '搜索设备或节点编号' : '搜索节点名称或 IP'} showClear/>
+      placeholder={devices ? schema.searchPlaceholder : '搜索节点名称或 IP'} showClear/>
       {!devices && <Select multiple showClear filter insetLabel="节点标签" insetLabelId={labelsId} aria-labelledby={labelsId}
         placeholder="按标签筛选" value={labels} onChange={value => { setLabels(value || []); setPage(1); }} optionList={workerLabelOptions(rows)}/>}
       <Button onClick={onRefresh}>刷新</Button></Space>
     <Table rowKey="id" dataSource={data} empty={devices ? '暂无 GPU' : '暂无节点'} columns={columns}
       pagination={{ pageSize, currentPage, onPageChange: setPage, onPageSizeChange: size => { setPageSize(size); setPage(1); },
-        showSizeChanger: true, showTotal: true }} scroll={{ x: columns.reduce((total, column) => total + column.width, 0) }}/>
+        showSizeChanger: true, showTotal: true }} scroll={{ x: `max(100%, ${tableWidth}px)` }}/>
   </div>;
 }
 
@@ -225,7 +233,7 @@ function layerTree(rows, layers, prefix = '') {
     children: layerTree(items, children, `${prefix}${name}/`) }));
 }
 
-export function ClusterTopology({ cluster, nodes, onClose, onRowsChange, onSaveLayers, dirtyRef }) {
+export function ClusterTopology({ cluster, nodes, onClose, onRowsChange, onSaveLayers, dirtyRef, changeResources, persistColumnPrefs }) {
   const [view, setView] = useState('table');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
@@ -233,7 +241,7 @@ export function ClusterTopology({ cluster, nodes, onClose, onRowsChange, onSaveL
   const [mapping, setMapping] = useState(null);
   const [discard, setDiscard] = useState(false);
   const prefsKey = `moma-5.12.0-estack:cluster-topology-columns:${cluster.id}`;
-  const [columnPrefs, setColumnPrefs] = useState(() => topologyColumnPrefs(prefsKey));
+  const [columnPrefs, setColumnPrefs] = useState(() => persistColumnPrefs ? topologyColumnPrefs(prefsKey) : {});
   const [preview, setPreview] = useState(false);
   const [settling, setSettling] = useState(false);
   const [error, setError] = useState('');
@@ -263,7 +271,7 @@ export function ClusterTopology({ cluster, nodes, onClose, onRowsChange, onSaveL
     if (nextLocation && !/^[\w.-]+$/.test(nextLocation)) { setError('位置值须使用字母、数字、下划线、点或连字符。'); return; }
     setSettling(true);
     try {
-      const next = await changeInfrastructure('ops-nodes', latest => {
+      const next = await changeResources('ops-nodes', latest => {
         const current = latest.filter(row => row.clusterId === cluster.id && editing.ids.includes(row.id));
         if (current.length !== editing.ids.length || current.some(row => labelMap(row.labels).get(primaryKey) !== locationTargets.find(target => target.id === row.id)?.previous)) {
           throw Error('节点位置已变化，请关闭弹窗后重试。');
@@ -319,7 +327,7 @@ export function ClusterTopology({ cluster, nodes, onClose, onRowsChange, onSaveL
   };
   const saveColumnPrefs = next => {
     try {
-      localStorage.setItem(prefsKey, JSON.stringify(next));
+      if (persistColumnPrefs) localStorage.setItem(prefsKey, JSON.stringify(next));
       setColumnPrefs(next);
     } catch { Toast.error('未能保存拓扑列设置。'); }
   };

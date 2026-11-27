@@ -35,6 +35,8 @@ export const AUDIT_ACTIONS = {
   'model_sale.stop_with_service': '因停服自动停售',
   ...PROJECT_AUDIT_ACTIONS,
   'site.personal_space.configure': '变更个人空间开关',
+  'announcement.publish': '发布公告',
+  'announcement.withdraw': '撤回公告',
 };
 
 export const AUDIT_RESULTS = { succeeded: '成功', failed: '失败', unknown: '未记录' };
@@ -57,6 +59,7 @@ export const AUDIT_RESOURCES = {
   project_key: '项目 API Key',
   project_route: '项目路由',
   site: '站点',
+  announcement: '公告',
 };
 
 export const AUDIT_OBJECT_FILTERS = {

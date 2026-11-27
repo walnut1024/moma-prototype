@@ -5,11 +5,12 @@ import { createMockEngine } from '../src/admin-v2/mock-onboarding-core.js';
 import { prepareMockOnboardingSync } from '../src/admin-v2/mock-onboarding-sync.js';
 import { assertNewMockPublications } from '../src/admin-v2/mock-publication-gate.js';
 import { modelWorkspacePayload, loadModelWorkspace, loadSimulationWorkspace, modelChanges, simulatorChanges, modelSupplyRelations, channelIndexPlan, channelIndexRepairStatements } from './model-repository.js';
-import { storedModel, domainModel } from '../src/mock/model-fields.js';
+import { storedModel, domainModel, domainModelWorkspace } from '../src/mock/model-fields.js';
 import { canManagePackages, packageFactorVersion, tokenPackageTransaction } from '../src/admin-v2/token-packages.js';
 import { validTrafficLimit } from '../src/admin-v2/traffic-rates.js';
 import { auditEvidence } from './audit-evidence.js';
-import { connectionKeys } from '../src/admin-v2/connection-state.js';
+import { connectionActive, connectionKeys } from '../src/admin-v2/connection-state.js';
+import { BUILTIN_INFERENCE_PROVIDER_ID, inferenceConnectionTargets, inferenceSourceAvailable, invalidateInferenceConnections } from '../src/admin-v2/inference-connection-targets.js';
 
 const collections=['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','tenants','audits'];
 const canonical=value=>value && typeof value==='object'?Array.isArray(value)?value.map(canonical):Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;
@@ -17,6 +18,13 @@ const digest=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('
 const issue=(status,code,message)=>{throw Object.assign(new Error(message),{status,code});};
 const rejectSecrets=value=>{if(!value || typeof value!=='object')return;for(const [key,item]of Object.entries(value)){if(/^(secret|password|authorization|cookie|keyInputs|keyInput)$/i.test(key) && item && (!Array.isArray(item) || item.length))issue(400,'INVALID_INPUT','请先在浏览器生成密钥掩码和指纹，明文不得提交');rejectSecrets(item);}};
 const validId=value=>typeof value==='string' && /^[A-Za-z0-9:_.-]{1,200}$/.test(value);
+
+function changesInferenceConfiguration(original, endpoint, fields) {
+  const candidate = endpoint.candidateConfiguration;
+  return fields.some(field => JSON.stringify(original[field]) !== JSON.stringify(endpoint[field]) ||
+    candidate && original.candidateConfiguration?.id !== candidate.id && Object.hasOwn(candidate.config, field) &&
+    JSON.stringify(original[field]) !== JSON.stringify(candidate.config[field]));
+}
 
 function patches(before,after){
   return Object.fromEntries(collections.flatMap(key=>{
@@ -57,7 +65,15 @@ export async function save(db,actor,state,key,id,hash,command,response,statement
   return response;
 }
 
-export async function modelBootstrap(db,actor){return modelWorkspacePayload(db,actor);}
+export async function modelBootstrap(db, actor) {
+  const stored = JSON.parse(await modelWorkspacePayload(db, actor));
+  const targets = stored.deployments.length ? inferenceConnectionTargets(domainModelWorkspace(stored)) : [];
+  const inferenceConnectionTargetsView = targets.map(({ id, name, deploymentName, modelName, interfaceType, endpointPath, baseUrl, source }) => ({
+    id, name, deploymentName, modelName, interfaceType, endpointPath, baseUrl, endpointId: source.endpointId,
+    connectionId: stored.endpoints.find(row => !row.deletedAt && row.inferenceSource?.endpointId === source.endpointId)?.id,
+  }));
+  return JSON.stringify({ ...stored, deployments: [], inferenceConnectionTargets: inferenceConnectionTargetsView });
+}
 
 export async function channelIndexCheck(db, actor) {
   const state = await loadModelWorkspace(db, actor, { command: true });
@@ -307,7 +323,7 @@ export async function modelCommand(db,actor,body,key,license){
   if (['serviceMode', 'createServiceModel', 'createServiceModels', 'guidedServiceConfigure', 'guidedProfileSave'].includes(body.action.operation)) {
     issue(422, 'BUSINESS_BLOCKED', '请在「模型服务」中创建和配置服务');
   }
-  const before=await loadModelWorkspace(db,actor,{command:true});
+  const before=await loadModelWorkspace(db,actor,{command:true,inference:true});
   if(before.revision!==body.expectedRevision)issue(409,'REVISION_CONFLICT','模型运营已有修订，请载入最新数据；当前输入保留');
   let indexRepairs = [];
   if (body.action.operation === 'channelDirectoryRepair') {
@@ -339,6 +355,34 @@ export async function modelCommand(db,actor,body,key,license){
   let next;
   try{
     next=commitAdminState(before,action,actor.role);
+    const managed = before.endpoints.filter(row => row.inferenceSource && !row.deletedAt);
+    const linked = next.endpoints.filter(row => row.inferenceSource && !row.deletedAt);
+    const connectionFields = ['inferenceSource', 'providerId', 'channelSourceType', 'baseUrl', 'endpointPath', 'interfaceType',
+      'modelProtocol', 'protocol', 'taskUrls', 'authMode', 'apiKeyId', 'keyGroupId', 'apiKeys', 'credentialRef', 'customAdapter'];
+    for (const endpoint of linked) {
+      const original = managed.find(row => row.id === endpoint.id);
+      if (original && changesInferenceConfiguration(original, endpoint, connectionFields)) {
+        throw Error('内置模型推理连接的地址、接口和认证由部署提供');
+      }
+      if (!original && action.operation !== 'channelDirectoryCreateInference') throw Error('请选择推理实例创建内置连接');
+      if (connectionActive(endpoint) && !connectionActive(original) && !inferenceSourceAvailable(before, endpoint.inferenceSource)) {
+        throw Error('推理部署的服务端点不可用，请恢复后重新测试');
+      }
+    }
+    for (const sourceId of new Set(linked.map(row => row.inferenceSource.endpointId))) {
+      const original = before.endpoints.find(row => row.id === sourceId);
+      const endpoint = next.endpoints.find(row => row.id === sourceId);
+      const fields = ['baseUrl', 'endpointPath', 'interfaceType', 'modelProtocol', 'protocol', 'taskUrls', 'modelIds'];
+      if (original && (!endpoint || endpoint.deletedAt || changesInferenceConfiguration(original, endpoint, fields))) {
+        throw Error('部署端点仍被内置模型推理连接引用，请先解除关联');
+      }
+    }
+    const builtin = before.providers.find(row => row.id === BUILTIN_INFERENCE_PROVIDER_ID);
+    if (builtin && !next.providers.some(row => row.id === builtin.id && row.name === builtin.name &&
+      row.sourceType === builtin.sourceType && !row.deletedAt && !row.profileRemovedAt)) {
+      throw Error('内置模型推理服务商的名称和供给类型由平台维护');
+    }
+    if (linked.length) next.endpoints = invalidateInferenceConnections(before, next);
     if(next.audits[0])next.audits[0].actorId=actor.id;
     const sync=prepareMockOnboardingSync(before,next,action);
     assertNewMockPublications(before,next,action,sync?.after);

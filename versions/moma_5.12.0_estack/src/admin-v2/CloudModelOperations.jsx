@@ -70,7 +70,19 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
     alive.current=true;
     if (modelWorkspace) acceptCloudState=accept;
     void load();
-    const focus=async()=>{if(!current.current)return;try{const next=await api(workspacePath);if(next.revision!==current.current.revision || next.modelRevision!==current.current.modelRevision)setConflict(true);else if(applicationWorkspace)accept(next);}catch(issue){setError(issue.message);}};
+    const focus = async () => {
+      if (!current.current) return;
+      try {
+        const next = await api(workspacePath);
+        if (next.revision !== current.current.revision || next.modelRevision !== current.current.modelRevision) {
+          setConflict(true);
+        } else if (applicationWorkspace || (modelWorkspace && next.commitSeq > current.current.commitSeq)) {
+          accept(next);
+        }
+      } catch (issue) {
+        setError(issue.message);
+      }
+    };
     addEventListener('focus',focus);
     return()=>{
       alive.current=false;

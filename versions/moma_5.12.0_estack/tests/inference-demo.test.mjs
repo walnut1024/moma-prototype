@@ -6,7 +6,10 @@ import { loadModelWorkspace } from '../server/model-repository.js';
 import { deploymentInstances } from '../src/admin-v2/deployments.js';
 import { deploymentPlaygroundTargets } from '../src/admin-v2/deployment-playground.js';
 import { createInferenceDemoState } from '../src/admin-v2/inference-demo-data.js';
+import { channelSourceTypeLabel, connectionDirectoryRows } from '../src/admin-v2/channel-connection-directory.js';
+import { inferenceConnectionTargets } from '../src/admin-v2/inference-connection-targets.js';
 import { infrastructurePages } from '../src/admin-v2/infrastructure-state.js';
+import { supplierDirectory } from '../src/admin-v2/moma-provider.js';
 import { deviceDeployments, workerDeployments } from '../src/admin-v2/ops-resources.js';
 
 test('the isolated inference demo links deployments, physical placement, repository files, caches and routes', async t => {
@@ -54,6 +57,23 @@ test('the isolated inference demo links deployments, physical placement, reposit
     assert.match(workspace.endpoints.find(row => row.id === targets[0].endpointId).baseUrl, /^https:\/\/inference\.demo\.invalid\//);
   }
   assert.equal(deploymentPlaygroundTargets(state, 'deployment-bge-nj-online')[0].mode, 'embedding');
+  const connections = connectionDirectoryRows(state, supplierDirectory(state));
+  const [inferenceConnection, ...extraInferenceConnections] = connections.filter(row => row.endpoint.inferenceSource);
+  assert.equal(extraInferenceConnections.length, 0);
+  assert.equal(inferenceConnection.name, 'BGE-M3 内置推理');
+  assert.equal(inferenceConnection.provider.name, '内置模型推理');
+  assert.equal(channelSourceTypeLabel(inferenceConnection.endpoint.channelSourceType), '内置模型推理服务');
+  assert.equal(inferenceConnection.status, '待验证');
+  assert.equal(inferenceConnection.modelCount, 1);
+  assert.deepEqual(inferenceConnection.credentials, []);
+  const bge = findDeployment('deployment-bge-nj-online');
+  assert.deepEqual(inferenceConnection.endpoint.inferenceSource, {
+    deploymentId: bge.id, endpointId: bge.endpointId, instanceId: 'deployment-bge-nj-online:1',
+  });
+  assert.equal(inferenceConnection.endpoint.baseUrl, state.endpoints.find(row => row.id === bge.endpointId).baseUrl);
+  assert.equal(inferenceConnection.endpoint.endpointPath, '/embeddings');
+  assert(connections.some(row => (row.endpoint.channelSourceType ?? row.provider.sourceType) === 'thirdParty'));
+  assert(inferenceConnectionTargets(state).some(target => target.id === 'deployment-glm:1'));
   assert.equal(findDeployment('deployment-glm').kvCache.service.id, 'cache-suzhou-glm');
   for (const benchmark of infrastructure['ops-benchmarks'].filter(row => ['bench-ds-throughput-nj', 'bench-glm-latency-sz'].includes(row.id))) {
     const target = instances.find(row => row.id === benchmark.targetSelection);
@@ -61,6 +81,8 @@ test('the isolated inference demo links deployments, physical placement, reposit
   }
   await initializeInferenceDemo(db);
   assert.equal(await db.prepare('SELECT application_revision FROM model_workspace WHERE id=1').first('application_revision'), reference.application_revision);
+  const reloaded = await loadModelWorkspace(db, actor, { simulation: false });
+  assert.deepEqual(reloaded.endpoints.filter(row => row.inferenceSource).map(row => row.id), [inferenceConnection.id]);
 });
 
 test('the model inference demo cannot be seeded into a persistent workspace', async () => {

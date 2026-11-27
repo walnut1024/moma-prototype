@@ -71,3 +71,10 @@ export const experienceKeyId = projectId => 'experience:' + projectId;
 
 export const projectModelEnabled = (project, modelId) =>
   project.inheritsSpaceModels === true || project.modelPermissions == null || project.modelPermissions.some(row => row.modelId === modelId);
+
+export function projectServiceEnabled(project, service) {
+  const modelId = service.serviceModelId || service.modelKey;
+  return service.internal && service.independentService
+    ? project.modelPermissions?.some(row => row.modelId === modelId) === true
+    : projectModelEnabled(project, modelId);
+}

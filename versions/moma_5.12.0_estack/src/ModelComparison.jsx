@@ -9,8 +9,8 @@ import ModelSelectDialog from './ModelSelectDialog';
 import './model-comparison.css';
 
 const createColumn = (id, model) => ({ id, model, input: '', response: '', temperature: '0.7', topP: '0.8', deep: false, settings: false });
-export default function ModelComparison({ onBack, owner = "", project }) {
-  const directory = useServiceDirectory('text',project), catalog = directory.models;
+export default function ModelComparison({ onBack, owner = "", project, internalProjectServices }) {
+  const directory = useServiceDirectory('text',project,internalProjectServices), catalog = directory.models;
   const defaults = () => catalog.filter(model => model.callable).slice(0, 2).map((model, index) => createColumn(index + 1, model.id));
   const [draft] = useState(() => { try { return readExperienceDraft(owner, 'comparison'); } catch { return { error: '对比草稿读取失败，请核对本地存储' }; } });
   const [columns, setColumns] = useState(draft.columns || defaults());

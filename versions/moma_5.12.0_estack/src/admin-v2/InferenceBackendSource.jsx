@@ -167,11 +167,11 @@ function BackendSourceDrawer({ onClose, onSaved }) {
   </>;
 }
 
-export default function InferenceBackendSource({ actorRole, onSaved }) {
+export default function InferenceBackendSource({ actorRole, onSaved, disabled }) {
   const t = useChannelText();
   const [open, setOpen] = useState(false);
   if (actorRole !== '平台管理员') return null;
-  return <><Button onClick={() => setOpen(true)}>{t('后端来源')}</Button>
-    {open && <BackendSourceDrawer onClose={() => setOpen(false)} onSaved={onSaved}/>}
+  return <><Button disabled={disabled} onClick={() => setOpen(true)}>{t('后端来源')}</Button>
+    {open && !disabled && <BackendSourceDrawer onClose={() => setOpen(false)} onSaved={onSaved}/>}
   </>;
 }

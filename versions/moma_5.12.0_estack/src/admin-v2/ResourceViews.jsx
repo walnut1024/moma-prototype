@@ -13,7 +13,7 @@ import { deploymentInstances, instanceFilterStates } from './deployments';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import './semi-inference.css';
 
-export function NodeRegistrationHeader({ records, openEditor, navigate, params, dispatch, inferenceDemo }) {
+export function NodeRegistrationHeader({ records, openEditor, navigate, params, dispatch, inferenceDemo, interactiveDemo, writable }) {
   const [active, setActive] = useState(false);
   const [metrics, setMetrics] = useState(false);
   const [retrying, setRetrying] = useState('');
@@ -34,8 +34,9 @@ export function NodeRegistrationHeader({ records, openEditor, navigate, params, 
   };
   return <>
     <Space wrap><Button onClick={() => setMetrics(true)}>监控</Button>
-      {!inferenceDemo && <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} onClick={() => clusters.length ? setActive(true) : navigate?.('clusters')}>添加节点</Button>}
-      {dispatch && recovery.map(({ cluster, row }) => <Button key={cluster.id} loading={retrying === row.id} disabled={Boolean(retrying) && retrying !== row.id}
+      <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!writable || inferenceDemo && !interactiveDemo}
+        onClick={() => clusters.length ? setActive(true) : navigate?.('clusters')}>添加节点</Button>
+      {recovery.map(({ cluster, row }) => <Button key={cluster.id} loading={retrying === row.id} disabled={!dispatch || Boolean(retrying) && retrying !== row.id}
         onClick={() => retry(row)}>完成 {cluster.name} 的注册</Button>)}</Space>
     {active && <ClusterRegistration cluster={fixed} clusters={clusters} onClose={() => setActive(false)}
       onFinish={(cluster, values) => { setActive(false); openEditor({ preset: { ...values, clusterId: cluster.id }, title: '登记演示节点' }); }}/>}
@@ -84,7 +85,7 @@ export function LabelPairsEditor({ id, value, onChange, disabled, submitted = fa
   </div>;
 }
 
-function NodeBatchLabels({ selectedRows, commit, clearSelection }) {
+function NodeBatchLabels({ selectedRows, commit, clearSelection, busy: pageBusy }) {
   const [visible, setVisible] = useState(false);
   const [draft, setDraft] = useState([]);
   const [error, setError] = useState('');
@@ -111,9 +112,9 @@ function NodeBatchLabels({ selectedRows, commit, clearSelection }) {
     finally { setBusy(false); }
   };
   return <>
-    {selectedRows.length > 0 && <Button onClick={() => {
+    <Button disabled={pageBusy || !selectedRows.length} onClick={() => {
       setDraft([]); setError(''); setSubmitted(false); setTargetIds(selectedRows.map(row => row.id)); setVisible(true);
-    }}>批量更新标签</Button>}
+    }}>批量更新标签</Button>
     {visible && <AdminModal visible title={`批量更新 ${targetIds.length} 个节点的标签`} onOk={save} confirmLoading={busy}
       okText="更新标签" okButtonProps={{ disabled: !draft.length }} onCancel={() => !busy && setVisible(false)}>
       <div className="admin-page-stack">
@@ -181,7 +182,7 @@ function ResourceInstances({ instances, records, navigate, scope, device = false
     ...(!device ? [{ title: 'GPU 设备', key: 'devices', width: 150, render: (_, { instance }) => instance &&
       (instance.devices.length ? <Space wrap>{instance.devices.map(gpu => <Button key={gpu.id} theme="borderless" size="small"
         onClick={() => navigate(deviceRoute(gpu, undefined, scope))}>{gpu.name} · {gpu.index}</Button>)}</Space> : '—') }] : []),
-    { title: '操作', key: 'actions', width: 96, render: (_, { instance }) => instance &&
+    { title: '操作', key: 'actions', width: 96, fixed: 'right', render: (_, { instance }) => instance &&
       <Button theme="borderless" size="small" aria-label={`查看 ${instance.name} 的日志`} onClick={() => setLogId(instance.id)}>查看日志</Button> },
   ];
   return <div className="admin-page-stack">
@@ -191,7 +192,7 @@ function ResourceInstances({ instances, records, navigate, scope, device = false
       <Typography.Text type="secondary" aria-live="polite">{groups.length} 个模型，{groups.reduce((count, group) => count + group.instances.length, 0)} 个实例</Typography.Text>
     </Space>}
     <div className="admin-resource-instance-table" role="region" aria-label="关联模型与实例表" tabIndex={0}>
-      <Table style={{ minWidth: device ? 770 : 920 }} rowKey="id" dataSource={rows} pagination={false}
+      <Table scroll={{ x: device ? 'max(100%, 770px)' : 'max(100%, 920px)' }} rowKey="id" dataSource={rows} pagination={false}
         empty={query.trim() || state ? '暂无匹配模型实例' : '暂无关联模型实例'} columns={columns}
         onRow={row => row.group ? { className: 'admin-resource-model-group' } : {}}/>
     </div>
@@ -326,7 +327,7 @@ function DeviceMetrics({ row, device, devices = [], scope }) {
   </div>;
 }
 
-function NodeDetails({ row, records, navigate, detail, panel, params, refresh, openEditor, busy, inferenceDemo }) {
+function NodeDetails({ row, records, navigate, detail, panel, params, refresh, openEditor, busy, inferenceDemo, interactiveDemo, writable }) {
   const selectedPanel = panel ?? detail?.panel;
   const scope = useResourceDetailScope(params, refresh);
   const [tab, setTab] = useState(() => detailTab(params, selectedPanel === 'metrics' ? 'monitoring' : 'overview'));
@@ -357,10 +358,10 @@ function NodeDetails({ row, records, navigate, detail, panel, params, refresh, o
     { key: 'KV 传输网卡', value: row.kvTransferNic || '—' }, { key: '维护说明', value: row.maintenanceRemark || '—' },
   ];
   return <div className="admin-page-stack">
-    {canEdit && !inferenceDemo && <Space wrap>
-      <Button disabled={busy} onClick={() => openEditor({ row })}>编辑节点</Button>
-      {row.sshConfigured && <Button onClick={() => setShowSsh(true)}>查看 SSH 访问</Button>}
-    </Space>}
+    <Space wrap>
+      <Button disabled={!canEdit || !writable || inferenceDemo && !interactiveDemo || busy} onClick={() => openEditor({ row })}>编辑节点</Button>
+      <Button disabled={!canEdit || inferenceDemo || !row.sshConfigured} onClick={() => setShowSsh(true)}>查看 SSH 访问</Button>
+    </Space>
     <Tabs activeKey={tab} onChange={setTab}>
     <Tabs.TabPane tab="概览" itemKey="overview"><div className="admin-page-stack">
       <Space><Typography.Text type="secondary">当前资源</Typography.Text><Button size="small" onClick={refresh}>刷新</Button></Space>
@@ -374,19 +375,19 @@ function NodeDetails({ row, records, navigate, detail, panel, params, refresh, o
       ]}/>
       <Typography.Title heading={5}>GPU 资源</Typography.Title>
       <Table rowKey="id" dataSource={gpus} pagination={false}
-        empty={row.gpuCount === 0 ? '节点报告无 GPU 设备' : '暂无可识别的 GPU 设备'} scroll={{ x: 870 }} columns={[
-        { title: '设备', dataIndex: 'name', render: (value, device) => <Button theme="borderless" size="small" onClick={() => navigate(deviceRoute(device, undefined, scope))}>{value}</Button> },
-        { title: '编号', dataIndex: 'index' },
-        { title: '关联实例', key: 'related', render: (_, device) => <Button theme="borderless" size="small"
+        empty={row.gpuCount === 0 ? '节点报告无 GPU 设备' : '暂无可识别的 GPU 设备'} scroll={{ x: 'max(100%, 870px)' }} columns={[
+        { title: '设备', dataIndex: 'name', width: 158, render: (value, device) => <Button theme="borderless" size="small" onClick={() => navigate(deviceRoute(device, undefined, scope))}>{value}</Button> },
+        { title: '编号', dataIndex: 'index', width: 62 },
+        { title: '关联实例', key: 'related', width: 110, render: (_, device) => <Button theme="borderless" size="small"
           aria-label={`查看 GPU ${device.index} 的模型与实例`} onClick={() => navigate(deviceRoute(device, 'instances', scope))}>
           {resourceInstances(deviceDeployments(device, records), records, device, true).length} 个实例
         </Button> },
-        { title: '核心使用率', dataIndex: 'utilization', render: pct },
-        { title: '显存已用 / 总量', key: 'vram', render: (_, device) => capacity(device.vramUsed, device.vram) },
-        { title: '已分配显存', dataIndex: 'vramAllocated', render: gib },
-        { title: '功耗', dataIndex: 'power', render: value => quantity(value, 'W') },
-        { title: '温度', dataIndex: 'temperature', render: value => quantity(value, '°C') },
-        { title: '操作', key: 'actions', render: (_, device) =>
+        { title: '核心使用率', dataIndex: 'utilization', width: 96, render: pct },
+        { title: '显存已用 / 总量', key: 'vram', width: 130, render: (_, device) => capacity(device.vramUsed, device.vram) },
+        { title: '已分配显存', dataIndex: 'vramAllocated', width: 98, render: gib },
+        { title: '功耗', dataIndex: 'power', width: 76, render: value => quantity(value, 'W') },
+        { title: '温度', dataIndex: 'temperature', width: 66, render: value => quantity(value, '°C') },
+        { title: '操作', key: 'actions', width: 74, fixed: 'right', render: (_, device) =>
           <Button theme="borderless" size="small" onClick={() => navigate(deviceRoute(device, 'monitoring', scope))}>监控</Button> },
       ]}/>
       <Space><Button onClick={() => navigate(`ops-gpus?nodeId=${encodeURIComponent(row.id)}`)}>查看 GPU 列表</Button></Space>
@@ -403,13 +404,13 @@ function NodeDetails({ row, records, navigate, detail, panel, params, refresh, o
   </div>;
 }
 
-function GPUDetails({ row, records, navigate, params, refresh }) {
+function GPUDetails({ row, records, navigate, panel, params, refresh }) {
   const switchId = useId();
   const worker = records['ops-nodes'].find(item => item.id === row.nodeId && item.clusterId === row.clusterId);
   const cluster = records.clusters?.find(item => item.id === row.clusterId);
   const instances = resourceInstances(deviceDeployments(row, records), records, row, true);
   const scope = useResourceDetailScope(params, refresh);
-  const [tab, setTab] = useState(() => detailTab(params));
+  const [tab, setTab] = useState(() => detailTab(params, panel === 'metrics' ? 'monitoring' : 'overview'));
   const siblings = worker ? workerGpuInventory(worker, records['ops-gpus']) : [];
   const openWorker = () => navigate(resourceRoute('ops-nodes', worker, undefined, scope));
   const workerLink = worker && <Button theme="borderless" size="small" onClick={openWorker}>{worker.name}</Button>;
@@ -429,15 +430,15 @@ function GPUDetails({ row, records, navigate, params, refresh }) {
   ];
   const descriptions = values => <Descriptions data={values.map(([key, value]) => ({ key, value: value == null || value === '' ? '—' : value }))}/>;
   return <div className="admin-page-stack">
-    {(worker || siblings.length > 1) && <Space wrap>
+    <Space wrap>
       {siblings.length > 1 && <Select insetLabel="切换 GPU" insetLabelId={switchId} aria-labelledby={switchId} value={row.id} filter
         optionList={siblings.map(gpu => ({ value: gpu.id, label: `GPU ${gpu.index} · ${gpu.name}` }))}
         onChange={id => {
           const selected = siblings.find(gpu => gpu.id === id);
           if (selected && selected.id !== row.id) navigate(deviceRoute(selected, tab, scope));
         }}/>}
-      {worker && <Button onClick={openWorker}>查看节点</Button>}
-    </Space>}
+      <Button disabled={!worker} onClick={openWorker}>查看节点</Button>
+    </Space>
     <Tabs activeKey={tab} onChange={setTab}>
     <Tabs.TabPane tab="概览" itemKey="overview"><div className="admin-page-stack">
       <Space><Typography.Text type="secondary">当前资源</Typography.Text><Button size="small" onClick={refresh}>刷新</Button></Space>

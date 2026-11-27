@@ -33,6 +33,7 @@ export const sections = [
   ]},
   { id: "platform", workspace: "operations", title: "平台管理", home: "license", items: [
     { id: "site-configuration", label: "站点配置", children: [["site-configuration", "站点配置"]] },
+    { id: "announcements", label: "公告管理", children: [["announcements", "公告管理"]] },
     { id: "license", label: "授权管理", children: [["license", "授权管理"]] },
     { id: "accounts", label: "后台账号", children: [["admins", "后台账号"]] },
     { id: "audit-logs", label: "审计日志", children: [["audit-logs", "审计日志"]] },
@@ -43,7 +44,7 @@ export const sections = [
   ]},
   { id: "ops-model-service", workspace: "maintenance", title: "模型推理", items: [
     { id: "clusters", label: "集群管理", children: [["clusters", "集群"], ["ops-nodes", "节点"], ["ops-gpus", "GPU"]] },
-    { id: "ops-model-library", label: "模型库", sidebar: false, children: [["ops-model-library", "模型库"]] },
+    { id: "ops-model-library", label: "模型库", children: [["ops-model-library", "模型库"]] },
     { id: "deployments", label: "模型部署", children: [["deployments", "模型部署"]] },
     { id: "ops-benchmarks", label: "基准测试", children: [["ops-benchmarks", "基准测试"]] },
     { id: "ops-inference-backends", label: "推理后端", children: [["ops-inference-backends", "推理后端"]] },
@@ -63,7 +64,7 @@ export const sections = [
 export const pages = {
   ...Object.fromEntries(sections.flatMap(group => group.items.flatMap(item => item.children.map(([id, label]) => [id, { id, label, area: item.id, areaLabel: item.label, group: group.title, groupId: group.id }])))),
   'organization-members': {id:'organization-members',label:'组织及成员',area:'enterprise',areaLabel:'租户管理',group:'访问控制',groupId:'customers'},
-  ...Object.fromEntries([['goods', '商品与套餐'], ['announcements', '公告与服务通知'], ['ledger', '账户与额度流水'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'commerce-orders', areaLabel: '订购与账单', group: '商业运营', groupId: 'commerce' }])),
+  ...Object.fromEntries([['goods', '商品与套餐'], ['ledger', '账户与额度流水'], ['settlement', '服务商对账与结算'], ['adjustments', '退款与调账']].map(([id, label]) => [id, { id, label, area: 'commerce-orders', areaLabel: '订购与账单', group: '商业运营', groupId: 'commerce' }])),
   'customer-analysis-detail': { id: 'customer-analysis-detail', label: '租户详情', area: 'customers-analysis', areaLabel: '租户数据', group: '运营分析', groupId: 'analytics' },
   'customer-usage-detail': { id: 'customer-usage-detail', label: '租户详情', area: 'users-analysis', areaLabel: '用户数据', group: '运营分析', groupId: 'analytics' },
 };

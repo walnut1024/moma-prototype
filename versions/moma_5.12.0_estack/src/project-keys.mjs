@@ -1,4 +1,4 @@
-import { projectAccess, requireProject, projectModelEnabled } from './project-access.mjs';
+import { projectAccess, requireProject, projectServiceEnabled } from './project-access.mjs';
 import { maskApiKey, parseIpAllowlist } from './api-key-utils.mjs';
 
 export function maskedProjectKeys(rows) {
@@ -13,13 +13,16 @@ export function changeProjectKeys({ state, identity, link }, rows, { projectId, 
   const actions = [], next = structuredClone(state);
   const at = new Date().toISOString();
   if(subscriptionId&&!state.orders.some(row=>row.id===subscriptionId&&row.tenantId===identity.tenantId&&['已开通','生效中'].includes(row.status)&&(!row.expiresAt || Date.parse(row.expiresAt)>Date.now())))throw Error('套餐归属或状态无效');
-  const allowed=new Set(services.filter(item=>projectModelEnabled(project, item.modelKey)).map(item=>item.modelKey));
+  const allowed=new Set(services.filter(item=>projectServiceEnabled(project,item)).map(item=>item.modelKey));
+  const internalServiceIds = new Map(services.filter(service=>service.internal && service.independentService)
+    .map(service=>[service.callId,service.modelKey]));
   const mapped=rows.map(row=>{
     if(!row.id || row.id.startsWith('experience:') || ids.has(row.id))throw Error('API Key ID 无效或重复');ids.add(row.id);
     const existing=state.apiKeys.find(item=>item.id===row.id);
     if(existing && !scoped.some(item=>item.id===row.id))throw Error('无权修改其他客户或用户的 API Key');
     const name=String(row.name || '').trim();if(name.length<2 || name.length>80)throw Error('名称需为2至80个字符');
-    const modelIds=row.models===null?[...allowed]:(row.models || []).map(code=>state.models.find(item=>item.modelId===code)?.id || code);
+    const modelIds=row.models===null?[...allowed]:(row.models || []).map(code=>
+      internalServiceIds.get(code) || state.models.find(item=>item.modelId===code)?.id || code);
     if(modelIds.some(id=>!allowed.has(id) && !existing?.modelIds?.includes(id)))throw Error('选择了未授权模型');
     const quotaLimit=row.quotaEnabled===false?null:(row.quotaLimit !== undefined ? row.quotaLimit : existing?.quotaLimit ?? null);
     if(quotaLimit!==null&&quotaLimit!==undefined&&(!Number.isSafeInteger(quotaLimit)||quotaLimit<0))throw Error('额度必须为非负整数');

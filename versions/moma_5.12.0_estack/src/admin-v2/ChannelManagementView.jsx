@@ -12,6 +12,7 @@ import ReferenceProviderApiKeys from './ReferenceProviderApiKeys';
 import { CopyId, SearchBox } from './ModelOperationsUI';
 import { workbenchProtocolLabel } from './workbench-protocol';
 import { channelRequestUrls, channelListPaths, channelListType, channelSourceTypeLabel } from './channel-connection-directory';
+import { demoConnectionDeploymentId } from './inference-demo-data.js';
 import { channelKeyMode, channelKeyStrategyLabel } from './ChannelCredentials';
 import { connectionKeys } from './connection-state';
 import { CHANNEL_PROCUREMENT_BATCH_LIMIT } from './channel-change-management';
@@ -223,6 +224,11 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   const matches = connections.filter(row => row.name.toLowerCase().includes(keyword) &&
     (!providerId || row.provider.id === providerId) &&
     (!modelKey || row.models.some(model => model.modelKey === modelKey)));
+  const demoIndex = matches.findIndex(row => row.endpoint.inferenceSource?.deploymentId === demoConnectionDeploymentId);
+  if (demoIndex > 0) {
+    const [demoConnection] = matches.splice(demoIndex, 1);
+    matches.unshift(demoConnection);
+  }
   const page = Math.min(Math.max(1, Number.parseInt(params.get('page'), 10) || 1), Math.ceil(matches.length / pageSize) || 1);
   const rows = matches.slice((page - 1) * pageSize, page * pageSize);
   const view = (id, tab = null) => {

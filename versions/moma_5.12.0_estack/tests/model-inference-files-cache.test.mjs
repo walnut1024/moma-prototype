@@ -4,10 +4,11 @@ import test from 'node:test';
 import { load } from 'js-yaml';
 import { strFromU8, unzipSync } from 'fflate';
 import { cacheFieldState, cacheL2Default, cacheL2Issue, cacheL2Values, cacheProviderSourceDocument, cacheVersionsForProvider, normalizeCacheProviderDocument } from '../src/admin-v2/cache-provider-fields.js';
-import { cacheAttachedInstances, cacheAttachments, cacheCreateDefaults, cacheInstances, cacheLogAvailable, cachePlacement, cachePlacementChanged, cacheServiceLogAvailable, modelFileCreation, modelFileNodeIssue, MODEL_SERVICE_PAGES, reconcileModelOperation } from '../src/admin-v2/ops-models.js';
+import { cacheAttachedInstances, cacheAttachments, cacheCreateDefaults, cacheInstances, cacheLogAvailable, cachePlacement, cachePlacementChanged, cacheServiceLogAvailable, modelFileCreation, modelFileNodeIssue, modelFileOnNode, MODEL_SERVICE_PAGES, reconcileModelOperation } from '../src/admin-v2/ops-models.js';
 import { catalogueDocument, catalogueInitialRecipe, catalogueRecipeMatches, catalogueRecipes, readCatalogueDocument } from '../src/admin-v2/model-catalogue.js';
 import { gpuStackCatalogue, gpuStackDraftRecipes } from '../src/admin-v2/model-catalogue-data.js';
-import { modelHubCandidates } from '../src/admin-v2/model-hub-candidates.js';
+import { modelHubCandidates, searchModelHubCandidates } from '../src/admin-v2/model-hub-candidates.js';
+import { modelFileDeploymentCode, modelFileDeploymentFieldErrors } from '../src/admin-v2/deployment-options.js';
 import { changeInfrastructure, INFRASTRUCTURE_STORAGE, readInfrastructure } from '../src/admin-v2/infrastructure-state.js';
 import { readModelSourceSetting } from '../src/admin-v2/infrastructure-source-settings.js';
 
@@ -55,6 +56,37 @@ test('model file registration validates the source, chosen node, and source-spec
   assert.equal(modelFileCreation({ ...remote, workerId: second.id }, state).workerId, second.id);
 });
 
+test('model file download marks existing workers and checks the destination separately', () => {
+  const draft = { source: 'ModelScope', repository: 'Qwen/model', filename: 'qwen-q4.gguf',
+    workerId: first.id, localDir: '/mnt/downloads' };
+  const downloaded = modelFileCreation(draft, base);
+  const state = { ...base, 'ops-model-files': [downloaded] };
+  const newDirectory = { ...draft, localDir: '/mnt/second-copy' };
+  assert.equal(modelFileOnNode(newDirectory, state), true);
+  assert.equal(modelFileNodeIssue(newDirectory, state), undefined);
+  assert.equal(modelFileOnNode({ ...draft, workerId: second.id }, state), false);
+  assert.match(modelFileNodeIssue({ ...draft, repository: 'Qwen/other', filename: '' }, state), /目录已被/);
+  assert.throws(() => modelFileCreation(draft, { ...base, clusters: [{ id: 'cluster', status: '异常' }] }), /运行中集群/);
+});
+
+test('model files offer deployment for ready base weights only', () => {
+  const action = filePage.actions.find(entry => entry.deployModelFile);
+  assert.equal(action.when({ status: '可用' }), true);
+  assert.equal(action.when({ status: '可用', lora: true }), false);
+  assert.equal(action.when({ status: '下载中', progress: 100 }), false);
+  assert.equal(action.when({ status: '失败' }), false);
+});
+
+test('cache placement preserves a chosen version across clusters and recomputes an automatic version', () => {
+  const extra = { ...base, clusters: [...base.clusters, { id: 'other', status: '运行中' }],
+    'ops-nodes': [first, second, { ...second, id: 'other-worker', clusterId: 'other' }] };
+  const draft = { ...cacheCreateDefaults('LMCache', extra), version: '0.4.2' };
+  assert.notEqual(cacheCreateDefaults('LMCache', extra).version, draft.version);
+  const pinned = { ...draft, ...cachePage.onFieldChange(draft, 'version', draft.version, extra) };
+  assert.equal(cachePage.onFieldChange(pinned, 'clusterId', 'other', extra).version, draft.version);
+  assert.equal(cachePage.onFieldChange(draft, 'clusterId', 'other', extra).version, cacheCreateDefaults('LMCache', extra).version);
+});
+
 test('model file references check stable IDs and distinguish same-path files on different nodes', () => {
   const file = { id: 'file', source: '本地路径', workerId: first.id, clusterId: first.clusterId, mountPath: '/models/model.gguf' };
   const deployment = { name: 'Hosted Model', clusterId: first.clusterId, placement: '指定节点',
@@ -63,6 +95,42 @@ test('model file references check stable IDs and distinguish same-path files on 
   assert.match(filePage.canDelete(file, { ...base, deployments: [{ ...deployment, modelFileId: file.id }] }), /Hosted Model/);
   assert.match(filePage.canDelete(file, { ...base, deployments: [{ ...deployment,
     previousConfig: { clusterId: first.clusterId, placement: '指定节点', placementTargets: [first.id], weightPath: file.mountPath } }] }), /Hosted Model/);
+});
+
+test('model file deployment follows GPUStack name rules and derives a MoMA deployment code', () => {
+  const config = { name: 'Qwen3.5_VL-9B', source: '本地路径', weightPath: '/models/qwen', clusterId: 'cluster',
+    modelId: 'model', runtimeMode: '推理后端版本', backend: 'vLLM', replicas: '0', placement: '自动调度' };
+  assert.deepEqual(modelFileDeploymentFieldErrors(config), {});
+  assert.equal(modelFileDeploymentCode(config.name), 'qwen3-5-vl-9b');
+  assert.equal(modelFileDeploymentCode('A'), 'a');
+  assert.equal(modelFileDeploymentCode('bad_'), '');
+  for (const name of ['3B', '.qwen', 'qwen-', 'Qwen 模型', 'a'.repeat(64)]) {
+    assert.ok(modelFileDeploymentFieldErrors({ ...config, name }).name, name);
+  }
+  assert.deepEqual(modelFileDeploymentFieldErrors({ ...config, name: '3B', enableInternalRoute: false }), {});
+  assert.deepEqual(modelFileDeploymentFieldErrors({ ...config, name: 'a'.repeat(63), replicas: 100 }), {});
+  for (const replicas of [-1, 1.5, 101]) assert.ok(modelFileDeploymentFieldErrors({ ...config, replicas }).replicas);
+});
+
+test('model file deployment validates only the visible source and scheduling fields', () => {
+  const config = { name: 'Demo', source: 'Hugging Face', repository: 'BAAI/bge-m3', clusterId: 'cluster',
+    modelId: 'model', runtimeMode: '推理后端版本', backend: 'vLLM', replicas: 1, placement: '自动调度' };
+  assert.deepEqual(modelFileDeploymentFieldErrors(config), {});
+  assert.deepEqual(Object.keys(modelFileDeploymentFieldErrors({ ...config, source: 'ModelScope', repository: 'invalid',
+    clusterId: '', modelId: '', backend: '', replicas: ' ', placement: '指定 GPU', placementTargets: [] })).sort(),
+    ['backend', 'clusterId', 'modelId', 'placementTargets', 'replicas', 'repository']);
+  assert.deepEqual(Object.keys(modelFileDeploymentFieldErrors({ ...config, source: '模型库' })), ['source']);
+  assert.deepEqual(Object.keys(modelFileDeploymentFieldErrors({ ...config, source: '本地路径', weightPath: '/models/../qwen' })), ['weightPath']);
+});
+
+test('model file deployment requires an image and command for the custom backend', () => {
+  const config = { name: 'Demo', source: 'ModelScope', repository: 'Qwen/Qwen3.5-9B', clusterId: 'cluster',
+    modelId: 'model', runtimeMode: '自定义镜像', backend: '', replicas: 1, placement: '指定 GPU', placementTargets: ['gpu-1'] };
+  assert.deepEqual(Object.keys(modelFileDeploymentFieldErrors({ ...config, containerImage: 'invalid image', containerCommand: ' ' })).sort(),
+    ['containerCommand', 'containerImage']);
+  const image = 'registry.example.com/inference:v1';
+  assert.deepEqual(modelFileDeploymentFieldErrors({ ...config, containerImage: image, containerCommand: 'serve --port 9000' }), {});
+  assert.deepEqual(modelFileDeploymentFieldErrors({ ...config, backend: 'vLLM', containerImage: image }), {});
 });
 
 test('GGUF download keeps all selected shard paths and rejects an unrelated shard or duplicate path', () => {
@@ -94,6 +162,17 @@ test('the same hub repository exposes each file once from model catalogue specs'
   const builtin = MODEL_SERVICE_PAGES['ops-model-library'].seed;
   assert.equal(new Set(builtin.map(row => row.id)).size, builtin.length);
   assert.equal(builtin.find(row => row.id === 'catalog-qwen35-9b').releaseDate, '2026-03-02');
+});
+
+test('model file repository search filters quantization within the current repo and sorts by the selected measure', () => {
+  const first = { repository: 'owner/base', name: 'Demo Base', likes: 200, trendingScore: 70, downloads: 20,
+    specs: [{ repository: 'owner/quantized', quantization: 'FP8' }] };
+  const second = { repository: 'owner/quantized', name: 'Demo Quantized', likes: 100, trendingScore: 95, downloads: 100,
+    specs: [{ repository: 'owner/quantized', quantization: 'FP8' }] };
+  assert.deepEqual(searchModelHubCandidates([first, second]), [second, first]);
+  assert.deepEqual(searchModelHubCandidates([first, second], { sort: 'likes' }), [first, second]);
+  assert.deepEqual(searchModelHubCandidates([first, second], { query: 'demo', quantization: 'fp8' }), [second]);
+  assert.deepEqual(searchModelHubCandidates([first, second], { query: 'unrelated' }), []);
 });
 
 test('catalogue search matches name tokens without punctuation and excludes description-only matches', () => {

@@ -10,12 +10,21 @@ import { registeredServiceUpstreams } from '../src/admin-v2/service-model-mappin
 import { resourceId } from '../src/resource-id.mjs';
 import { marketCardFixture } from './market-card-fixture.mjs';
 
-test('independent services retain separate sale, order, price and call identities', {timeout:90_000}, async t => {
+const adminId = 'admin-001';
+const adminActor = {id:adminId,role:'平台管理员'};
+const digest = value => createHash('sha256').update(value).digest('hex');
+
+async function commerceTestBackend(t, account, licenseEdition) {
+  const previous = process.env.VITE_MOMA_PRIVATE_SITE;
   process.env.VITE_MOMA_PRIVATE_SITE = '1';
-  const origin = 'https://example.test', adminId = 'admin-001', account = 'grzh';
+  t.after(() => {
+    if (previous === undefined) delete process.env.VITE_MOMA_PRIVATE_SITE;
+    else process.env.VITE_MOMA_PRIVATE_SITE = previous;
+  });
+  const origin = 'https://example.test';
   const accessCode = randomBytes(18).toString('hex');
-  const digest = value => createHash('sha256').update(value).digest('hex');
-  const {db,runtime} = await startLocalBackend({demo:true,presets:true,loginHashes:{[adminId]:digest(accessCode),[account]:digest(accessCode)}});
+  const {db,runtime} = await startLocalBackend({demo:true,presets:true,licenseEdition,
+    loginHashes:{[adminId]:digest(accessCode),[account]:digest(accessCode)}});
   t.after(() => runtime.dispose());
 
   async function request(path, {cookie,body,key,secret,requestId} = {}) {
@@ -29,23 +38,20 @@ test('independent services retain separate sale, order, price and call identitie
     });
     return {status:response.status,data:await response.json(),cookie:response.headers.get('set-cookie')?.split(';')[0]};
   }
-  function ok(result) {
-    assert.equal(result.status,200,JSON.stringify(result.data));
-    return result.data;
-  }
-
   const adminLogin = await request('/auth/login',{body:{accountId:adminId,accessCode}});
   ok(adminLogin);
-  const admin = adminLogin.cookie;
-  const tenantLogin = await request('/market/login',{body:{username:account,accountType:'personal',accessCode}});
-  ok(tenantLogin);
-  const cookie = tenantLogin.cookie;
-  const tenantId = tenantLogin.data.tenant.id;
-  const read = async path => ok(await request(path,{cookie}));
-  const project = (await read('/market/workspace')).projects.find(row=>row.status==='正常');
-  assert.ok(project);
+  return {db,request,admin:adminLogin.cookie,login:accountType => request('/market/login',{
+    body:{username:account,accountType,accessCode},
+  })};
+}
 
-  const workspace = await loadModelWorkspace(db,{id:adminId,role:'平台管理员'},{simulation:false});
+function ok(result) {
+  assert.equal(result.status,200,JSON.stringify(result.data));
+  return result.data;
+}
+
+async function costedTextAssociation(db) {
+  const workspace = await loadModelWorkspace(db,adminActor,{simulation:false});
   const association = registeredServiceUpstreams(workspace).filter(row=>!row.reason).map(row=>({
     id:resourceId('service-channel'),channelId:row.id,name:row.name,fingerprint:channelFingerprint(row),
     upstreamId:row.upstreamModelId,provider:row.provider.name,enabled:true,priority:0,weight:100,
@@ -54,8 +60,11 @@ test('independent services retain separate sale, order, price and call identitie
     return prices?.map(item=>item.unit+':'+item.currency).sort().join() === 'million_input_tokens:CNY,million_output_tokens:CNY';
   });
   assert.ok(association,'fixture includes a qualified two-item upstream in CNY');
+  return association;
+}
 
-  const serviceCommand = async (row,revision = 0,expectedSale) => {
+function modelServicesClient(request, admin, association) {
+  const serviceCommand = (row,revision = 0,expectedSale) => {
     const operationId = resourceId('operation');
     return request('/model-services-new',{cookie:admin,key:operationId,
       body:{action:'save',id:row.id,row,revision,operationId,expectedSale}});
@@ -69,6 +78,19 @@ test('independent services retain separate sale, order, price and call identitie
     assert.equal(Object.hasOwn(row,'modelId'),false);
     return row;
   }
+  return {serviceCommand,makeService};
+}
+
+test('independent services retain separate sale, order, price and call identities', {timeout:90_000}, async t => {
+  const {db,request,login,admin} = await commerceTestBackend(t,'grzh');
+  const tenantLogin = await login('personal');
+  ok(tenantLogin);
+  const cookie = tenantLogin.cookie;
+  const tenantId = tenantLogin.data.tenant.id;
+  const read = async path => ok(await request(path,{cookie}));
+  const project = (await read('/market/workspace')).projects.find(row=>row.status==='正常');
+  assert.ok(project);
+  const {makeService,serviceCommand} = modelServicesClient(request,admin,await costedTextAssociation(db));
   const a = await makeService('a'), b = await makeService('b');
   assert.notEqual(a.id,b.id);
   assert.equal(a.channels[0].channelId,b.channels[0].channelId);
@@ -142,7 +164,6 @@ test('independent services retain separate sale, order, price and call identitie
   assert.deepEqual(ok(await invokeAPI(a.callId,apiRequest)),api.data);
   assert.equal((await invokeAPI(a.callId,webRequest)).data.error.code,'REQUEST_ID_CONFLICT');
 
-  const adminActor = {id:adminId,role:'平台管理员'};
   const costed = await loadModelWorkspace(db,adminActor,{command:true,simulation:false});
   const costId = modelServiceSupply(costed,b)[0].costPrice.id;
   const uncosted = structuredClone(costed);
@@ -232,4 +253,138 @@ test('independent services retain separate sale, order, price and call identitie
   const cancelled = (await read('/market/workspace')).orders.find(row=>row.id===firstOrder.id);
   assert.equal(cancelled.status,'已退订');
   assert.equal(cancelled.priceSnapshot.id,shown.salePriceId);
+});
+
+test('a new internal service needs tenant and project authorization but no sale or customer charge', {timeout:90_000}, async t => {
+  const tenantId = 'zqzh';
+  const {db,request,login,admin} = await commerceTestBackend(t,tenantId,'internal');
+  const foreignKey = 'sk-' + randomBytes(16).toString('hex');
+  await db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json,'$.apiKeys[#]',json(?)) WHERE id=1")
+    .bind(JSON.stringify({id:resourceId('api-key'),name:'原个人项目密钥',ownerId:'grzh',tenantId:'grzh',projectId:'project-grzh',
+      status:'有效',billingType:'按量付费',modelIds:[],credentialDigest:digest(foreignKey)})).run();
+  const policy = ok(await request('/project-space-policy',{cookie:admin}));
+  ok(await request('/project-space-policy',{cookie:admin,body:{
+    expectedRevision:policy.revision,operatingMode:'factory',internalTenantId:tenantId,personalEnabled:true,
+  }}));
+  assert.equal(ok(await request('/deployment/license')).commerceWritable,false);
+  assert.equal((await request('/model-service-sales',{cookie:admin})).data.error.code,'LICENSE_REQUIRED');
+
+  const tenantLogin = await login('enterprise');
+  assert.equal(ok(tenantLogin).tenant.internal,true);
+  assert.equal(tenantLogin.data.tenant.id,tenantId);
+  const cookie = tenantLogin.cookie;
+  const workspace = async () => ok(await request('/market/workspace',{cookie}));
+  async function tenantCommand(action, data) {
+    const {revision} = await workspace();
+    return request('/market/commands',{cookie,body:{
+      operationId:resourceId('operation'),tenantId,expectedRevision:revision,action,data,
+    }});
+  }
+  const application = async () => ok(await request('/application',{cookie:admin}));
+  async function tenantSettings(operation, data) {
+    const operationId = resourceId('operation');
+    return request('/application/commands',{cookie:admin,key:operationId,body:{
+      operationId,expectedRevision:(await application()).revision,
+      action:{type:'tenantServiceSettings',tenantId,operation,data},
+    }});
+  }
+
+  const {makeService,serviceCommand} = modelServicesClient(request,admin,await costedTextAssociation(db));
+  const service = await makeService('internal');
+  const departmentId = (await application()).organizations.find(row=>row.tenantId===tenantId && !row.parentId).id;
+  const createProject = async name => 'project-' + ok(await tenantCommand('projectCreate',{name,departmentId})).operationId;
+  const projectA = await createProject('内用项目 A');
+  const projectB = await createProject('内用项目 B');
+  assert.equal((await application()).marketModelServices.find(row=>row.id===service.id).independentService,true);
+  const assign = projectId => tenantCommand('projectUpdate',{projectId,type:'models',input:[{modelId:service.id,rpm:null,tpm:null}]});
+  const hasProjectService = async () => (await workspace()).projectServices.some(row=>row.id===service.id);
+  const messages = [{role:'user',content:'内用项目首次调用'}];
+  const invokeWeb = (projectId, requestId = resourceId('request')) => request('/market/completions',{cookie,
+    body:{tenantId,projectId,requestId,model:service.callId,messages,task:'text'}});
+
+  assert.equal(await hasProjectService(),false);
+  assert.equal((await assign(projectA)).status,422);
+  assert.equal((await tenantSettings('open-models',{modelIds:[service.id,resourceId('model-service')]})).status,422);
+  assert.equal(await hasProjectService(),false,'failed bulk authorization must not open the valid service');
+
+  ok(await tenantSettings('open-models',{modelIds:[service.id]}));
+  const grant = (await application()).tenants.find(row=>row.id===tenantId).modelRules.find(row=>row.modelId===service.id);
+  assert.deepEqual(grant,{modelId:service.id,rpm:null,tpm:null});
+  const eligible = (await workspace()).projectServices.find(row=>row.id===service.id);
+  assert.ok(eligible);
+  const {callable,canOrder,ordered,salePrices} = eligible;
+  assert.deepEqual({callable,canOrder,ordered,salePrices},{callable:true,canOrder:false,ordered:false,salePrices:[]});
+  ok(await assign(projectA));
+  const market = ok(await request('/market/catalogue?project='+projectA,{cookie}));
+  assert(!market.services.some(row=>row.id===service.id),'a service without a card stays out of the marketplace');
+  const blockedWeb = await invokeWeb(projectB);
+  assert.equal(blockedWeb.status,403);
+  assert.equal(blockedWeb.data.error.code,'project_model_not_enabled');
+  const legacyProject = (await workspace()).projects.find(row=>row.id==='project-'+tenantId);
+  assert.ok(legacyProject);
+  assert.equal((await invokeWeb(legacyProject.id)).data.error.code,'project_model_not_enabled');
+  const webRequest = resourceId('request');
+  const web = ok(await invokeWeb(projectA,webRequest));
+  assert.equal(web.model,service.callId);
+  assert.equal(web.source,'mock');
+
+  async function projectKey(projectId, models) {
+    const secret = 'sk-' + randomBytes(16).toString('hex');
+    ok(await tenantCommand('keys',{projectId,billing:'按量付费',rows:[{
+      id:resourceId('api-key'),name:'内用项目密钥',enabled:true,models,
+      secretPreview:secret.slice(0,8) + '*****' + secret.slice(-4),credentialDigest:digest(secret),
+    }]}));
+    return secret;
+  }
+  const invokeAPI = (secret, requestId = resourceId('request')) => request('/chat/completions',{secret,requestId,body:{model:service.callId,messages}});
+  const projectAKey = await projectKey(projectA,[service.callId]);
+  const projectBKey = await projectKey(projectB,null);
+  const stateWithKeys = await application();
+  const keyId = stateWithKeys.apiKeys.find(key=>key.projectId===projectA).id;
+  const toggleOperation = resourceId('operation');
+  const blockedToggle = await request('/application/commands',{cookie:admin,key:toggleOperation,body:{
+    operationId:toggleOperation,expectedRevision:stateWithKeys.revision,
+    action:{type:'enterprise',operation:'toggle-key',tenantId,keyId},
+  }});
+  assert.equal(blockedToggle.status,403);
+  const foreign = await invokeAPI(foreignKey);
+  assert.equal(foreign.status,403);
+  assert.equal(foreign.data.error.code,'customer_unavailable');
+  const blockedAPI = await invokeAPI(projectBKey);
+  assert.equal(blockedAPI.status,403);
+  assert.equal(blockedAPI.data.error.code,'project_model_not_enabled');
+  const apiRequest = resourceId('request');
+  assert.equal(ok(await invokeAPI(projectAKey,apiRequest)).model,service.callId);
+
+  for (const requestId of [webRequest,apiRequest]) {
+    const fact = await readProjectFact(db,tenantId,requestId);
+    assert.equal(fact.modelId,service.id);
+    assert.equal(fact.projectId,projectA);
+    assert.equal(fact.departmentId,departmentId);
+    assert.equal(fact.settlement,'internal');
+    assert.ok(fact.internalCost?.micros > 0);
+    assert.deepEqual(await db.prepare('SELECT sale_price_id FROM model_service_calls WHERE tenant_id=? AND request_id=?')
+      .bind(tenantId,requestId).first(),{sale_price_id:null});
+    assert.equal(await db.prepare('SELECT 1 FROM market_charge_receipts WHERE tenant_id=? AND request_id=?')
+      .bind(tenantId,requestId).first(),null);
+  }
+  assert.equal(await db.prepare('SELECT 1 FROM model_service_sales WHERE service_id=?').bind(service.id).first(),null);
+  assert.equal(await db.prepare('SELECT 1 FROM model_service_orders WHERE service_id=?').bind(service.id).first(),null);
+
+  const stopped = ok(await serviceCommand({...service,listed:false},service.revision)).row;
+  const deleteIssue = ok(await request('/model-services-new?inspect='+service.id,{cookie:admin})).deleteIssue;
+  assert.match(deleteIssue,/租户授权/);
+  const operationId = resourceId('operation');
+  const blockedDelete = await request('/model-services-new',{cookie:admin,key:operationId,body:{
+    action:'delete',id:service.id,revision:stopped.revision,operationId,
+  }});
+  assert.equal(blockedDelete.status,400);
+  assert.equal(blockedDelete.data.error.message,deleteIssue);
+  ok(await serviceCommand({...stopped,listed:true},stopped.revision));
+  assert.equal(await hasProjectService(),true);
+
+  ok(await tenantSettings('remove-model',{modelId:service.id}));
+  assert.equal(await hasProjectService(),false);
+  assert.equal((await invokeWeb(projectA)).status,403);
+  assert.equal((await invokeAPI(projectAKey)).status,403);
 });

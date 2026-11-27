@@ -4,7 +4,7 @@ import { Button, Input, TextArea } from '@douyinfe/semi-ui';
 import AdminStatus from './AdminStatus';
 import CandidateProbePanel from './CandidateProbePanel';
 import { ChannelKeySummary } from './ChannelCredentials';
-import ChannelProtocolFields from './ChannelProtocolFields';
+import ChannelProtocolFields, { ReadOnlyChannelProtocolFields } from './ChannelProtocolFields';
 import { Cell, CopyId, GridTable, Modal, Notice, Row } from './ModelOperationsUI';
 import { Choice, Field } from './ServiceUI';
 import SupplierCreationDialog from './SupplierCreationDialog';
@@ -83,6 +83,7 @@ function AffectedModels({ connection, impact, checks }) {
 export function ChannelConnectionEditor({ state, connection, ops, close }) {
   const t = useChannelText();
   const { provider, endpoint, name } = connection;
+  const managedInference = Boolean(endpoint.inferenceSource);
   const formId = useId();
   const stageContent = useRef(null);
   const candidate = endpoint.candidateConfiguration;
@@ -232,17 +233,22 @@ export function ChannelConnectionEditor({ state, connection, ops, close }) {
           <Field label={t('连接名称')} required help={t('填写便于识别的名称，同一服务商下不可重复。')}>
             <Input aria-label={t('连接名称')} maxLength={60} value={draft.name} onChange={value => update({ name: value })} disabled={locked}/>
           </Field>
-          <Field label={t('服务商')}>{provider.name}</Field>
-          <Field label={typeLabel} required help={t('选择第三方模型服务或自有模型推理服务。')}>
-            <Choice label={typeLabel} value={draft.sourceType} disabled={locked}
-              options={CHANNEL_SOURCE_TYPES.map(type => [type, t(channelSourceTypeLabel(type))])}
-              onChange={sourceType => update({ sourceType })}/>
-          </Field>
-          <ChannelProtocolFields protocol={draft.type} baseUrl={draft.url} allowHttp={allowHttp} disabled={locked} root={root}
-            showHelp allowCustom={initialSelection === 'custom'} current={kindChanged ? undefined : connection}
-            endpointPath={draft.endpointPath} onEndpointPathChange={endpointPath => update({ endpointPath })}
-            onProtocolChange={type => update({ type, endpointPath: type === initialSelection ? endpoint.endpointPath ?? null : null })}
-            onBaseUrlChange={url => update({ url })}/>
+          <Field label={t('服务商')}>{managedInference ? t('内置模型推理') : provider.name}</Field>
+          {managedInference ? <>
+            <Field label={typeLabel}><Input aria-label={typeLabel} value={t(channelSourceTypeLabel(sourceType))} readonly/></Field>
+            <ReadOnlyChannelProtocolFields interfaceType={draft.type} baseUrl={draft.url} endpointPath={endpointPath}/>
+          </> : <>
+            <Field label={typeLabel} required help={t('选择第三方模型服务或内置模型推理服务。')}>
+              <Choice label={typeLabel} value={draft.sourceType} disabled={locked}
+                options={CHANNEL_SOURCE_TYPES.map(type => [type, t(channelSourceTypeLabel(type))])}
+                onChange={sourceType => update({ sourceType })}/>
+            </Field>
+            <ChannelProtocolFields protocol={draft.type} baseUrl={draft.url} allowHttp={allowHttp} disabled={locked} root={root}
+              showHelp allowCustom={initialSelection === 'custom'} current={kindChanged ? undefined : connection}
+              endpointPath={draft.endpointPath} onEndpointPathChange={endpointPath => update({ endpointPath })}
+              onProtocolChange={type => update({ type, endpointPath: type === initialSelection ? endpoint.endpointPath ?? null : null })}
+              onBaseUrlChange={url => update({ url })}/>
+          </>}
           <Field label={t('简介')}><TextArea aria-label={t('简介')} value={note} maxLength={300} disabled={locked}
             onChange={value => { setNote(value); ops.dirty(true); ops.setError(''); }}/></Field>
           {candidate && <Notice>{t('此连接有待验证的配置。')}

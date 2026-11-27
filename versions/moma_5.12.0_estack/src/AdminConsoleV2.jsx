@@ -61,6 +61,7 @@ const GatewayPage = lazy(() => import('./admin-v2/GatewayPages'));
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
 const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
+const AnnouncementManagement = lazy(() => import('./admin-v2/AnnouncementManagement'));
 const SiteAgreementsEditor = lazy(() => import('./admin-v2/SiteAgreementsEditor'));
 const ModelMaterials = lazy(() => import('./admin-v2/ModelMaterials'));
 const loadModelServices = () => import('./admin-v2/ModelServicesNew');
@@ -90,6 +91,7 @@ const NAVIGATION_ICONS = {
   gateway: IconFlowChartStroked,
   logs: IconChecklistStroked,
   clusters: IconServerStroked,
+  'ops-model-library': IconLayers,
   deployments: IconPlayCircle,
   'ops-benchmarks': IconBarChartVStroked,
   'ops-inference-backends': IconComponentStroked,
@@ -100,6 +102,7 @@ const NAVIGATION_ICONS = {
   'audit-logs': IconChecklistStroked,
   'global-routing': IconSetting,
   'site-configuration': IconSetting,
+  announcements: IconBellStroked,
   'model-operations-guide': IconBookOpenStroked,
   'model-operations-requirements': IconBookStroked,
 };
@@ -174,6 +177,9 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     };
   }, [draftDirty]);
   const [active, setActive] = useState(initialPage);
+  const demoMode = new URLSearchParams(location.search).get('demo');
+  const interactiveDemo = demoMode === 'inference-interactive';
+  const [menuPreview, setMenuPreview] = useState('current');
   const [workspace, setWorkspace] = useState(pageWorkspace(initialPage) || availableWorkspaces(state.currentRole)[0] || 'operations');
   const [detailParams, setDetailParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const organizationView = isOrganizationPage(active, internalSite);
@@ -192,7 +198,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const allowedWorkspaces = availableWorkspaces(state.currentRole);
   const canVisit = canAccessPage(state.currentRole, active, license, detailParams);
   const currentWorkspace = allowedWorkspaces.includes(workspace) ? workspace : allowedWorkspaces[0] || 'operations';
-  const navigate = id => { setNavOpen(false); location.hash = '/admin-2/' + id; window.scrollTo({ top: 0, behavior: 'instant' }); };
+  const navigate = id => {
+    if (interactiveDemo && !inferenceDemoPages.has(id.split('?')[0])) return;
+    setNavOpen(false);
+    location.hash = '/admin-2/' + id;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
   useEffect(() => {
     const sync = () => {
       const id = pageFromHash(location.hash, state.currentRole), nextWorkspace = pageWorkspace(id);
@@ -204,6 +215,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       }
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       setNavOpen(false); setActive(id); setDetailParams(params);
+      if (id !== 'license') setMenuPreview('current');
       if (canAccessPage(state.currentRole, id, license, params)) {
         if (nextWorkspace) { setWorkspace(nextWorkspace); lastVisits.current[nextWorkspace] = location.hash; }
       }
@@ -220,7 +232,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     return () => { clearTimeout(pendingHash); window.removeEventListener('hashchange', handleHashChange); };
   }, [state.currentRole, license.commercial]);
   const switchWorkspace = nextWorkspace => {
-    if (!allowedWorkspaces.includes(nextWorkspace) || nextWorkspace === currentWorkspace) return;
+    if (interactiveDemo || !allowedWorkspaces.includes(nextWorkspace) || nextWorkspace === currentWorkspace) return;
     if (canVisit && pageWorkspace(active)) lastVisits.current[currentWorkspace] = location.hash;
     location.hash = lastVisits.current[nextWorkspace];
   };
@@ -246,22 +258,30 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
   const gatewaySettings = activeArea === 'gateway';
-  const inferenceDemo = inferenceDemoPages.has(active) && new URLSearchParams(location.search).get('demo') === 'inference';
-  const renderInferencePage = (inferenceState, demo = false, { refresh = refreshRead } = {}) => {
-    const save = demo ? undefined : dispatch;
+  const inferenceDemo = inferenceDemoPages.has(active) && (demoMode === 'inference' || interactiveDemo);
+  const renderInferencePage = (inferenceState, demo = false, {
+    refresh = refreshRead, interactive = false, infrastructure, dispatch: demoDispatch, changeInfrastructure,
+  } = {}) => {
+    const save = demo ? demoDispatch : dispatch;
+    const demoProps = { inferenceDemo: demo, interactiveDemo: interactive, demoInfrastructure: infrastructure,
+      changeDemoInfrastructure: changeInfrastructure };
     if (active === 'clusters') return <ClusterManagement state={inferenceState} params={detailParams}
-      dispatch={save} refreshShared={refresh} onNavigate={navigate} dirtyRef={draftDirty} inferenceDemo={demo}/>;
+      dispatch={save} refreshShared={refresh} onNavigate={navigate} dirtyRef={draftDirty} {...demoProps}/>;
     if (active === 'deployments') return <ModelDeployments state={inferenceState} dispatch={save}
-      conflict={conflict} onNavigate={navigate} refreshRead={refresh} inferenceDemo={demo}/>;
+      conflict={!demo && conflict} onNavigate={navigate} refreshRead={refresh} {...demoProps}/>;
     return <InfrastructurePage key={active + ':' + detailParams.toString()} pageId={active}
       state={inferenceState} params={detailParams} navigate={navigate} dirtyRef={draftDirty}
-      dispatch={save} conflict={conflict} inferenceDemo={demo}/>;
+      dispatch={save} conflict={!demo && conflict} {...demoProps}/>;
   };
-  const renderMenu = collapsed => <nav aria-label="后台导航">{adminSections.filter(group => group.workspace === currentWorkspace).map(group => {
-      const locked = group.id === 'commerce' && !license.commercial;
+  const previewingMenu = active === 'license' && menuPreview !== 'current';
+  const menuLicense = previewingMenu ? { commercial: menuPreview === 'commercial' } : license;
+  const menuLabel = previewingMenu ? (english ? 'Workbench Navigation Preview' : '后台导航预览') : '后台导航';
+  const renderMenu = collapsed => <nav aria-label={menuLabel}>{adminSections.filter(group => group.workspace === currentWorkspace).map(group => {
+      const locked = group.id === 'commerce' && !menuLicense.commercial;
       const items = group.items.filter(item => {
         const target = item.children[0][0];
-        return (locked && commercialPage(target)) || canAccessPage(state.currentRole, target, license);
+        if (interactiveDemo && !inferenceDemoPages.has(target)) return false;
+        return (locked && commercialPage(target)) || canAccessPage(state.currentRole, target, menuLicense);
       });
       if (!items.length) return null;
       const groupStatus = locked ? (items.every(item => commercialPage(item.children[0][0])) ? '（未授权）' : '（部分未授权）') : '';
@@ -275,13 +295,20 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
           const label = english ? channelEnglish(item.label) : item.label;
           const collapsedLabel = label + (disabled ? '（未授权）' : '');
           const button = <Button key={item.id} disabled={disabled} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
-            aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => navigate(target)}>{collapsed ? null : label}</Button>;
+            aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => {
+              if (previewingMenu && !canAccessPage(state.currentRole, target, license)) {
+                Toast.info(english ? 'Preview only. This page requires commercial authorization.' : '仅供预览，该入口需要商业运营授权。');
+                return;
+              }
+              navigate(target);
+            }}>{collapsed ? null : label}</Button>;
           return collapsed ? <Tooltip key={item.id} content={collapsedLabel} position="right" clickToHide closeOnEsc>{button}</Tooltip> : button;
         })}
       </section>;
     })}</nav>;
   const renderNavigation = (collapsed = false) => <Tabs type="button" size="small" activeKey={currentWorkspace} onChange={switchWorkspace}>
-    {allowedWorkspaces.map(id => <Tabs.TabPane key={id} itemKey={id} tab={english ? channelEnglish(WORKSPACES[id]) : WORKSPACES[id]}>{id === currentWorkspace && renderMenu(collapsed)}</Tabs.TabPane>)}
+    {allowedWorkspaces.filter(id => !interactiveDemo || id === currentWorkspace).map(id =>
+      <Tabs.TabPane key={id} itemKey={id} tab={english ? channelEnglish(WORKSPACES[id]) : WORKSPACES[id]}>{id === currentWorkspace && renderMenu(collapsed)}</Tabs.TabPane>)}
   </Tabs>;
   useEffect(() => { const media = matchMedia('(min-width: 901px)'); const close = () => { if (media.matches) setNavOpen(false); }; media.addEventListener('change', close); return () => media.removeEventListener('change', close); }, []);
   const alertCount = state.alerts.filter(item => !["已恢复", "已转事件"].includes(item.status)).length;
@@ -320,8 +347,8 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         </div>
         <Badge count={alertCount} aria-label={`${alertCount} 条待处理告警`}><IconBellStroked aria-hidden="true"/></Badge>
       </header>
-      {state.storageError && <Banner type="danger" closeIcon={null} description={<>本地数据异常：{state.storageError.toLowerCase().includes('quota') ? '浏览器本地存储空间不足，原数据未更改。' : state.storageError} <Button onClick={reload}>重新加载</Button></>}/>}
-      {conflict && <Banner type="warning" closeIcon={null} description={<>检测到其他页面的新版本数据。 <Button onClick={reload}>载入新版本</Button></>}/>}
+      {!interactiveDemo && state.storageError && <Banner type="danger" closeIcon={null} description={<>本地数据异常：{state.storageError.toLowerCase().includes('quota') ? '浏览器本地存储空间不足，原数据未更改。' : state.storageError} <Button onClick={reload}>重新加载</Button></>}/>}
+      {!interactiveDemo && conflict && <Banner type="warning" closeIcon={null} description={<>检测到其他页面的新版本数据。 <Button onClick={reload}>载入新版本</Button></>}/>}
       {showPage && !organizationView && commercialPage(active) && active !== 'tenants' && commerceReadOnly && <Banner type="warning" closeIcon={null} description={license.status === 'expired' ? '商业运营授权已到期，可查阅已保存的记录。' : '商业运营授权不可用，可查阅已保存的记录。'}/>}
       {showPage && activeModule?.children.length > 1 && activeModule.id !== 'materials' &&
         !(active === 'providers-reference' && detailParams.get('connection')) && (
@@ -331,10 +358,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         </Tabs>
       )}
       <main data-admin-page={active}>
-        <AdminPageBoundary key={active}>
+        <AdminPageBoundary key={interactiveDemo ? demoMode : active}>
           {!hasAccount ? <Banner title="后台账号不可用" description={<a href="#/auth/login">重新登录</a>} closeIcon={null}/> : !canVisit ? (
             <Banner type="warning" title="无访问权限" description={<Button onClick={() => navigate(WORKSPACE_HOME[allowedWorkspaces[0]] || 'dashboard')}>返回首页</Button>} closeIcon={null}/>
-          ) : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认政企租户" closeIcon={null}/> : <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}>
+          ) : interactiveDemo && !inferenceDemo ? <Banner type="info" title="此页面不在可操作演示范围内" closeIcon={null}
+            description={<Button onClick={() => navigate('deployments')}>返回可操作演示</Button>}/>
+          : organizationView && !organizationTenant ? <Banner type="warning" title="尚未配置默认政企租户" closeIcon={null}/> : <Suspense fallback={<AdminPageLoading label={pages[active].label}/>}>
             {active === "model-operations-guide" ? <ModelOperationsGuide english={english}/>
             : active === "model-operations-requirements" ? <ModelOperationsRequirements english={english}/>
             : active === "dashboard" ? <OperationsOverview state={factState} workbenchName={workbenchName} onNavigate={navigate}
@@ -347,9 +376,11 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === 'audit-logs' ? <AuditLogsPage key={state.adminSession.accountId + ':' + detailParams.toString()}
               accountId={state.adminSession.accountId} params={detailParams} tenants={state.tenants} projects={state.projects}/>
             : active === 'site-configuration' ? <SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/>
+            : active === 'announcements' ? <AnnouncementManagement key={state.adminSession.accountId}
+              accountId={state.adminSession.accountId} dirtyRef={draftDirty}/>
             : active === 'site-agreements' ? <SiteAgreementsEditor key={state.adminSession.accountId} dirtyRef={draftDirty}/>
             : active === 'global-routing' ? <GlobalRouting saved={state.globalRoutingParameters} revision={state.revision} transact={transact} conflict={conflict} dirtyRef={draftDirty}/>
-            : active === 'license' ? <LicensePage license={license}/>
+            : active === 'license' ? <LicensePage license={license} menuPreview={menuPreview} onMenuPreviewChange={setMenuPreview}/>
             : active === 'business-analysis' ? <CommerceAnalysis state={state}/>
             : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} internal={internalSite}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload} readOnly={commerceReadOnly}/>
@@ -373,7 +404,9 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : ["providers-health", "logs"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
               state={factState} dispatch={dispatch} navigate={navigate} simulation={logSimulation} setSimulation={setLogSimulation} refreshRead={refreshRead}
               canViewFullLog={state.currentRole === '平台管理员'}/>
-            : inferenceDemo ? <InferenceDemo role={state.currentRole}>{renderInferencePage}</InferenceDemo>
+            : inferenceDemo ? <InferenceDemo key={state.currentRole} role={state.currentRole} interactive={interactiveDemo}>
+              {(...args) => <AdminPageBoundary key={active}>{renderInferencePage(...args)}</AdminPageBoundary>}
+            </InferenceDemo>
             : inferenceDemoPages.has(active) || isInfrastructurePage(active) ? renderInferencePage(state)
             : <BusinessOperationsPage key={active} pageId={active} state={state} params={detailParams} dispatch={dispatch}/>}
           </Suspense>}

@@ -3,7 +3,7 @@ import { ChevronRight, Folder, FolderKanban, Search } from 'lucide-react';
 import { Button, Input, Select, Tabs } from '@douyinfe/semi-ui';
 import AdminStatus from '../admin-v2/AdminStatus';
 import FrontPageHeader from './FrontPageHeader';
-import { projectModelEnabled, projectRoleLabel } from '../project-access.mjs';
+import { projectServiceEnabled, projectRoleLabel } from '../project-access.mjs';
 import { departmentPath } from '../organization-data.mjs';
 import ProjectOverview from './ProjectOverview';
 import ProjectBudgetNotice from './ProjectBudgetNotice';
@@ -50,7 +50,7 @@ export default function ProjectWorkspace({ tenant, projectId, currentProjectId, 
   const available = personal ? ['settings','models','routes'] : canConfigure ? ['members','budget','models'] : ['members'];
   const tab = available.includes(initialTab) ? initialTab : available[0];
   const openTab = value => onNavigate(project,'tab',{ view:value });
-  const experience = project && tenant.projectServices.find(row => row.callable && projectModelEnabled(project,row.modelKey));
+  const experience = project && tenant.projectServices.find(row => row.callable && projectServiceEnabled(project,row));
   const online = personal && !tenant.systemAdministrator && project?.status === '正常' && <Button theme="solid" onClick={() => experience ? onExperience(project,experience) : openTab('models')}>在线体验</Button>;
   const overview = personal && project && <ProjectOverview tenant={tenant} project={project} department=""
     openTab={openTab} onNavigate={(page,params) => onNavigate(project,page,params)} />;

@@ -3,7 +3,7 @@ import {useTenantData} from './useTenantData';
 import { marketModels } from './service-directory.mjs';
 import ConsoleNavigation from './components/ConsoleNavigation';
 import { consoleActiveItem } from './console-navigation.mjs';
-import { projectModelEnabled, tenantProjectAdmin } from './project-access.mjs';
+import { projectServiceEnabled, tenantProjectAdmin } from './project-access.mjs';
 import { MarketAction, marketRequest, useCloudMarket } from './CloudMarket';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
 import { Button as SemiButton, ConfigProvider, Modal, Input as SemiInput, Select as SemiSelect, Slider, Tabs as SemiTabs, Tag, Toast, Typography as SemiTypography } from '@douyinfe/semi-ui';
@@ -18,6 +18,7 @@ import { agreementFromHash } from "./agreement-route.mjs";
 import { useDeploymentLicense } from './useDeploymentLicense';
 import { restoreSiteImage, useSiteChrome, useSiteConfig } from "./useSiteConfig";
 import ProjectBudgetNotice from "./components/ProjectBudgetNotice";
+import TenantAnnouncementDialog from './components/TenantAnnouncementDialog';
 import { experiencePages, readProjectScope, useProjectSelection } from "./useProjectSelection";
 import { MODEL_ORDER_BILLING_TYPES } from './model-order-display.mjs';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -334,6 +335,7 @@ function PrototypeApp({ version }) {
   const selectMarketProject = market.selectProject;
   useEffect(() => { selectMarketProject(selectedProject); }, [selectedProject, selectMarketProject]);
   const internal=market.tenant?.internal===true;
+  const internalProjectServices = internal && owner ? projectTenant.projectServices : undefined;
   const personal=market.tenant?.type==='个人';
   const [activeRoute, routeParams] = frontDestination(activePage);
   const checkoutKind = new URLSearchParams(location.search).get('checkout');
@@ -405,7 +407,7 @@ function PrototypeApp({ version }) {
       return;
     }
     if (!row) { setEntryChoice({kind:'project',service}); return; }
-    if (!projectModelEnabled(row,service.serviceModelId)) {
+    if (!projectServiceEnabled(row,service)) {
       setEntryChoice({kind:'models',service,project:row,message:row.canManage ? '当前项目尚未开通此模型。' : '当前项目尚未开通此模型，请联系项目管理员授权。'}); return;
     }
     setEntryChoice(null);
@@ -500,7 +502,7 @@ function PrototypeApp({ version }) {
   const navigateAdmin = (mode) => {
     if (routingDirty.current && !window.confirm('放弃未保存的修改？')) return;
     routingDirty.current = false;
-    if (mode === "front" && /^#\/admin-2\/(?:site-configuration|site-agreements)(?:[/?]|$)/.test(location.hash)) {
+    if (mode === "front" && /^#\/admin-2\/(?:site-configuration|site-agreements|announcements)(?:[/?]|$)/.test(location.hash)) {
       if (adminDraftDirty.current && !window.confirm('放弃未保存的修改？')) return;
       adminDraftDirty.current = false;
       location.hash = "";
@@ -700,6 +702,9 @@ function PrototypeApp({ version }) {
           projects={activeProjects} enabled={Boolean(owner)} onProjectChange={changeCurrentProject}
           active={currentNav} navigate={navigateTenant} icons={navIcons}/>
       )}
+      <TenantAnnouncementDialog
+        accountId={admin === 'front' && !auth.route && market.tenant ? market.account?.id : undefined}
+        getPopupContainer={getTenantPopupContainer}/>
       <main key={auth.route ? "auth" : admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : "front-main"}>
         {admin === 'front' && !auth.route && !detailRoute && projectPages.has(activeRoute) && !spaceLogs && project?.canManage &&
           <div className="project-page-notice"><ProjectBudgetNotice project={project} spend={projectTenant.projectBudgets?.[project.id]} /></div>}
@@ -733,7 +738,10 @@ function PrototypeApp({ version }) {
           </div>
         ) : activePage === "首页" ? (
           <ConsoleHome tenant={projectTenant} personal={personal} internal={internal}
-            models={marketModels(owner ? projectTenant.services : [],'all')}
+            models={marketModels(owner ? internal ? [
+              ...projectTenant.services.filter(service => !service.independentService),
+              ...marketServices.filter(service => service.independentService),
+            ] : projectTenant.services : [],'all')}
             onOpenModel={model=>openModelDetails(null,model)}
             onPage={page=>openProjectPage(projectPages.has(page) ? project : undefined,page)} />
         ) : activePage === "空间总览" ? (
@@ -792,11 +800,12 @@ function PrototypeApp({ version }) {
           </Suspense>
         ) : activePage === "文本生成" ? (
           textCompare ? (
-            <ModelComparison key={owner+':'+selectedProject} owner={owner} project={project}
+            <ModelComparison key={owner+':'+selectedProject} owner={owner} project={project} internalProjectServices={internalProjectServices}
               onBack={() => setTextCompare(false)}
             />
           ) : (
             <TextExperience key={`${owner}:text:${selectedProject}:${entryService}`} owner={owner} initialServiceId={entryService} project={project}
+              internalProjectServices={internalProjectServices}
               tenantRoutes={projectTenant.routes.filter(row=>row.projectId===selectedProject)}
               onReturnToRouting={() => openProjectPage(project, 'smart-route', entryService.startsWith('@preset/') ? {preset:entryService} :
                 entryService === 'moma/auto' ? {} : {routing:'settings'})}
@@ -808,12 +817,14 @@ function PrototypeApp({ version }) {
         ) : activePage === "图片生成" || activePage === "视频生成" ? (
           <ModelExperience
             key={`${owner}:${activePage}:${selectedProject}:${entryService}`} owner={owner} initialServiceId={entryService} project={project}
+            internalProjectServices={internalProjectServices}
             kind={activePage === "图片生成" ? "image" : "video"}
             groupLabel={activePage}
           />
         ) : activePage === "语音识别" ? (
           <ModelExperience
             key={`${owner}:voice:${selectedProject}:${entryService}`} owner={owner} initialServiceId={entryService} project={project}
+            internalProjectServices={internalProjectServices}
             kind="voice"
             groupLabel="语音识别"
           />

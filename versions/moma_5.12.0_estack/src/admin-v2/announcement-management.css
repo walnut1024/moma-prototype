@@ -1,0 +1,49 @@
+.announcement-management-modal .semi-modal {
+  --announcement-modal-margin: clamp(12px, 4dvh, 32px);
+  margin-block: var(--announcement-modal-margin);
+}
+
+.announcement-management-modal .semi-modal-content {
+  max-block-size: calc(100dvh - 2 * var(--announcement-modal-margin));
+}
+
+.announcement-management-modal .semi-modal-body {
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.announcement-management-modal :is(.semi-modal-header, .semi-modal-footer) {
+  flex-shrink: 0;
+}
+
+.announcement-management-modal .announcement-body-input textarea {
+  min-block-size: 190px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.announcement-management-modal .announcement-audience {
+  margin-block: 8px 16px;
+}
+
+.announcement-management .announcement-wrap,
+.announcement-management-modal .announcement-wrap {
+  overflow-wrap: anywhere;
+}
+
+.announcement-management-modal .announcement-text {
+  white-space: pre-wrap;
+}
+
+.announcement-management-modal .announcement-time {
+  display: grid;
+  gap: 4px;
+  margin-block-start: 8px;
+}
+
+.announcement-management-modal .announcement-time-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr));
+  gap: 8px;
+}

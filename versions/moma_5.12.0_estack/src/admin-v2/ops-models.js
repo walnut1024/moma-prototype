@@ -27,6 +27,7 @@ const description = field('description', '描述', { type: 'textarea' });
 const created = field('createdAt', '创建时间', { width: 165, sorter: true });
 const status = field('status', '状态', { status: true, width: 100 });
 const suffix = unit => value => value == null || value === '' ? undefined : `${value} ${unit}`;
+const catalogueSource = {huggingface:'Hugging Face',model_scope:'ModelScope',local_path:'本地路径'};
 const clusterOptions = records => optionsOf(records, 'clusters', row => row.status === '运行中');
 const nodeOptions = (records, draft) => optionsOf(records, nodesPage, row => row.status === '就绪' && (!draft.clusterId || row.clusterId === draft.clusterId));
 const benchmarkActive = row => ['排队中', '运行中'].includes(row.status);
@@ -84,7 +85,7 @@ modelCatalog.seed = [
     return {
       id: 'catalog-upstream-' + encodeURIComponent(row.name.toLowerCase()).replaceAll('%', '_'),
       ...existing, ...row, name: existing?.name || row.name,
-      source: top.source === 'model_scope' ? 'ModelScope' : 'Hugging Face',
+      source: catalogueSource[top.source],
       repository: top.repository, backend: top.backend, spec: top.mode,
       license: row.licenses?.join('、') || existing?.license, category: catalogueCategories[row.categories?.[0]],
     };
@@ -283,7 +284,7 @@ export const cacheL2Entries = row => (Array.isArray(row?.l2Entries) ? row.l2Entr
 const cacheL2Config = (draft, current) => Array.isArray(draft.l2Entries) ? draft.l2Entries : cacheL2Entries(current);
 const cacheProviderOptions = records => Array.from(new Set([...(configuredCacheProviders() || cacheProviderCatalogue).map(item => item.name), ...list(records, cachePage).map(row => row.provider)]));
 const cacheVersionOptions = (records, draft, row) => cacheVersionsForProvider(activeCacheProvider(draft.provider),
-  records ? cacheClusterFrameworks(records,draft.clusterId) : [], row?.version);
+  records ? cacheClusterFrameworks(records,draft.clusterId) : [], row?.version ?? (draft.versionPinned ? draft.version : undefined));
 const cacheVersion = draft => {
   const versions = cacheVersionOptions(null, draft);
   return versions.length === 1 && versions[0] === '自定义' ? '自定义' : draft.version;
@@ -389,6 +390,7 @@ const cacheAcceleration = {
   fields: [name('名称'), select('provider', '提供方', cacheProviderOptions, { required: true, disabled: true, defaultValue: 'LMCache' }),
     select('version', '版本', cacheVersionOptions, { defaultValue: (_records, params) => cacheVersionOptions(null, { provider: params?.get?.('provider') || params?.provider || 'LMCache' })[0],
       required: true, visible: (draft, records) => cacheVersionOptions(records, draft).some(version => version !== '自定义') }),
+    field('versionPinned', '版本', { visible: () => false }),
     field('image', '容器镜像', { required: true, visible: draft => cacheVersion(draft) === '自定义' && !externalCache(draft) }),
     select('clusterId', '集群', clusterOptions, { required: true, editable: false, defaultValue: defaultCacheCluster }),
     select('workerId', '节点', cacheNodes, { visible: cacheWorkerPicker, help:'可选，留空时由调度器自动放置实例。' }),
@@ -407,17 +409,20 @@ const cacheAcceleration = {
     format: value => typeof value === 'string' ? value : Object.entries(value || {}).map(([component, args]) =>
       [component, ...args].join(' ')).join('\n') }), status, field('checkResult', '状态信息'), description, created],
   onFieldChange(draft, key, value, records) {
-    if (key === 'provider') return { version: cacheVersionOptions(records, { provider: value })[0], workerId: '' };
+    if (key === 'version') return { versionPinned: true };
+    if (key === 'provider') return { version: cacheVersionOptions(records, { provider: value })[0], versionPinned:false, workerId: '' };
     if (key === 'clusterId') {
-      const versions = cacheVersionOptions(records,{ ...draft,clusterId:value,version:undefined });
-      return { workerId:defaultCacheWorker({ ...draft,clusterId:value },records) || '',version:draft.version==='自定义' && versions.includes(draft.version) ? draft.version : versions[0] };
+      const next = { ...draft, clusterId:value };
+      const versions = cacheVersionOptions(records,next);
+      const keepVersion = (draft.versionPinned || draft.version==='自定义') && versions.includes(draft.version);
+      return { workerId:defaultCacheWorker(next,records) || '',version:keepVersion ? draft.version : versions[0], versionPinned:Boolean(keepVersion) };
     }
     if (key === 'selector' && draft.workerId && !cacheNodes(records, { ...draft, selector: value }).some(node => node.value === draft.workerId)) return { workerId: '' };
   },
   validate(draft, records, current) {
     if (!current && activeCacheProvider(draft.provider)?.unavailable) return activeCacheProvider(draft.provider).detail || '所选提供方暂不可用。';
     if (current && draft.provider !== current.provider) return '创建后不能更改缓存提供方。';
-    const versions = cacheVersionOptions(records, draft, current);
+    const versions = cacheVersionOptions(records, { ...draft,versionPinned:true }, current);
     if (versions.length > 0 && !versions.includes(cacheVersion(draft))) return '请选择缓存提供方支持的版本。';
     if (find(records, 'clusters', draft.clusterId)?.status !== '运行中') return '请选择运行中的集群。';
     const selectorIssue = labelIssue(draft.selector);
@@ -525,6 +530,13 @@ const remoteDirectory = row => {
     .includes(row.mountPath)) return '';
   return row.mountPath;
 };
+const sameModelFile = (row, draft) => row.source === draft.source && (localFile(draft)
+  ? Boolean(filePath(draft.mountPath) && filePath(row.mountPath) === filePath(draft.mountPath))
+  : row.repository === String(draft.repository || '').trim() && artifactMatches(row.filename, draft.filename));
+
+export function modelFileOnNode(draft, records) {
+  return list(records, filesPage).some(row => row.workerId === draft.workerId && sameModelFile(row, draft));
+}
 
 function fileReferences(row, records) {
   const nodeId = row.workerId;
@@ -547,20 +559,15 @@ function fileReferences(row, records) {
 export function modelFileNodeIssue(draft, records) {
   const nodeFiles = list(records, filesPage).filter(row => row.workerId === draft.workerId);
   if (localFile(draft)) {
-    const path = filePath(draft.mountPath);
-    if (path && nodeFiles.some(row => localFile(row) && filePath(row.mountPath) === path)) {
-      return '该节点上已登记此文件路径。';
-    }
-    return undefined;
+    return nodeFiles.some(row => sameModelFile(row, draft)) ? '该节点上已登记此文件路径。' : undefined;
   }
   const repository = String(draft.repository || '').trim();
   if (!repository) return undefined;
   const directory = filePath(draft.localDir);
-  if (nodeFiles.some(row => !localFile(row) && row.source === draft.source && row.repository === repository &&
-    artifactMatches(row.filename, draft.filename) && filePath(remoteDirectory(row)) === directory)) {
+  if (nodeFiles.some(row => sameModelFile(row, draft) && filePath(remoteDirectory(row)) === directory)) {
     return '该节点上已有相同来源和本地目录的模型文件。';
   }
-  if (directory && nodeFiles.some(row => !localFile(row) && !row.filename && filePath(remoteDirectory(row)) === directory)) {
+  if (directory && nodeFiles.some(row => !localFile(row) && (!row.filename || !draft.filename) && filePath(remoteDirectory(row)) === directory)) {
     return '该节点的本地目录已被另一个下载任务占用。';
   }
 }
@@ -575,6 +582,7 @@ export function modelFileCreation(draft, records) {
   if (!sources.includes(draft.source)) throw Error('请选择有效的模型来源。');
   const worker = find(records, nodesPage, draft.workerId);
   if (!worker || worker.status !== '就绪') throw Error('请选择处于就绪状态的节点。');
+  if (find(records, 'clusters', worker.clusterId)?.status !== '运行中') throw Error('请选择运行中集群的节点。');
   const repository = String(draft.repository || '').trim();
   const filename = selectedFilename(draft.filename);
   if (!local && !/^[\w.-]+\/[\w.-]+$/.test(repository)) throw Error('请先选择模型仓库。');
