@@ -338,6 +338,7 @@ async function route(request, env, requestId) {
     if (method !== 'POST') fail(405, 'METHOD_NOT_ALLOWED', '请求方法不支持');
     const actor = await authenticate(request, db);
     if (actor.role !== '平台管理员') fail(403, 'FORBIDDEN', '仅系统管理员可保存站点协议');
+    requireCommerce(true);
     const body = await bodyJson(request);
     fields(body, ['expectedRevision', 'agreements']);
     const next = validateAgreements(body);

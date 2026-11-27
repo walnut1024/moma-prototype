@@ -49,11 +49,12 @@ test('platform announcement, account and audit entries use their existing admini
   }
 });
 
-test('site agreements have a standalone route and are independent of commercial licensing', () => {
+test('site agreements have a standalone commercial route unavailable in the public build', () => {
   const page = 'site-agreements';
   assert.equal(pageFromHash('#/admin-2/' + page, '平台管理员'), page);
   assert.deepEqual(labels(build(page)), ['商业运营', '协议管理']);
-  assert.equal(commercialPage(page), false);
+  assert.equal(commercialPage(page), true);
+  assert.equal(canAccessPage('平台管理员', page, { commercial: false }), false);
   assert.equal(canAccessPage('平台管理员', page, { commercial: true }), false);
 });
 

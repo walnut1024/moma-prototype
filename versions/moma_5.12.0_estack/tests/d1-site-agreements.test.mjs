@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash, randomBytes } from 'node:crypto';
 import { startLocalBackend } from '../database/local-runtime.js';
+import { savePublishedSiteSetting } from '../server/site-settings.js';
 import { agreementFromHash, agreementHref } from '../src/agreement-route.mjs';
 
 const prefix = '/api/v1';
@@ -13,7 +14,7 @@ test('public agreement URLs select exactly one document', () => {
   assert.equal(agreementFromHash('#/admin-2/site-configuration'), null);
 });
 
-test('only a private site administrator may publish, and anonymous visitors read the saved revision', async t => {
+test('only a private site administrator with active commercial licensing may publish, and anonymous visitors read the saved revision', async t => {
   const oldSetting = process.env.VITE_MOMA_PRIVATE_SITE;
   t.after(() => {
     if (oldSetting === undefined) delete process.env.VITE_MOMA_PRIVATE_SITE;
@@ -34,19 +35,19 @@ test('only a private site administrator may publish, and anonymous visitors read
   process.env.VITE_MOMA_PRIVATE_SITE = '1';
   const accessCode = randomBytes(18).toString('hex');
   const hash = createHash('sha256').update(accessCode).digest('hex');
-  const local = await startLocalBackend({ loginHashes: { 'admin-001': hash, 'admin-003': hash } });
+  const local = await startLocalBackend({ licenseEdition: 'commercial', loginHashes: { 'admin-001': hash, 'admin-003': hash } });
   t.after(() => local.runtime.dispose());
   await local.db.prepare("INSERT OR IGNORE INTO admin_accounts(id,name,role,enabled) VALUES('admin-003','运营测试','运营人员',1)").run();
-  async function request(endpoint, { body, cookie, requestOrigin = origin } = {}) {
-    const response = await local.runtime.dispatchFetch(origin + prefix + endpoint, {
+  async function request(endpoint, { body, cookie, requestOrigin = origin, runtime = local.runtime } = {}) {
+    const response = await runtime.dispatchFetch(origin + prefix + endpoint, {
       method: body ? 'POST' : 'GET',
       headers: { ...(cookie ? { cookie } : {}), ...(body ? { origin: requestOrigin, 'x-moma-request': '1', 'content-type': 'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     return { status: response.status, data: await response.json(), cookie: response.headers.get('set-cookie')?.split(';')[0] };
   }
-  const login = async accountId => {
-    const result = await request('/auth/login', { body: { accountId, accessCode } });
+  const login = async (accountId, runtime) => {
+    const result = await request('/auth/login', { body: { accountId, accessCode }, runtime });
     assert.equal(result.status, 200);
     return result.cookie;
   };
@@ -78,4 +79,20 @@ test('only a private site administrator may publish, and anonymous visitors read
   assert.equal(cleared.status, 200);
   assert.deepEqual((await request(portalPath)).data, { revision: 2, url: '' });
   assert.deepEqual((await request(path)).data, { revision: 1, agreements: body.agreements });
+
+  for (const [licenseEdition, licenseExpiresAt] of [['internal'], ['commercial', '2000-01-01T00:00:00Z']]) {
+    await t.test(licenseEdition === 'internal' ? 'internal deployment' : 'expired commercial license', async t => {
+      const { db, runtime } = await startLocalBackend({ licenseEdition, licenseExpiresAt, loginHashes: { 'admin-001': hash } });
+      t.after(() => runtime.dispose());
+      const cookie = await login('admin-001', runtime);
+      const saved = { revision: 1, agreements: body.agreements };
+      await savePublishedSiteSetting(db, 'site-agreements', saved);
+      const blocked = await request(path, { body: { ...body, expectedRevision: 1 }, cookie, runtime });
+      assert.equal(blocked.status, 403);
+      assert.equal(blocked.data.error.code, 'LICENSE_REQUIRED');
+      const published = await request(path, { runtime });
+      assert.equal(published.status, 200);
+      assert.deepEqual(published.data, saved);
+    });
+  }
 });

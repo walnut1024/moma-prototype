@@ -54,7 +54,6 @@ export default function EnterpriseDetails({ state, tenant, params, navigate, can
         </div>
         <EnterpriseFacts rows={[
           ['租户名称', tenant.name], ['租户 ID', tenant.id], ['租户类型', tenant.type],
-          ['服务等级', <TenantServiceSettings state={state} tenant={tenant} section="level" canWrite={canWrite} transact={transact}/>],
           ['创建时间', time(tenant.createdAt)], ['最近更新', time(tenant.updatedAt)], ['备注', tenant.notes || '—'],
         ]}/>
         <MetadataFacts title="企业信息" tenant={tenant} fields={enterpriseMetadataFields.slice(0,2)}/>

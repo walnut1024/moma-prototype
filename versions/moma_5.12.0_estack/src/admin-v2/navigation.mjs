@@ -84,7 +84,7 @@ export function isInfrastructurePage(id) {
   return pages[id]?.groupId === 'ops-model-service' && !['clusters', 'deployments'].includes(id);
 }
 
-export const commercialPage = id => pages[id]?.groupId === 'commerce' && id !== 'site-agreements';
+export const commercialPage = id => pages[id]?.groupId === 'commerce';
 
 export const adminSections = sections.filter(group => group.sidebar !== false).map(group => ({
   ...group,

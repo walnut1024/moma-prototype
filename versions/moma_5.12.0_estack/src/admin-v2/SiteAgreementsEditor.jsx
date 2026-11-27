@@ -20,7 +20,7 @@ function activeAgreement(agreement) {
   return agreementMode(agreement) === 'url' ? { text: '', url: agreement.url } : { text: agreement.text, url: '' };
 }
 
-export default function SiteAgreementsEditor({ dirtyRef }) {
+export default function SiteAgreementsEditor({ dirtyRef, readOnly }) {
   const translateLabel = useChannelText();
   const legacy = readSiteConfig(useSiteConfigSnapshot());
   const [selected, setSelected] = useState('terms');
@@ -31,7 +31,7 @@ export default function SiteAgreementsEditor({ dirtyRef }) {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null);
   const operation = useRef(null);
-  const legacyPending = published?.revision === 0 && AGREEMENTS.some(([key]) => legacy[key].text || legacy[key].url);
+  const legacyPending = !readOnly && published?.revision === 0 && AGREEMENTS.some(([key]) => legacy[key].text || legacy[key].url);
   const source = legacyPending ? legacy : published?.agreements;
   const agreements = draft || Object.fromEntries(AGREEMENTS.map(([key]) => [key, agreementWithDefault(key, source?.[key])]));
   const label = AGREEMENTS.find(([key]) => key === selected)[1];
@@ -65,7 +65,7 @@ export default function SiteAgreementsEditor({ dirtyRef }) {
   }
 
   async function save() {
-    if (!published || operation.current || error?.status === 409 || error?.status === 401) return;
+    if (readOnly || !published || operation.current || error?.status === 409 || error?.status === 401) return;
     const changes = {};
     for (const [key, name] of AGREEMENTS) {
       const value = activeAgreement(agreements[key]);
@@ -109,7 +109,7 @@ export default function SiteAgreementsEditor({ dirtyRef }) {
       <Tabs type="button" activeKey={selected} onChange={setSelected} aria-label="选择协议">
         {AGREEMENTS.map(([key, name]) => <Tabs.TabPane key={key} itemKey={key} tab={name} />)}
       </Tabs>
-      <Button theme="solid" loading={busy} disabled={!published || !(draft || legacyPending) || busy || [401, 409].includes(error?.status)}
+      <Button theme="solid" loading={busy} disabled={readOnly || !published || !(draft || legacyPending) || busy || [401, 409].includes(error?.status)}
         onClick={save}>保存协议</Button>
     </div>
     {published ? <Card className="site-agreement-document" title={label}>
@@ -123,7 +123,7 @@ export default function SiteAgreementsEditor({ dirtyRef }) {
       </div>
       <div className="site-agreement-controls">
         <RadioGroup type="button" name="site-agreement-mode" aria-label={label + '配置方式'} value={agreementMode(agreement)}
-          disabled={busy} onChange={event => update({ ...agreement, mode: event.target.value })}>
+          disabled={readOnly || busy} onChange={event => update({ ...agreement, mode: event.target.value })}>
           <Radio value="text">协议内容</Radio>
           <Radio value="url">外部链接</Radio>
         </RadioGroup>
@@ -137,18 +137,18 @@ export default function SiteAgreementsEditor({ dirtyRef }) {
             }
             setPreview(agreementWithDefault(selected, { ...value, url: nextUrl }));
           }}>预览</Button>
-          <Button aria-label={'恢复默认' + label} disabled={busy || (agreementMode(agreement) === 'text' && !agreement.url && agreement.text === defaultAgreement(selected).text)}
+          <Button aria-label={'恢复默认' + label} disabled={readOnly || busy || (agreementMode(agreement) === 'text' && !agreement.url && agreement.text === defaultAgreement(selected).text)}
             onClick={() => update(defaultAgreement(selected))}>{translateLabel("恢复默认")}</Button>
         </Space>
       </div>
       {agreementMode(agreement) === 'url'
         ? <Form.Slot label={{ text: '协议链接', name: 'site-' + selected }}>
           <Input id={'site-' + selected} aria-label={label + '链接'} value={agreement.url} maxLength={MAX_SITE_URL}
-            placeholder="https://" disabled={busy} onChange={url => update({ ...agreement, url })} />
+            placeholder="https://" disabled={busy} readonly={readOnly} onChange={url => update({ ...agreement, url })} />
         </Form.Slot>
         : <Form.Slot label={{ text: '协议正文', name: 'site-' + selected }}>
           <TextArea key={selected} className="site-agreement-text" id={'site-' + selected} aria-label={label + '正文'}
-            value={agreement.text} maxCount={MAX_AGREEMENT_TEXT} rows={24} disabled={busy}
+            value={agreement.text} maxCount={MAX_AGREEMENT_TEXT} rows={24} disabled={busy} readonly={readOnly}
             onChange={text => update({ ...agreement, text })} />
         </Form.Slot>}
     </Card> : !error && <p role="status">正在加载协议…</p>}

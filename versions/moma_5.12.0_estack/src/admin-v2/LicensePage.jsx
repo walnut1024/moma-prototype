@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useState } from 'react';
 import { IconShield } from '@douyinfe/semi-icons';
-import { Banner, Button, Card, RadioGroup, Space, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { cacheLicense, LICENSE_NAMES } from '../deployment-license.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import AdminStatus from './AdminStatus';
@@ -18,7 +18,7 @@ const dateTime = new Intl.DateTimeFormat('sv-SE', {
 });
 const showTime = value => value ? dateTime.format(new Date(value)) : '—';
 
-export default function LicensePage({ license, menuPreview, onMenuPreviewChange }) {
+export default function LicensePage({ license }) {
   const translateLabel = useChannelText();
   const [details, setDetails] = useState(null);
   const [open, setOpen] = useState(false);
@@ -108,17 +108,6 @@ export default function LicensePage({ license, menuPreview, onMenuPreviewChange 
           <dd>{value}</dd>
         </div>)}
       </dl>
-      <Space className="license-menu-preview" spacing={12} wrap>
-        <Typography.Text strong>{translateLabel('菜单模拟')}</Typography.Text>
-        <RadioGroup type="button" size="small" aria-label={translateLabel('菜单模拟')} value={menuPreview}
-          onChange={event => onMenuPreviewChange(event.target.value)}
-          options={[
-            { value:'current', label:translateLabel('当前菜单') },
-            { value:'internal', label:translateLabel(LICENSE_NAMES.internal) },
-            { value:'commercial', label:translateLabel(LICENSE_NAMES.commercial) },
-          ]}/>
-        <Typography.Text type="tertiary" size="small">{translateLabel('离开本页后恢复当前菜单。')}</Typography.Text>
-      </Space>
     </Card>
     {license.status === 'expired' && <Banner type="warning" closeIcon={null} title="授权已到期"
       description={license.edition === 'commercial' ? '商业运营历史记录仍可查看，经营配置暂不可变更。' : undefined}/>}

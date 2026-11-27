@@ -11,7 +11,7 @@ test('tenant management is shared and resource management requires the system ad
   const commercial = deploymentLicense({ MOMA_LICENSE_EDITION: 'commercial' });
   const commercialGroup = adminSections.find(row=>row.id==='commerce');
   const licensedItems = commercialGroup.items.filter(item=>commercialPage(item.children[0][0]));
-  assert.deepEqual(licensedItems.map(row=>row.label), ['模型售卖','套餐管理','套餐数据']);
+  assert.deepEqual(licensedItems.map(row=>row.label), ['模型售卖','套餐管理','套餐数据','协议管理']);
   assert(!adminSections.some(row=>row.id==='organization'));
   assert(canAccessPage('平台管理员','projects',commercial));
   assert(canAccessPage('平台管理员','organization-members',internal));

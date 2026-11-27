@@ -9,7 +9,7 @@ import {
   IconShield, IconUserGroup, IconUserSetting, IconUserStroked,
 } from '@douyinfe/semi-icons';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
-import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Dropdown, Tabs, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Dropdown, Select, Tabs, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './admin-v2/AdminOverlay';
 import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
@@ -17,10 +17,11 @@ import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWo
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
 import { modelMaterial } from './admin-v2/model-library';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { createPortal } from 'react-dom';
 import "./admin-v2/admin-shell.css";
 import { managedIndividualAccounts } from "./admin-v2/individual-users";
 import { managedEnterpriseTenants } from "./admin-v2/enterprise";
-import { LICENSE_UNAVAILABLE } from './deployment-license.mjs';
+import { LICENSE_NAMES, LICENSE_UNAVAILABLE } from './deployment-license.mjs';
 import { Toast } from '@douyinfe/semi-ui';
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
 import { tenantHref } from './admin-v2/access-control.mjs';
@@ -116,6 +117,7 @@ export default function AdminConsoleV2(props) {
   const { license } = props;
   const [hash,setHash]=useState(location.hash);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [menuPreview, setMenuPreview] = useState(null);
   const { english, changeLanguage } = props;
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
   const cloud=/^#\/admin-2\/(listing-new|providers-reference|model-market|model-prices|model-templates|provider-materials|tariff-dictionary)(?:[/?]|$)/.test(hash);
@@ -128,9 +130,10 @@ export default function AdminConsoleV2(props) {
   const packageWorkspace=license?.commercial && /^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
   if (!license) return <AdminPageLoading label="部署授权"/>;
-  return <ConfigProvider locale={english ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider>;
+  return <ConfigProvider locale={english ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}
+    menuPreview={menuPreview} setMenuPreview={setMenuPreview}/>}</CloudModelOperations></ConfigProvider>;
 }
-function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage,draftDirty}) {
+function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage,draftDirty,bannerTarget,menuPreview,setMenuPreview}) {
   const { state: workspaceState, dispatch: persist, transact, transactModel, transactIndividual, transactAdminAccount, reload, refreshRead, conflict } = store;
   const internalSite = !deploymentLicense.commercial || (!deploymentLicense.managed && workspaceState.spacePolicy?.operatingMode==='internal');
   const license = internalSite ? { ...deploymentLicense, commercial:false, commerceWritable:false } : deploymentLicense;
@@ -179,7 +182,6 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const [active, setActive] = useState(initialPage);
   const demoMode = new URLSearchParams(location.search).get('demo');
   const interactiveDemo = demoMode === 'inference-interactive';
-  const [menuPreview, setMenuPreview] = useState('current');
   const [workspace, setWorkspace] = useState(pageWorkspace(initialPage) || availableWorkspaces(state.currentRole)[0] || 'operations');
   const [detailParams, setDetailParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
   const organizationView = isOrganizationPage(active, internalSite);
@@ -215,7 +217,6 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       }
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       setNavOpen(false); setActive(id); setDetailParams(params);
-      if (id !== 'license') setMenuPreview('current');
       if (canAccessPage(state.currentRole, id, license, params)) {
         if (nextWorkspace) { setWorkspace(nextWorkspace); lastVisits.current[nextWorkspace] = location.hash; }
       }
@@ -273,25 +274,29 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       state={inferenceState} params={detailParams} navigate={navigate} dirtyRef={draftDirty}
       dispatch={save} conflict={!demo && conflict} {...demoProps}/>;
   };
-  const previewingMenu = active === 'license' && menuPreview !== 'current';
-  const menuLicense = previewingMenu ? { commercial: menuPreview === 'commercial' } : license;
+  const canPreviewMenu = hasAccount && !interactiveDemo && canAccessPage(state.currentRole, 'license', license);
+  const licenseMenu = license.commercial ? 'commercial' : 'internal';
+  const selectedMenu = canPreviewMenu ? menuPreview ?? licenseMenu : licenseMenu;
+  const previewingMenu = selectedMenu !== licenseMenu;
+  const menuLicense = previewingMenu ? { commercial: selectedMenu === 'commercial' } : license;
   const menuLabel = previewingMenu ? (english ? 'Workbench Navigation Preview' : '后台导航预览') : '后台导航';
   const renderMenu = collapsed => <nav aria-label={menuLabel}>{adminSections.filter(group => group.workspace === currentWorkspace).map(group => {
       const locked = group.id === 'commerce' && !menuLicense.commercial;
+      const visibilityLicense = locked ? { ...menuLicense, commercial: true } : menuLicense;
       const items = group.items.filter(item => {
         const target = item.children[0][0];
         if (interactiveDemo && !inferenceDemoPages.has(target)) return false;
-        return (locked && commercialPage(target)) || canAccessPage(state.currentRole, target, menuLicense);
+        return canAccessPage(state.currentRole, target, visibilityLicense);
       });
       if (!items.length) return null;
-      const groupStatus = locked ? (items.every(item => commercialPage(item.children[0][0])) ? '（未授权）' : '（部分未授权）') : '';
+      const groupStatus = locked ? '（未授权）' : '';
       return <section key={group.id} aria-label={english ? channelEnglish(group.title) : group.title}>
         {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{groupStatus}</Typography.Text>}
         {items.map(item => {
           const Icon = NAVIGATION_ICONS[item.id];
           const selected = activeGroup === group.id && activeArea === item.id;
           const target = item.children[0][0];
-          const disabled = locked && commercialPage(target);
+          const disabled = locked;
           const label = english ? channelEnglish(item.label) : item.label;
           const collapsedLabel = label + (disabled ? '（未授权）' : '');
           const button = <Button key={item.id} disabled={disabled} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
@@ -324,6 +329,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       </Button>
     </Dropdown>;
   return <AdminUIContext.Provider value={true}><div className="admin-v2">
+    {canPreviewMenu && bannerTarget && createPortal(<div className="admin-banner-field">
+      <span id="admin-menu-preview-label">{english ? channelEnglish('菜单模拟') : '菜单模拟'}</span>
+      <Select size="small" aria-labelledby="admin-menu-preview-label" value={selectedMenu}
+        optionList={Object.entries(LICENSE_NAMES).map(([value,label])=>({ value,label:english ? channelEnglish(label) : label }))}
+        onChange={value => setMenuPreview(value === licenseMenu ? null : value)}/>
+    </div>, bannerTarget)}
     {!navOpen && <aside className="v2-sidebar-desktop" data-collapsed={sidebarCollapsed}>
       <div id="admin-desktop-navigation" className="v2-sidebar">{renderNavigation(sidebarCollapsed)}</div>
       <div className="v2-sidebar-footer">
@@ -378,9 +389,9 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === 'site-configuration' ? <SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/>
             : active === 'announcements' ? <AnnouncementManagement key={state.adminSession.accountId}
               accountId={state.adminSession.accountId} dirtyRef={draftDirty}/>
-            : active === 'site-agreements' ? <SiteAgreementsEditor key={state.adminSession.accountId} dirtyRef={draftDirty}/>
+            : active === 'site-agreements' ? <SiteAgreementsEditor key={state.adminSession.accountId} dirtyRef={draftDirty} readOnly={commerceReadOnly}/>
             : active === 'global-routing' ? <GlobalRouting saved={state.globalRoutingParameters} revision={state.revision} transact={transact} conflict={conflict} dirtyRef={draftDirty}/>
-            : active === 'license' ? <LicensePage license={license} menuPreview={menuPreview} onMenuPreviewChange={setMenuPreview}/>
+            : active === 'license' ? <LicensePage license={license}/>
             : active === 'business-analysis' ? <CommerceAnalysis state={state}/>
             : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} internal={internalSite}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload} readOnly={commerceReadOnly}/>
