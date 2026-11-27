@@ -1,0 +1,317 @@
+.admin-v2 .v2-content:has(> main[data-admin-page="package-data"]) {
+  background: #f4f5fa;
+}
+
+.admin-v2 .v2-content > main[data-admin-page="package-data"]:has(> .package-report) {
+  padding: 20px;
+}
+
+.package-report {
+  --package-report-muted: #f6f7fb;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  min-width: 0;
+  container: package-report / inline-size;
+}
+
+.package-report-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 92px;
+  padding: 6px 20px;
+  border-radius: 16px;
+  background: linear-gradient(108deg, white 26%, #f7f9ff 65%, #eef2fd);
+}
+
+.package-report-hero :is(h1, h2, h3) {
+  margin: 0;
+  color: #07162e;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.package-report-hero p {
+  margin: 6px 0 0;
+  color: #59677d;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.package-report-hero-end {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.package-report-hero-end img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+
+.package-report .package-report-body {
+  min-width: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--semi-color-bg-0);
+  box-shadow: none;
+}
+
+.package-report-body > .semi-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px 24px;
+}
+
+.package-report-toolbar,
+.package-report-detail-heading,
+.package-report-detail-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.package-report-toolbar {
+  margin-bottom: 2px;
+}
+
+.package-report-toolbar > :first-child {
+  margin-inline-end: 12px;
+  color: var(--semi-color-text-0);
+  font-size: 14px;
+}
+
+.package-report .package-report-periods {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--package-report-muted);
+}
+
+.package-report-periods .semi-radio-buttonRadioGroup {
+  padding: 0;
+}
+
+.package-report-periods .semi-radio-addon-buttonRadio {
+  padding: 4px 12px;
+  border-radius: 6px;
+  color: var(--semi-color-text-0);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.package-report-periods .semi-radio-addon-buttonRadio-checked {
+  background: white;
+  color: var(--semi-color-primary);
+  box-shadow: 0 3px 10px rgb(30 77 167 / 8%);
+}
+
+.package-report-periods .semi-radio:has(input:focus-visible) .semi-radio-addon-buttonRadio,
+.package-report-table:focus-visible {
+  outline: 2px solid var(--semi-color-primary);
+  outline-offset: -2px;
+}
+
+.package-report-dates {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--semi-color-text-2);
+  font-size: 12px;
+}
+
+.package-report-dates .semi-datepicker {
+  max-width: 100%;
+}
+
+.package-report-query {
+  margin-inline-start: auto;
+}
+
+.package-report-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.package-report-metric {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 90px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--package-report-muted);
+  color: var(--semi-color-text-1);
+  font-size: 13px;
+}
+
+.package-report-metric-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+}
+
+.package-report-metric-values > * {
+  display: flex;
+  flex: 1 0 max-content;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.package-report-metric-values strong {
+  color: var(--semi-color-text-0);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.package-report-metric-values small {
+  color: var(--semi-color-text-2);
+  font-size: 12px;
+}
+
+.package-report-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.package-report-chart {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 8px;
+}
+
+.package-report-chart-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--semi-color-text-0);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.package-report-chart-heading .semi-icon {
+  flex-shrink: 0;
+  color: var(--semi-color-text-2);
+}
+
+.package-report-chart > p {
+  margin: 6px 0 8px;
+  color: var(--semi-color-text-2);
+  font-size: 12px;
+}
+
+.package-report-chart .unified-chart-canvas,
+.package-report-distribution-empty {
+  min-height: 270px;
+}
+
+.package-report-distribution-empty {
+  display: grid;
+  place-items: center;
+}
+
+.package-report-detail-heading {
+  justify-content: space-between;
+}
+
+.package-report-detail-heading :is(h2, h3, h4) {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.package-report-detail-controls {
+  justify-content: flex-end;
+}
+
+.package-report .package-report-detail-controls > .semi-input-wrapper {
+  width: 224px;
+  max-width: 100%;
+}
+
+.package-report-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.package-report-table {
+  min-width: 0;
+  overflow-x: auto;
+  border-radius: 8px;
+}
+
+.package-report-table .semi-table {
+  font-size: 14px;
+}
+
+.package-report-table .semi-table-thead > .semi-table-row > .semi-table-row-head {
+  background: var(--package-report-muted);
+  color: var(--semi-color-text-1);
+}
+
+.package-report-footnote {
+  margin: 0;
+  color: var(--semi-color-text-2);
+  font-size: 12px;
+}
+
+@container package-report (max-width: 760px) {
+  .package-report-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .package-report-body > .semi-card-body {
+    padding-inline: 16px;
+  }
+}
+
+@container package-report (max-width: 550px) {
+  .package-report-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .package-report-hero {
+    padding-inline: 16px;
+  }
+
+  .package-report-hero-end {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .package-report-hero-end img {
+    width: 60px;
+    height: 60px;
+  }
+
+  .package-report-detail-controls {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-v2 .v2-content > main[data-admin-page="package-data"]:has(> .package-report) {
+    padding: 12px;
+  }
+}

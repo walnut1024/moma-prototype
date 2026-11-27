@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sections, canAccessPage, pageFromHash, pageWorkspace } from '../src/admin-v2/navigation.mjs';
+import { adminSections, canAccessPage, pageFromHash, pageWorkspace } from '../src/admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
 import { LOGIN_BASE, loginDestination, loginLocation } from '../src/login-navigation.mjs';
 import { readFileSync } from 'node:fs';
 import { parseOperationsGuide } from '../src/admin-v2/model-operations-guide.mjs';
 
 test('engineering notes is the last operations group with role access and reloadable routes', () => {
-  const group = sections.find(item => item.id === 'getting-started');
+  const group = adminSections.find(item => item.id === 'getting-started');
   assert.equal(Boolean(group.direct), false);
   for (const role of ['平台管理员', '运营人员']) {
-    const visible = sections.filter(item => item.workspace === 'operations' || item.id === 'platform' && role === '平台管理员');
+    const visible = adminSections.filter(item => item.workspace === 'operations' &&
+      item.items.some(entry => canAccessPage(role, entry.children[0][0])));
     assert.equal(visible.at(-1).id, 'getting-started');
   }
   assert.equal(group.title, '研发须知');
@@ -70,6 +71,6 @@ test('requirements can be shared as a direct link and return to the document aft
     assert.equal(loginDestination(returnTo, { role }), target);
   }
   for (const role of ['运维人员', '未知角色']) assert.equal(canAccessPage(role, route), false);
-  assert.equal(loginDestination(returnTo, { role: '运维人员' }), LOGIN_BASE + '#/admin-2/call-analysis');
+  assert.equal(loginDestination(returnTo, { role: '运维人员' }), LOGIN_BASE + '#/admin-2/model-performance');
   assert.equal(loginDestination(returnTo), LOGIN_BASE + '?page=home');
 });

@@ -8,6 +8,7 @@ import { createSeed, initializeDatabase } from './seed.js';
 import { initializeModelWorkspace } from '../server/model-repository.js';
 import { initializeApplication } from '../server/application.js';
 import { initializePrototypeCatalogue } from '../server/prototype-presets.js';
+import { initializeInferenceDemo } from './inference-demo.js';
 
 // Tooling only: SQLite parses the original migration, D1 executes every resulting DDL statement.
 export async function migrateEmptyDatabase(db) {
@@ -59,7 +60,8 @@ export async function migrateEmptyDatabase(db) {
   } finally { sqlite.close(); }
 }
 
-export async function startLocalBackend({ persistPath, loginHashes, port = 0, log, demo = false, licensePublicKey, licenseDeploymentId, presets = false, licenseEdition, licenseExpiresAt } = {}) {
+export async function startLocalBackend({ persistPath, loginHashes, port = 0, log, demo = false, inferenceDemo = false, licensePublicKey, licenseDeploymentId, presets = false, licenseEdition, licenseExpiresAt } = {}) {
+  if (inferenceDemo && (persistPath || !demo || !presets)) throw Error('模型推理演示须使用独立内存工作区');
   const source = fileURLToPath(new URL('../server/api.js', import.meta.url));
   const bundled = await build({ stdin: { contents: `import {handleModelOperations} from ${JSON.stringify(source)}; export default {fetch:handleModelOperations};`, resolveDir: process.cwd() },
     plugins:[modelWorkerDataPlugin], bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022' });
@@ -79,6 +81,7 @@ export async function startLocalBackend({ persistPath, loginHashes, port = 0, lo
       await initializePrototypeCatalogue(db);
       await initializeApplication(db);
     }
+    if (inferenceDemo) await initializeInferenceDemo(db);
     return { runtime, db, initialization, url: await runtime.ready };
   } catch (error) { await runtime.dispose(); throw error; }
 }

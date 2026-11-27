@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { filterCallLogs, logFilters, logMinuteRange, logWindow } from '../src/admin-v2/call-log-filters.mjs';
-import { observationDrill, observationWindow } from '../src/admin-v2/call-observations.mjs';
+import { observationWindow } from '../src/admin-v2/call-observations.mjs';
 
 const now = Date.parse('2026-11-24T01:11:30Z');
 
@@ -24,11 +24,13 @@ test('a manual log range includes the final selected minute and limits displayed
   assert.equal(logMinuteRange(window.end, window.start), null);
 });
 
-test('analytics drill keeps its exact ISO bounds and model/upstream and supply filters', () => {
+test('log URLs retain exact ISO bounds and model, upstream and supply filters', () => {
   const expected = { start: Date.parse('2026-09-01T00:00:06.017Z'), end: Date.parse('2026-10-31T02:00:08.001Z') };
-  const hash = observationDrill({ model: ['service-model'], type: 'text' }, expected,
-    { provider: ['provider'], channel: ['connection'], upstreamModelId: ['upstream-model'], view: 'upstream' });
-  const filters = logFilters(new URLSearchParams(hash.split('?')[1]));
+  const params = new URLSearchParams({ period: 'custom',
+    start: new Date(expected.start).toISOString(), end: new Date(expected.end).toISOString(),
+    model: 'service-model', type: 'text', supply: JSON.stringify([['provider', 'connection']]),
+    upstreamModelId: 'upstream-model', view: 'upstream' });
+  const filters = logFilters(params);
   const window = logWindow(filters, now);
   assert.deepEqual(window, expected);
   const row = { at: expected.start, model: 'service-model', modelType: 'text', provider: 'provider', channel: 'connection', upstreamModelId: 'upstream-model' };

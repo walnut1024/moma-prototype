@@ -1,11 +1,11 @@
 import { channelEnglish } from './admin-v2/channel-language';
 import AdminPageLoading from './admin-v2/AdminPageLoading';
 import {
-  IconActivity, IconApartment, IconAppCenter, IconBarChartVStroked, IconBellStroked,
+  IconActivity, IconApartment, IconAppCenter, IconArticle, IconBarChartVStroked, IconBellStroked,
   IconBookOpenStroked, IconBookStroked, IconBox, IconChainStroked, IconChecklistStroked,
   IconComponentStroked, IconFlowChartStroked, IconGridStroked, IconLayers,
   IconDoubleChevronLeft, IconDoubleChevronRight, IconLanguage,
-  IconMenu, IconMonitorStroked, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked, IconSetting,
+  IconMenu, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked, IconSetting,
   IconShield, IconUserGroup, IconUserSetting, IconUserStroked,
 } from '@douyinfe/semi-icons';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
@@ -50,6 +50,10 @@ const ModelOperationsGuide = lazy(() => import('./admin-v2/GettingStarted').then
 const ModelOperationsRequirements = lazy(() => import('./admin-v2/ModelOperationsRequirements'));
 const ClusterManagement = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ClusterManagement })));
 const ModelDeployments = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelDeployments })));
+const InferenceDemo = lazy(() => import('./admin-v2/InferenceDemo'));
+const inferenceDemoPages = new Set([
+  'deployments', 'clusters', 'ops-nodes', 'ops-gpus', 'ops-benchmarks', 'ops-cache-acceleration', 'ops-model-files',
+]);
 const loadModelConnections = () => import('./admin-v2/ChannelDirectory');
 const ChannelManagementNew = lazy(() => loadModelConnections().then(module => ({ default: module.ChannelManagementNew })));
 const ModelPrices = lazy(() => import('./admin-v2/ModelPrices'));
@@ -57,6 +61,7 @@ const GatewayPage = lazy(() => import('./admin-v2/GatewayPages'));
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
 const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
+const SiteAgreementsEditor = lazy(() => import('./admin-v2/SiteAgreementsEditor'));
 const ModelMaterials = lazy(() => import('./admin-v2/ModelMaterials'));
 const loadModelServices = () => import('./admin-v2/ModelServicesNew');
 const ModelServicesNew = lazy(loadModelServices);
@@ -76,29 +81,23 @@ const NAVIGATION_ICONS = {
   prices: IconPriceTag,
   materials: IconBookStroked,
   'package-production': IconBox,
-  'package-data': IconChecklistStroked,
+  'package-data': IconBarChartVStroked,
+  'site-agreements': IconArticle,
   'traffic-limits': IconActivity,
   enterprise: IconApartment,
   projects: IconLayers,
-  individual: IconUserStroked,
-  'organization-members': IconUserGroup,
-  calls: IconPulse,
   'model-performance': IconBarChartVStroked,
   gateway: IconFlowChartStroked,
   logs: IconChecklistStroked,
-  monitoring: IconMonitorStroked,
   clusters: IconServerStroked,
   deployments: IconPlayCircle,
-  'ops-model-library': IconLayers,
   'ops-benchmarks': IconBarChartVStroked,
   'ops-inference-backends': IconComponentStroked,
   'ops-cache-acceleration': IconPulse,
   'ops-model-files': IconBox,
+  license: IconShield,
   accounts: IconUserSetting,
   'audit-logs': IconChecklistStroked,
-  'commerce-orders': IconChecklistStroked,
-  'business-analysis': IconBarChartVStroked,
-  license: IconShield,
   'global-routing': IconSetting,
   'site-configuration': IconSetting,
   'model-operations-guide': IconBookOpenStroked,
@@ -128,7 +127,7 @@ export default function AdminConsoleV2(props) {
   if (!license) return <AdminPageLoading label="部署授权"/>;
   return <ConfigProvider locale={english ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider>;
 }
-function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage}) {
+function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage,draftDirty}) {
   const { state: workspaceState, dispatch: persist, transact, transactModel, transactIndividual, transactAdminAccount, reload, refreshRead, conflict } = store;
   const internalSite = !deploymentLicense.commercial || (!deploymentLicense.managed && workspaceState.spacePolicy?.operatingMode==='internal');
   const license = internalSite ? { ...deploymentLicense, commercial:false, commerceWritable:false } : deploymentLicense;
@@ -149,7 +148,6 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const [navOpen, setNavOpen] = useState(false);
   const [leave, setLeave] = useState(null);
   const [logSimulation, setLogSimulation] = useState(null);
-  const draftDirty = useRef(false);
   useEffect(() => {
     let accepted = location.hash;
     const sync = () => {
@@ -169,8 +167,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     const unload = event => { if (draftDirty.current) { event.preventDefault(); event.returnValue = ''; } };
     addEventListener('hashchange', sync, true);
     addEventListener('beforeunload', unload);
-    return () => { removeEventListener('hashchange', sync, true); removeEventListener('beforeunload', unload); };
-  }, []);
+    return () => {
+      removeEventListener('hashchange', sync, true);
+      removeEventListener('beforeunload', unload);
+      draftDirty.current = false;
+    };
+  }, [draftDirty]);
   const [active, setActive] = useState(initialPage);
   const [workspace, setWorkspace] = useState(pageWorkspace(initialPage) || availableWorkspaces(state.currentRole)[0] || 'operations');
   const [detailParams, setDetailParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
@@ -182,7 +184,10 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     spacePolicy: { ...state.spacePolicy, operatingMode: 'internal', internalTenantId: organizationTenant?.id },
     commerceReadOnly: !internalSite || state.commerceReadOnly,
   } : state;
-  const lastVisits = useRef({ operations: '#/admin-2/dashboard', maintenance: '#/admin-2/call-analysis' });
+  const lastVisits = useRef({
+    operations: '#/admin-2/' + WORKSPACE_HOME.operations,
+    maintenance: '#/admin-2/' + WORKSPACE_HOME.maintenance,
+  });
   const previousRole = useRef(state.currentRole);
   const allowedWorkspaces = availableWorkspaces(state.currentRole);
   const canVisit = canAccessPage(state.currentRole, active, license, detailParams);
@@ -191,6 +196,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   useEffect(() => {
     const sync = () => {
       const id = pageFromHash(location.hash, state.currentRole), nextWorkspace = pageWorkspace(id);
+      const path = location.hash.split('?')[0];
+      const canonical = '#/admin-2/' + id;
+      if (path !== canonical && !path.startsWith(canonical + '/')) {
+        location.replace(canonical);
+        return;
+      }
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       setNavOpen(false); setActive(id); setDetailParams(params);
       if (canAccessPage(state.currentRole, id, license, params)) {
@@ -235,19 +246,35 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
   const gatewaySettings = activeArea === 'gateway';
-  const renderMenu = collapsed => <nav aria-label="后台导航">{adminSections.filter(group =>
-    group.workspace === currentWorkspace || (group.id === 'platform' && state.currentRole === '平台管理员')).map(group => {
-      const reason = group.id === 'commerce' && !license.commercial ? '未授权' : '';
+  const inferenceDemo = inferenceDemoPages.has(active) && new URLSearchParams(location.search).get('demo') === 'inference';
+  const renderInferencePage = (inferenceState, demo = false, { refresh = refreshRead } = {}) => {
+    const save = demo ? undefined : dispatch;
+    if (active === 'clusters') return <ClusterManagement state={inferenceState} params={detailParams}
+      dispatch={save} refreshShared={refresh} onNavigate={navigate} dirtyRef={draftDirty} inferenceDemo={demo}/>;
+    if (active === 'deployments') return <ModelDeployments state={inferenceState} dispatch={save}
+      conflict={conflict} onNavigate={navigate} refreshRead={refresh} inferenceDemo={demo}/>;
+    return <InfrastructurePage key={active + ':' + detailParams.toString()} pageId={active}
+      state={inferenceState} params={detailParams} navigate={navigate} dirtyRef={draftDirty}
+      dispatch={save} conflict={conflict} inferenceDemo={demo}/>;
+  };
+  const renderMenu = collapsed => <nav aria-label="后台导航">{adminSections.filter(group => group.workspace === currentWorkspace).map(group => {
+      const locked = group.id === 'commerce' && !license.commercial;
+      const items = group.items.filter(item => {
+        const target = item.children[0][0];
+        return (locked && commercialPage(target)) || canAccessPage(state.currentRole, target, license);
+      });
+      if (!items.length) return null;
+      const groupStatus = locked ? (items.every(item => commercialPage(item.children[0][0])) ? '（未授权）' : '（部分未授权）') : '';
       return <section key={group.id} aria-label={english ? channelEnglish(group.title) : group.title}>
-        {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{reason && `（${reason}）`}</Typography.Text>}
-        {group.items
-          .filter(item => reason || canAccessPage(state.currentRole, item.children[0][0], license)).map(item => {
+        {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{groupStatus}</Typography.Text>}
+        {items.map(item => {
           const Icon = NAVIGATION_ICONS[item.id];
           const selected = activeGroup === group.id && activeArea === item.id;
           const target = item.children[0][0];
+          const disabled = locked && commercialPage(target);
           const label = english ? channelEnglish(item.label) : item.label;
-          const collapsedLabel = (item.id === 'projects' ? `${english ? channelEnglish(group.title) : group.title} · ${label}` : label) + (reason ? `（${reason}）` : '');
-          const button = <Button key={item.id} disabled={Boolean(reason)} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
+          const collapsedLabel = label + (disabled ? '（未授权）' : '');
+          const button = <Button key={item.id} disabled={disabled} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
             aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => navigate(target)}>{collapsed ? null : label}</Button>;
           return collapsed ? <Tooltip key={item.id} content={collapsedLabel} position="right" clickToHide closeOnEsc>{button}</Tooltip> : button;
         })}
@@ -312,7 +339,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === "model-operations-requirements" ? <ModelOperationsRequirements english={english}/>
             : active === "dashboard" ? <OperationsOverview state={factState} workbenchName={workbenchName} onNavigate={navigate}
               shortcuts={overviewShortcuts.filter(({ id }) => canAccessPage(state.currentRole, id, license))}/>
-            : ["usage-analysis", "user-analysis", "call-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>
+            : ["usage-analysis", "user-analysis"].includes(active) ? <AnalyticsPages pageId={active} state={factState}/>
             : active === 'model-performance' ? <ModelPerformancePage state={factState}/>
             : ['customer-analysis', 'customer-analysis-detail'].includes(active) ? <CustomerAnalysis key={active + detailParams.toString()} detail={active === 'customer-analysis-detail'} params={detailParams}/>
             : active === 'customer-usage-detail' ? <CustomerUsageDetail state={pageState}/>
@@ -320,6 +347,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === 'audit-logs' ? <AuditLogsPage key={state.adminSession.accountId + ':' + detailParams.toString()}
               accountId={state.adminSession.accountId} params={detailParams} tenants={state.tenants} projects={state.projects}/>
             : active === 'site-configuration' ? <SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/>
+            : active === 'site-agreements' ? <SiteAgreementsEditor key={state.adminSession.accountId} dirtyRef={draftDirty}/>
             : active === 'global-routing' ? <GlobalRouting saved={state.globalRoutingParameters} revision={state.revision} transact={transact} conflict={conflict} dirtyRef={draftDirty}/>
             : active === 'license' ? <LicensePage license={license}/>
             : active === 'business-analysis' ? <CommerceAnalysis state={state}/>
@@ -331,7 +359,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === 'model-templates' ? <ModelMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'listing-new' ? <ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict} reloadWorkspace={reload}/>
             : active === 'model-links' ? <ModelLinks/>
-            : active === "package-data" ? <PackageData state={state} params={detailParams}/>
+            : active === "package-data" ? <PackageData state={state} params={detailParams} refreshRead={refreshRead}/>
             : active === "package-production" ? <PackageProduction state={state} transact={transact} conflict={conflict} params={detailParams} dirty={draftDirty}/>
             : active === 'traffic-limits' ? <TrafficOperations key={state.adminSession.accountId} state={state} dirtyRef={draftDirty}/>
             : active === "tenants" ? <CustomerPage key={organizationView ? 'organization' : 'customers'} state={pageState} transact={transact} transactIndividual={transactIndividual} reload={reload} conflict={conflict} dirtyRef={draftDirty} internal={organizationView}/>
@@ -342,14 +370,11 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
               returnHref={resourceTenant && tenantHref(resourceTenant,{tab:'organization'})}
               onTabChange={tab=>navigate(active + '?' + new URLSearchParams({tenant:resourceTenant.id,tab}))}/>
             : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch}/>
-            : ["providers-health", "monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
+            : ["providers-health", "logs"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
               state={factState} dispatch={dispatch} navigate={navigate} simulation={logSimulation} setSimulation={setLogSimulation} refreshRead={refreshRead}
               canViewFullLog={state.currentRole === '平台管理员'}/>
-            : active === "clusters" ? <ClusterManagement state={state} params={detailParams} dispatch={dispatch} refreshShared={refreshRead}
-              onNavigate={navigate} dirtyRef={draftDirty}/>
-            : active === "deployments" ? <ModelDeployments state={state} dispatch={dispatch} conflict={conflict} onNavigate={navigate} refreshRead={refreshRead}/>
-            : isInfrastructurePage(active) ? <InfrastructurePage key={active + ':' + detailParams.toString()}
-              pageId={active} state={state} params={detailParams} navigate={navigate} dirtyRef={draftDirty} dispatch={dispatch} conflict={conflict}/>
+            : inferenceDemo ? <InferenceDemo role={state.currentRole}>{renderInferencePage}</InferenceDemo>
+            : inferenceDemoPages.has(active) || isInfrastructurePage(active) ? renderInferencePage(state)
             : <BusinessOperationsPage key={active} pageId={active} state={state} params={detailParams} dispatch={dispatch}/>}
           </Suspense>}
         </AdminPageBoundary>

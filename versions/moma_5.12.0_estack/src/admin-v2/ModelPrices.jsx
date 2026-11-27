@@ -134,8 +134,8 @@ export default function ModelPrices(props) {
   };
   const merged=render=>(_,row)=>({children:render(row),props:{rowSpan:row.recordSpan}});
   return <div className="admin-page-stack semi-services">
-    <ModelModuleHeading module="prices" title={service?.name || translateLabel('模型销售')}><div className="sp-actions">{params.has('service') && !back && <Button
-        onClick={() => go({ service: null, tab: null, edit: null }, { preserveScroll: true })}>返回模型销售</Button>
+    <ModelModuleHeading module="prices" title={service?.name || translateLabel('模型售卖')}><div className="sp-actions">{params.has('service') && !back && <Button
+        onClick={() => go({ service: null, tab: null, edit: null }, { preserveScroll: true })}>{translateLabel('返回模型售卖')}</Button>
       }{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>{translateLabel("返回来源页面")}</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>{translateLabel("计量配置")}</Button></div></ModelModuleHeading>
     {saleWorkspace.error && <Notice error>{saleWorkspace.error}<Button theme="borderless" onClick={refreshSales}>载入最新售卖</Button></Notice>}
     {params.has('service') ? service ? service.unavailable ? <Notice error>暂无法读取该模型服务的原售卖配置。</Notice> : service.independent ? <Card>
@@ -152,7 +152,7 @@ export default function ModelPrices(props) {
         <Tabs.TabPane itemKey="history" tab={translateLabel("变更记录")}><div className="ss-tab-content ss-body"><Typography.Title heading={5}>{translateLabel("模型刊例价版本")}</Typography.Title><Table size="small" rowKey="id" dataSource={versions} pagination={false} scroll={{x:760,y:420}} empty="尚无模型刊例价版本。" columns={[{title:'模型刊例价版本 ID',dataIndex:'id',width:280,render:value=><CopyId value={value} label="模型刊例价版本 ID"/>},{title:'版本',dataIndex:'version',width:80},{title:'生效时间',dataIndex:'effectiveAt',width:180,render:displayTime},{title:'计费项与模型刊例价',render:(_,version)=>priceItems(version,model).map((item,index)=><Typography.Paragraph key={index}>{item.name}：{moneyDisplay(item.amount)} {item.currency} / {item.unit}</Typography.Paragraph>)}]}/></div></Tabs.TabPane>
       </Tabs>
       </div>
-    </Card> : saleWorkspace.loading ? <Spin /> : <Notice error>指定售卖不存在或已归档，请返回模型销售列表。</Notice> : <Card>
+    </Card> : saleWorkspace.loading ? <Spin /> : <Notice error>指定售卖不存在或已归档，请返回模型售卖列表。</Notice> : <Card>
       <PricingFilters records={services} ops={ops} kind="price"/>
       <Table size="small" rowKey="tableKey" pagination={false} scroll={{x:1600,y:'calc(100vh - 330px)'}} dataSource={pricingTableRows(pageRows,row=>priceItems(row.price,row.model))} empty={saleWorkspace.loading ? '正在加载模型售卖' : '没有符合条件的记录'} columns={[
         {title:'模型服务名称',width:160,render:merged(row=><Typography.Text link={{ href: detailHref(row) }}>{row.modelName}</Typography.Text>)},

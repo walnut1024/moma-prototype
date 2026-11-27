@@ -2,10 +2,57 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
 import { classificationHref } from '../src/admin-v2/model-classification.js';
-import { canAccessPage, isInfrastructurePage, pageFromHash } from '../src/admin-v2/navigation.mjs';
+import { adminSections, canAccessPage, commercialPage, isInfrastructurePage, pageFromHash, pageWorkspace, sections } from '../src/admin-v2/navigation.mjs';
 const build = (page, query = '', names = {}) => adminBreadcrumbs(page, new URLSearchParams(query), names);
 const labels = crumbs => crumbs.map(c => c.label);
 const params = crumb => new URLSearchParams(crumb.href.split('?')[1]);
+
+test('sidebar follows the operations and maintenance groups in order', () => {
+  const menu = workspace => adminSections.filter(group => group.workspace === workspace)
+    .map(group => group.direct ? group.items[0].label : [group.title, ...group.items.map(item => item.label)]);
+  assert.deepEqual(menu('operations'), [
+    '首页',
+    ['运营分析', '用量数据', '租户数据', '用户数据'],
+    ['模型运营', '模型接入', '模型服务', '模型链路', '模型广场', '基础资料'],
+    ['商业运营', '模型售卖', '套餐管理', '套餐数据', '协议管理'],
+    ['流量运营', '限流配置'],
+    ['访问控制', '租户管理', '项目管理'],
+    ['平台管理', '站点配置', '授权管理', '后台账号', '审计日志'],
+    ['研发须知', '平台术语', '需求文档'],
+  ]);
+  assert.deepEqual(menu('maintenance'), [
+    ['运行分析', '模型性能', '调用日志'],
+    ['模型推理', '集群管理', '模型部署', '基准测试', '推理后端', 'KV缓存', '模型文件'],
+    ['网关管理', '模型路由', '路由设置（全局）'],
+  ]);
+  assert.equal(pageWorkspace('license'), 'operations');
+  assert.equal(pageWorkspace('global-routing'), 'maintenance');
+  assert.equal(canAccessPage('平台管理员', 'global-routing'), true);
+  assert.equal(canAccessPage('运营人员', 'global-routing'), false);
+  assert.equal(canAccessPage('运维人员', 'global-routing'), false);
+});
+
+test('platform account and audit entries use their existing administrator-only routes', () => {
+  const platform = adminSections.find(group => group.id === 'platform');
+  for (const [itemId, route, label] of [['accounts', 'admins', '后台账号'], ['audit-logs', 'audit-logs', '审计日志']]) {
+    assert.deepEqual(platform.items.find(item => item.id === itemId).children, [[route, label]]);
+    assert.equal(pageFromHash('#/admin-2/' + route, '平台管理员'), route);
+    assert.deepEqual(labels(build(route)), ['平台管理', label]);
+    for (const commercial of [true, false]) {
+      assert.equal(canAccessPage('平台管理员', route, { commercial }), true);
+      assert.equal(canAccessPage('运营人员', route, { commercial }), false);
+      assert.equal(canAccessPage('运维人员', route, { commercial }), false);
+    }
+  }
+});
+
+test('site agreements have a standalone route and are independent of commercial licensing', () => {
+  const page = 'site-agreements';
+  assert.equal(pageFromHash('#/admin-2/' + page, '平台管理员'), page);
+  assert.deepEqual(labels(build(page)), ['商业运营', '协议管理']);
+  assert.equal(commercialPage(page), false);
+  assert.equal(canAccessPage('平台管理员', page, { commercial: true }), false);
+});
 
 test('removed JSON views use the source page breadcrumbs', () => {
   const query = 'service=s1&tab=history&q=GLM&page=3';
@@ -71,33 +118,19 @@ test('model library editor shows the current model name and keeps identity out o
 
 test('deployment list, detail and editor have explicit hierarchy and preserve filters', () => {
   const rows = build('deployments', 'deployment=d1&view=edit&tab=events&cluster=gpu&page=2', { deployment: '生产服务' });
-  assert.deepEqual(labels(rows), ['模型推理', '部署', '生产服务', '更新部署配置']);
+  assert.deepEqual(labels(rows), ['模型推理', '模型部署', '生产服务', '更新部署配置']);
   assert.equal(params(rows[1]).get('cluster'), 'gpu');
   assert.equal(params(rows[1]).has('deployment'), false);
   assert.equal(params(rows[2]).get('deployment'), 'd1');
   assert.equal(params(rows[2]).has('view'), false);
-  assert.deepEqual(labels(build('deployments', 'view=create')), ['模型推理', '部署', '部署模型']);
-  const playground = build('deployments', 'view=playground&deployment=d1&playgroundRoute=r1&cluster=gpu&page=2', { deployment: '生产服务' });
-  assert.deepEqual(labels(playground), ['模型推理', '部署', '生产服务', 'Playground']);
-  for (const crumb of playground.slice(1, 3)) {
-    assert.equal(params(crumb).has('playgroundRoute'), false);
-    assert.equal(params(crumb).get('cluster'), 'gpu');
-    assert.equal(params(crumb).get('page'), '2');
-  }
-});
-
-test('model inference routes retain their maintenance access and cluster tabs', () => {
-  for (const [route, label] of [['clusters', '集群'], ['ops-nodes', '节点'], ['ops-gpus', 'GPU']]) {
-    const crumbs = build(route);
-    assert.deepEqual(labels(crumbs), ['模型推理', '集群管理', label]);
-    assert.equal(crumbs[1].href, route === 'clusters' ? undefined : '#/admin-2/clusters');
-  }
-  for (const route of ['ops-nodes', 'ops-gpus', 'ops-model-library', 'ops-benchmarks', 'ops-inference-backends', 'ops-cache-acceleration', 'ops-model-files']) {
-    assert.equal(isInfrastructurePage(route), true);
-    assert.equal(pageFromHash('#/admin-2/' + route, '运维人员'), route);
-    assert.equal(canAccessPage('运维人员', route), true);
-    assert.equal(canAccessPage('运营人员', route), false);
-  }
+  const create = build('deployments', 'view=create&catalogModel=example&from=catalog&catalogQuery=q%3Dtest');
+  assert.deepEqual(labels(create), ['模型推理', '模型部署', '部署模型']);
+  assert.equal(params(create[1]).size, 0);
+  const playground = build('deployments', 'deployment=d1&view=playground&playgroundRoute=r1', { deployment: '生产服务' });
+  assert.deepEqual(labels(playground), ['模型推理', '模型部署', '生产服务', 'Playground']);
+  assert.equal(params(playground[2]).get('tab'), 'overview');
+  assert.equal(params(playground[2]).has('playgroundRoute'), false);
+  assert.equal(params(playground[1]).has('playgroundRoute'), false);
 });
 
 test('user and analytics detail breadcrumbs preserve their original list scope', () => {
@@ -114,11 +147,14 @@ test('user and analytics detail breadcrumbs preserve their original list scope',
 });
 
 test('section breadcrumbs open a real landing page and current pages remain plain text', () => {
-  assert.deepEqual(build('dashboard'), [{ label: '概览' }]);
+  assert.deepEqual(build('dashboard'), [{ label: '首页' }]);
   assert.deepEqual(build('listing-new'), [{ label: '模型运营' }, { label: '模型服务' }]);
   assert.deepEqual(build('model-links'), [{ label: '模型运营' }, { label: '模型链路' }]);
-  assert.deepEqual(labels(build('logs')), ['网关管理', '调用日志']);
-  assert.equal(build('logs')[0].href, '#/admin-2/routes');
+  assert.deepEqual(labels(build('logs')), ['运行分析', '调用日志']);
+  assert.equal(build('logs')[0].href, '#/admin-2/model-performance');
+  assert.deepEqual(labels(build('global-routing')), ['网关管理', '路由设置（全局）']);
+  assert.deepEqual(build('license'), [{ label: '平台管理' }, { label: '授权管理' }]);
+  assert.deepEqual(labels(build('model-prices', 'service=example')), ['商业运营', '模型售卖', '售卖详情']);
   assert.equal(build('tenants')[0].href, undefined);
   assert.deepEqual(labels(build('tenants')), ['访问控制', '租户管理']);
   assert.deepEqual(labels(build('tenants', 'scope=organization', { internal: true })), ['访问控制', '租户管理']);
@@ -129,30 +165,59 @@ test('section breadcrumbs open a real landing page and current pages remain plai
   const allProjects = build('projects','tenant=test&project=p1&fromList=all&tab=keys&page=2',{project:'热线项目'});
   assert.equal(allProjects[1].href, '#/admin-2/projects?page=2');
   assert.equal(build('deployments')[0].href, '#/admin-2/clusters');
-  assert.deepEqual(labels(build('monitoring')), ['网关管理', '服务监控']);
   assert.deepEqual(labels(build('providers-health')), ['模型运营', '模型接入', '连接健康']);
   assert.equal(build('limits')[1].href, '#/admin-2/routes');
-  const alerts = build('alerts');
-  assert.equal(alerts[1].href, '#/admin-2/monitoring');
-  assert.equal(alerts.at(-1).href, undefined);
 });
 
 test('retired model operations addresses resolve to the role workspace home', () => {
   for (const page of ['listing', 'providers', 'providers-new', 'model-costs', 'getting-started']) {
     assert.equal(pageFromHash('#/admin-2/' + page + '?q=GLM', '运营人员'), 'dashboard');
-    assert.equal(pageFromHash('#/admin-2/' + page, '运维人员'), 'call-analysis');
+    assert.equal(pageFromHash('#/admin-2/' + page, '运维人员'), 'model-performance');
     assert.equal(canAccessPage('平台管理员', page), false);
   }
 });
 
-test('model performance is a maintenance page beside the request analytics home', () => {
+test('model performance is the maintenance home', () => {
   const page = 'model-performance';
   assert.deepEqual(labels(build(page)), ['运行分析', '模型性能']);
-  assert.equal(build(page)[0].href, '#/admin-2/call-analysis');
+  assert.equal(build(page)[0].href, undefined);
   assert.equal(pageFromHash('#/admin-2/' + page, '运维人员'), page);
   assert.equal(canAccessPage('运维人员', page), true);
   assert.equal(canAccessPage('平台管理员', page), true);
   assert.equal(canAccessPage('运营人员', page), false);
+});
+
+test('cluster management is the first model inference entry and shares a navigation item across three tabs', () => {
+  const group = sections.find(group => group.id === 'ops-model-service');
+  assert.ok(group.items.some(item => item.id === 'ops-model-library'));
+  assert.deepEqual(group.items[0].children, [['clusters', '集群'], ['ops-nodes', '节点'], ['ops-gpus', 'GPU']]);
+  for (const [id, label] of group.items[0].children) {
+    const crumbs = build(id);
+    assert.deepEqual(labels(crumbs), ['模型推理', '集群管理', label]);
+    assert.equal(crumbs[1].href, id === 'clusters' ? undefined : '#/admin-2/clusters');
+  }
+  assert.equal(isInfrastructurePage('clusters'), false);
+  assert.equal(isInfrastructurePage('ops-nodes'), true);
+  assert.equal(isInfrastructurePage('ops-gpus'), true);
+  assert.equal(sections.some(group => ['gpu-service', 'ops-resources'].includes(group.id)), false);
+  for (const { children } of group.items) {
+    for (const [id] of children) {
+      assert.equal(pageFromHash('#/admin-2/' + id, '运维人员'), id);
+      assert.equal(canAccessPage('运维人员', id), true);
+      assert.equal(canAccessPage('平台管理员', id), true);
+      assert.equal(canAccessPage('运营人员', id), false);
+    }
+  }
+});
+
+test('retired maintenance pages have neither navigation entries nor direct access', () => {
+  for (const id of ['call-analysis', 'monitoring', 'alerts', 'incidents', 'sla',
+    'ops-model-routes', 'ops-model-providers', 'gpu-ssh-keys', 'ops-cloud-credentials', 'artifacts', 'model-observability',
+    'gpu-instances', 'gpu-instance-types', 'gpu-instance-templates', 'gpu-storage', 'gpu-storage-types']) {
+    assert.equal(canAccessPage('平台管理员', id), false);
+    assert.equal(pageFromHash('#/admin-2/' + id, '运维人员'), 'model-performance');
+    assert.equal(pageFromHash('#/admin-2/' + id, '平台管理员'), 'dashboard');
+  }
 });
 
 test('model operations is a navigation group, not a link to a sibling model-service page', () => {

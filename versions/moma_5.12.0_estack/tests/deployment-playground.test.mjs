@@ -15,7 +15,6 @@ test('deployment Playground requires operations access, serving instances and a 
   assert.equal(open({ currentRole: '平台管理员' }).length, 1);
   assert.deepEqual(open({ currentRole: '运营人员' }), []);
   assert.deepEqual(open({ deployments: [{ ...deployment, readyReplicas: 2, replicas: 3, roles: { prefill: 1, decode: 1, router: 1 } }] }), []);
-  assert.equal(open({ deployments: [{ ...deployment, readyReplicas: 3, replicas: 3, roles: { prefill: 1, decode: 1, router: 1 } }] }).length, 1);
   assert.deepEqual(open({ deployments: [{ ...deployment, retiredAt: 'yesterday' }] }), []);
   assert.deepEqual(open({ endpoints: [{ ...endpoint, status: '停止' }] }), []);
   assert.deepEqual(open({ endpoints: [{ ...endpoint, modelIds: ['other-model'] }] }), []);

@@ -1,0 +1,41 @@
+.benchmark-editor .benchmark-fields,
+.benchmark-editor .benchmark-field,
+.benchmark-editor .benchmark-editor-rows {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.benchmark-editor .benchmark-field { gap: 6px; }
+.benchmark-editor .benchmark-field label,
+.benchmark-editor .benchmark-editor-rows legend { font-weight: 600; }
+.benchmark-editor .benchmark-field > :is(.semi-select, .semi-input-number) { width: 100%; }
+.benchmark-editor .benchmark-fields { padding-block: 16px; }
+.benchmark-editor .benchmark-required { color: var(--semi-color-danger); }
+.benchmark-editor .benchmark-field-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 138px), 1fr));
+  min-width: 0;
+}
+
+.benchmark-editor .benchmark-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: end;
+  gap: 8px;
+}
+
+.benchmark-editor .benchmark-editor-rows { border: 0; margin: 0; padding: 0; }
+.benchmark-editor .benchmark-editor-rows legend { padding-block-end: 8px; }
+.benchmark-editor .benchmark-editor-rows > .semi-button { justify-self: start; }
+.benchmark-editor .benchmark-toggle { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+.benchmark-results { inline-size: 100%; min-inline-size: 0; }
+.benchmark-results-stack { display: grid; gap: 12px; min-inline-size: 0; }
+.benchmark-result-table { max-inline-size: 100%; min-inline-size: 0; overflow: auto; }
+.benchmark-point-highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+}

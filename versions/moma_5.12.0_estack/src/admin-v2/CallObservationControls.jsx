@@ -11,7 +11,7 @@ import {
 import { SemiDateRange, SemiMultiPick } from './SemiAnalyticsFilters';
 import { AnalysisHelp } from './AnalysisMetric';
 
-export function ObservationTimeRange({ filters, window, onChange, children }) {
+export function ObservationTimeRange({ filters, window, onChange }) {
   const t = useChannelText();
   const custom = filters.period === 'custom';
   const time = window ? observationTime(window.start).slice(0, 16) + ' — ' + observationTime(window.end).slice(0, 16) : '自定义';
@@ -25,7 +25,6 @@ export function ObservationTimeRange({ filters, window, onChange, children }) {
     </FilterPresets>
     <Typography.Text type="secondary">{t('北京时间')}</Typography.Text>
     {window && <AnalysisHelp label={t('统计时间')}>{time}</AnalysisHelp>}
-    {children}
   </>;
 }
 
@@ -177,8 +176,8 @@ export function ObservationSupplyPick({ treeData, value, group, onChange }) {
     treeData={treeData} value={value} onChange={change}/>;
 }
 
-export function ObservationPlot({ title, actions, compact = true, ...props }) {
-  return <Card title={<Typography.Title heading={5} component="h2">{title}</Typography.Title>} headerExtraContent={actions}>
-    <TimeSeriesChart compact={compact} label={title} height={260} {...props}/>
+export function ObservationPlot({ title, ...props }) {
+  return <Card title={<Typography.Title heading={5} component="h2">{title}</Typography.Title>}>
+    <TimeSeriesChart compact label={title} height={260} {...props}/>
   </Card>;
 }

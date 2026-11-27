@@ -1,40 +1,38 @@
 import { dump } from 'js-yaml';
-import { gpuStackCatalogue } from './model-catalogue-data.js';
+import { callLogWorkbook } from './call-log-xlsx.mjs';
+import { alignedBenchmarkExportFields, alignBenchmarkPage, cloneAlignedBenchmark, completeAlignedBenchmark, isBenchmarkTargetReady } from './benchmark-alignment.js';
 import { INFERENCE_BACKEND_PAGE } from './inference-backend.js';
+import { gpuStackCatalogue } from './model-catalogue-data.js';
+import { browseCatalogue, catalogueCategoryLabels } from './model-catalogue.js';
+import { activeCacheProvider, cacheDeclaredValues, cacheFieldState, cacheL2Issue, cacheL2Values, cacheProviderCatalogue, cacheProviderFields, cacheRequestedMemory, cacheVersionsForProvider, configuredCacheProviders } from './cache-provider-fields.js';
+import { labelIssue, labelList, labelMap, normalizedLabelPairs } from './ops-resources.js';
+import { deploymentInstances } from './deployments.js';
 
 const benchmarksPage = 'ops-benchmarks';
 const backendsPage = 'ops-inference-backends';
 const cachePage = 'ops-cache-acceleration';
 const nodesPage = 'ops-nodes';
 const filesPage = 'ops-model-files';
-const categories = ['语言模型', '多模态理解', '向量模型', '重排序', '图像生成', '语音'];
+export const catalogueCategories = { llm: '语言模型', embedding: '向量模型', reranker: '重排序', image: '图像生成',
+  text_to_speech: '语音合成', speech_to_text: '语音识别', decision: '决策', vision: '多模态理解', audio: '语音' };
 const sources = ['Hugging Face', 'ModelScope', '本地路径'];
-const benchmarkProfiles = ['自定义', '吞吐量', '延迟 SLO'];
-const cacheVersions = { LMCache: ['0.4.2', '0.4.1', '自定义'], Mooncake: ['外部服务'], 'XSKY MeshFusion': ['自定义'] };
-const cacheProviders = Object.keys(cacheVersions);
 const list = (records, page) => records[page] || [];
 const find = (records, page, id) => list(records, page).find(row => row.id === id);
 const labelOf = page => (id, _row, records) => find(records, page, id)?.name || (id ? '记录不可用' : undefined);
 const optionsOf = (records, page, match = () => true) => list(records, page).filter(match).map(row => ({ value: row.id, label: row.name }));
-const names = value => String(value || '').split(/[\n,，]/).map(item => item.trim()).filter(Boolean);
 const field = (key, label, config) => ({ key, label, ...config });
 const name = label => field('name', label, { required: true });
 const select = (key, label, options, config) => field(key, label, { type: 'select', options, ...config });
-const quantity = (key, label, min, max, defaultValue, config) => field(key, label, { type: 'number', min, max, step: 1, defaultValue, ...config });
 const description = field('description', '描述', { type: 'textarea' });
 const created = field('createdAt', '创建时间', { width: 165, sorter: true });
 const status = field('status', '状态', { status: true, width: 100 });
 const suffix = unit => value => value == null || value === '' ? undefined : `${value} ${unit}`;
-const yesNo = value => value == null ? undefined : value ? '是' : '否';
-const lockedAfterCreate = (_draft, current) => Boolean(current);
 const clusterOptions = records => optionsOf(records, 'clusters', row => row.status === '运行中');
 const nodeOptions = (records, draft) => optionsOf(records, nodesPage, row => row.status === '就绪' && (!draft.clusterId || row.clusterId === draft.clusterId));
 const benchmarkActive = row => ['排队中', '运行中'].includes(row.status);
-const readyDeployment = row => row?.status === '运行中' && row.readyReplicas > 0;
+export const benchmarkLog = row => (row.runEvents || [{ at: row.createdAt, message: `模拟测试已登记，状态为${row.status}。` }]);
 const targetName = (value, row, records) => row.targetName || labelOf('deployments')(value, row, records);
-const deploymentTargets = (records, draft) => optionsOf(records, 'deployments', row => readyDeployment(row) && row.clusterId === draft.clusterId);
-const benchmarkTargetReady = (row, records) => deploymentTargets(records, row).some(option => option.value === row.targetId);
-const absolutePath = value => /^\/[\w./-]+$/.test(value || '') && !value.split('/').includes('..');
+const benchmarkTargetReady = isBenchmarkTargetReady;
 const urlValid = value => {
   try {
     const url = new URL(value);
@@ -44,7 +42,6 @@ const urlValid = value => {
   }
 };
 
-const backendRegistry = records => list(records, backendsPage).map(row => row.name);
 const jsonData = object => JSON.stringify(object, null, 2);
 const yamlData = object => dump(object, { noRefs: true, lineWidth: 100 });
 const artifact = (name, content, type = 'text/plain;charset=utf-8') => ({ name, content, type });
@@ -56,24 +53,17 @@ export function linkedDeploymentModel(row, models) {
   return matches.length === 1 ? matches[0] : undefined;
 }
 
-const catalogueCategoriesById = {
-  llm:'语言模型', embedding:'向量模型', reranker:'重排序', image:'图像生成', audio:'语音',
-  text_to_speech:'语音', speech_to_text:'语音', vision:'多模态理解',
-};
-
 const modelCatalog = {
   title: '模型库',
-  description: '查找受支持的模型与部署配置。',
-  searchPlaceholder: '搜索模型、作者或仓库',
-  searchKeys: ['name', 'maker', 'repository'],
-  views: ['cards', 'table'],
-  loadMore: true,
-  columns: [field('name', '模型', { width: 215 }), field('category', '类型'), field('spec', '部署配置'), field('backend', '推理后端'), field('source', '来源'), field('license', '许可证')],
-  filters: [field('category', '类型', { options: categories }), field('backend', '推理后端', { options: backendRegistry })],
-  detail: [field('name', '模型名称'), field('category', '类型'), field('maker', '作者'), field('source', '来源'), field('repository', '模型仓库'), field('backend', '推荐推理后端'), field('spec', '部署配置'), field('license', '许可证'), field('modelCode', '部署对象', { format: (_value, row, records) => linkedDeploymentModel(row, records.deployableModels)?.name || '待关联模型资料' }), description],
+  searchPlaceholder: '名称搜索',
+  searchRows: browseCatalogue,
+  views: ['cards'], initialPageSize: 24, loadMore: true, loadOnScroll: true,
+  actionsInToolbar: true, hideResetFilter: true,
+  columns: [field('name', '模型')],
+  filters: [field('category', '类别', { options: Object.entries(catalogueCategoryLabels).map(([value, label]) => ({ value, label })),
+    match: (value, row) => row.categories?.includes(value) || row.category === catalogueCategories[value] })],
   editable: false,
   deletable: false,
-  actions: [{ label: '部署', target: { page: 'deployments', mode: 'create', field: 'catalogModel' } }],
   seed: [
     { id: 'catalog-glm52', name: 'GLM-5.2', modelCode: 'glm-5.2', category: '语言模型', maker: '智谱 AI', source: 'Hugging Face', repository: 'zai-org/GLM-5.2-FP8', spec: '高吞吐 · FP8', backend: 'SGLang', license: 'MIT', description: '长上下文推理、复杂代码工程与多步任务。' },
     { id: 'catalog-glm53', name: 'GLM-5.3', modelCode: 'glm-5.3', category: '语言模型', maker: '智谱 AI', source: 'Hugging Face', repository: 'zai-org/GLM-5.3', spec: '标准 · FP8', backend: 'vLLM', license: 'GLM-5.3', description: '支持长上下文推理、编程和多步工具调用。' },
@@ -85,20 +75,21 @@ const modelCatalog = {
   ],
 };
 
-const legacyCatalogueNames = new Set(modelCatalog.seed.map(row=>row.name.toLowerCase()));
-const officialCatalogueByName = new Map(gpuStackCatalogue.map(row=>[row.name.toLowerCase(),row]));
+const linkedCatalogueRows = modelCatalog.seed;
+const officialCatalogueNames = new Set(gpuStackCatalogue.map(item => item.name.toLowerCase()));
 modelCatalog.seed = [
-  ...modelCatalog.seed.map(row=>{
-    const official = officialCatalogueByName.get(row.name.toLowerCase());
-    return official ? { ...row, specs:official.specs } : row;
+  ...gpuStackCatalogue.map(row => {
+    const existing = linkedCatalogueRows.find(item => item.name.toLowerCase() === row.name.toLowerCase());
+    const top = row.specs[0];
+    return {
+      id: 'catalog-upstream-' + encodeURIComponent(row.name.toLowerCase()).replaceAll('%', '_'),
+      ...existing, ...row, name: existing?.name || row.name,
+      source: top.source === 'model_scope' ? 'ModelScope' : 'Hugging Face',
+      repository: top.repository, backend: top.backend, spec: top.mode,
+      license: row.licenses?.join('、') || existing?.license, category: catalogueCategories[row.categories?.[0]],
+    };
   }),
-  ...gpuStackCatalogue.filter(row=>!legacyCatalogueNames.has(row.name.toLowerCase())).map(row=>{
-    const spec = row.specs[0];
-    const source = { huggingface:'Hugging Face', model_scope:'ModelScope', local_path:'本地路径' };
-    return { ...row, id:'catalog-upstream-' + encodeURIComponent(row.name.toLowerCase()).replaceAll('%','_'),
-      category:catalogueCategoriesById[row.categories?.[0]] || '语言模型', source:source[spec.source],
-      repository:spec.repository, backend:spec.backend, spec:spec.mode, license:row.licenses?.join('、') };
-  }),
+  ...linkedCatalogueRows.filter(row => !officialCatalogueNames.has(row.name.toLowerCase())),
 ];
 
 export function benchmarkExport(rows) {
@@ -112,19 +103,20 @@ export function benchmarkExport(rows) {
     dataset_seed: row.randomSeed, load_type: row.loadType === '并发数' ? 'concurrency' : 'fixed_rate', request_rate: row.load,
     total_requests: row.requests, max_seconds: row.duration, slo_p95_ttft_ms: row.latencySlo,
     stages: row.stages?.map(stage => ({ rate: stage.load, max_requests: stage.requests, max_seconds: stage.duration })),
+    ...alignedBenchmarkExportFields(row),
     result: row.status === '已完成' ? { source: 'simulated', completed_requests: row.completed, success_rate: row.resultRate,
       output_tokens_per_second: row.throughput, time_to_first_token_p95: row.ttft, inter_token_latency_p95: row.tpot, request_latency_p95_ms: row.totalLatency } : undefined,
   }));
-  return artifact(rows.length === 1 ? `benchmark-${rows[0].id}.yaml` : 'benchmark-results.yaml', yamlData({ benchmarks: results }), 'application/yaml');
-}
-function duplicateName(name, rows) {
-  const names = new Set(rows.map(row => row.name.toLocaleLowerCase()));
-  let next = `${name}-copy`;
-  let sequence = 2;
-  while (names.has(next.toLocaleLowerCase())) next = `${name}-copy-${sequence++}`;
-  return next;
+  return artifact(rows.length === 1 ? `benchmark-${rows[0].id}.yml` : 'benchmark-results.yml', yamlData({ benchmarks: results }), 'application/yaml');
 }
 
+function benchmarkWorkbook(rows, records, columns) {
+  const headers = columns.map(column => column.label);
+  const data = rows.map(row => columns.map(column => column.key === 'targetId' ? targetName(row.targetId, row, records) :
+    typeof row[column.key] === 'number' ? row[column.key] : column.format?.(row[column.key], row, records) ?? row[column.key]));
+  return artifact('benchmark.xlsx', callLogWorkbook([headers, ...data], 'benchmark_data'),
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
 function benchmarkResults(row) {
   const requests = Number(row.requests) || 500;
   const load = Number(row.load) || 1;
@@ -150,13 +142,20 @@ function benchmarkResults(row) {
 }
 
 const addRunEvent = (row, message) => [...(row.runEvents || []), { at: new Date().toISOString(), message }];
-const stagedProfile = draft => draft.loadPattern === '手工分阶段';
-const adaptiveProfile = draft => draft.loadPattern === '自动调优';
-const randomDataset = draft => draft.dataset === 'Random';
-const latencyProfile = draft => draft.profile === '延迟 SLO';
-export function benchmarkClone(row, records) {
-  const targetId = benchmarkTargetReady(row, records) ? row.targetId : '';
-  return { ...row, name: duplicateName(row.name, list(records, benchmarksPage)), targetId, replica: targetId ? row.replica : 1 };
+export const benchmarkClone = cloneAlignedBenchmark;
+
+function completedBenchmarkSeed(row) {
+  const submittedAt = new Date(row.createdAt);
+  const result = completeAlignedBenchmark(row, submittedAt);
+  const duration = result.stageResults.reduce((total, stage) => total + stage.duration, 0);
+  const finishedAt = new Date(submittedAt.getTime() + Math.ceil(duration * 1000)).toISOString();
+  return { ...row, ...result, duration, finishedAt,
+    environment: { ...row.environment, deployment: row.modelName, capturedAt: row.createdAt, targetInstanceId: row.targetSelection },
+    runEvents: [
+      { at: row.createdAt, message: `开始模拟测试，目标实例 ${row.modelInstanceName}。` },
+      ...result.runEvents.map(event => ({ ...event, at: finishedAt })),
+    ],
+  };
 }
 
 const benchmarks = {
@@ -174,264 +173,506 @@ const benchmarks = {
   actionWidth: 128,
   columns: [field('name', '测试名称', { width: 170 }), field('targetId', '测试对象', { format: targetName, width: 195 }), field('profile', '测试方案'), status, field('throughput', '输出吞吐量', { format: suffix('Token/s') }), field('ttft', 'P95 TTFT', { format: suffix('ms') }), created],
   filters: [field('status', '测试状态', { options: ['排队中', '运行中', '已完成', '已停止', '失败'] }), field('clusterId', '集群', { options: records => optionsOf(records, 'clusters') })],
-  fields: [name('测试名称'), description,
-    select('clusterId', '执行集群', clusterOptions, { required: true, disabled: lockedAfterCreate }),
-    select('targetId', '测试对象', deploymentTargets, { required: true, disabled: lockedAfterCreate }),
-    quantity('replica', '模型副本序号', 1, 100, 1, { required: true, disabled: lockedAfterCreate }),
-    select('profile', '测试方案', benchmarkProfiles, { required: true, defaultValue: '自定义', disabled: lockedAfterCreate, group: '数据集' }),
-    select('dataset', '数据集', ['Random', 'ShareGPT'], { defaultValue: 'Random', required: true, disabled: lockedAfterCreate, group: '数据集' }),
-    quantity('inputTokens', '输入长度（Token）', 1, 1048576, 512, { required: true, disabled: lockedAfterCreate, visible: randomDataset, group: '数据集' }),
-    quantity('outputTokens', '输出长度（Token）', 1, 1048576, 128, { required: true, disabled: lockedAfterCreate, visible: randomDataset, group: '数据集' }),
-    field('pinSeed', '固定随机种子', { type: 'switch', disabled: lockedAfterCreate, visible: randomDataset, group: '数据集' }),
-    quantity('randomSeed', '随机种子', 1, 2147483647, 42, { required: true, disabled: lockedAfterCreate, visible: draft => randomDataset(draft) && draft.pinSeed, group: '数据集' }),
-    field('incrementSeed', '每个阶段递增种子', { type: 'switch', defaultValue: true, disabled: lockedAfterCreate, visible: draft => randomDataset(draft) && draft.loadPattern !== '单次', group: '数据集' }),
-    field('tokenDistribution', '使用 Token 长度分布', { type: 'switch', disabled: lockedAfterCreate, visible: randomDataset, group: '数据集' }),
-    quantity('inputStdev', '输入长度标准差', 0, 1048576, 64, { disabled: lockedAfterCreate, visible: draft => randomDataset(draft) && draft.tokenDistribution, group: '数据集' }),
-    quantity('outputStdev', '输出长度标准差', 0, 1048576, 16, { disabled: lockedAfterCreate, visible: draft => randomDataset(draft) && draft.tokenDistribution, group: '数据集' }),
-    quantity('turns', '对话轮数', 1, 100, 1, { disabled: lockedAfterCreate, group: '数据集' }),
-    select('loadType', '负载类型', ['固定请求速率', '并发数'], { defaultValue: '固定请求速率', required: true, disabled: lockedAfterCreate, group: '负载配置' }),
-    select('loadPattern', '负载模式', ['单次', '手工分阶段', '自动调优'], { defaultValue: '单次', required: true, disabled: lockedAfterCreate, group: '负载配置' }),
-    quantity('load', '负载值（请求/秒或并发数）', 1, 10000, 8, { required: true, disabled: lockedAfterCreate, visible: draft => !stagedProfile(draft) && !adaptiveProfile(draft), group: '负载配置' }),
-    quantity('requests', '请求总数', 1, 1000000, 500, { required: true, disabled: lockedAfterCreate, visible: draft => !stagedProfile(draft), group: '负载配置' }),
-    quantity('duration', '最长时长（秒）', 1, 86400, 120, { required: true, disabled: lockedAfterCreate, visible: draft => !stagedProfile(draft), group: '负载配置' }),
-    field('stages', '阶段', { type: 'benchmarkStages', fullWidth: true, defaultValue: [{ load: 8, requests: 200, duration: 60 }], visible: stagedProfile, disabled: lockedAfterCreate, group: '负载配置' }),
-    quantity('minLoad', '负载下限', 1, 10000, 1, { required: true, disabled: lockedAfterCreate, visible: adaptiveProfile, group: '负载配置' }),
-    quantity('maxLoad', '负载上限', 1, 10000, 64, { required: true, disabled: lockedAfterCreate, visible: adaptiveProfile, group: '负载配置' }),
-    quantity('maxPoints', '最大测量点数', 1, 100, 8, { required: true, disabled: lockedAfterCreate, visible: adaptiveProfile, group: '负载配置' }),
-    quantity('latencySlo', 'P95 首 Token 时延目标（ms）', 1, 60000, 800, { required: true, disabled: lockedAfterCreate, visible: latencyProfile, group: 'SLO' }),
-    quantity('tpotSlo', 'P95 输出 Token 时延目标（ms）', 1, 60000, '', { disabled: lockedAfterCreate, visible: latencyProfile, group: 'SLO' }),
-    quantity('totalLatencySlo', 'P95 端到端时延目标（ms）', 1, 60000, '', { disabled: lockedAfterCreate, visible: latencyProfile, group: 'SLO' }),
-    quantity('warmup', '预热请求数', 0, 1000000, 3, { disabled: lockedAfterCreate, group: '高级配置' }),
-    quantity('cooldown', '冷却时长（秒）', 0, 3600, 0, { disabled: lockedAfterCreate, group: '高级配置' }),
-    quantity('maxErrors', '错误数上限', 1, 1000000, '', { disabled: lockedAfterCreate, group: '高级配置' }),
-    field('stopOnSaturation', '饱和时停止', { type: 'switch', disabled: lockedAfterCreate, group: '高级配置' }),
-  ],
-  onFieldChange(_draft, key, value) {
-    if (key === 'clusterId') return { targetId: '', replica: 1 };
-    if (key === 'targetId') return { replica: 1 };
-    if (key === 'profile' && value === '吞吐量') return { dataset: 'ShareGPT', loadType: '固定请求速率', loadPattern: '自动调优' };
-    if (key === 'profile' && value === '延迟 SLO') return { loadType: '并发数', loadPattern: '自动调优' };
-  },
+  fields: [name('测试名称'), description],
   detail: [field('name', '测试名称'), field('clusterId', '执行集群', { format: labelOf('clusters') }), field('targetMode', '目标类型'), field('targetId', '测试对象', { format: targetName }), field('profile', '测试方案'), field('dataset', '数据集'), field('loadType', '负载类型'), field('load', '负载值'), field('requests', '请求数'), field('completed', '成功请求数'), field('resultRate', '成功率', { format: value => value == null ? undefined : `${value.toFixed(2)}%` }), field('throughput', '输出吞吐量', { format: suffix('Token/s') }), field('ttft', 'P95 TTFT', { format: suffix('ms') }), field('tpot', 'P95 TPOT', { format: suffix('ms') }), field('latencySlo', 'P95 TTFT 目标', { format: suffix('ms') }), field('resultSource', '结果来源'), status, description, created],
-  validate(draft, records, current) {
-    if (current) return;
-    if (stagedProfile(draft) && (!draft.stages?.length || draft.stages.some(stage => ![stage.load, stage.requests, stage.duration].every(value => Number.isInteger(value) && value > 0)))) return '至少配置一个阶段，负载、请求数和时长须为正整数。';
-    if (adaptiveProfile(draft) && draft.maxLoad < draft.minLoad) return '负载上限不能小于下限。';
-    const deployment = find(records, 'deployments', draft.targetId);
-    if (!readyDeployment(deployment) || deployment.clusterId !== draft.clusterId) return '请选择所选集群中有就绪副本的模型部署。';
-    if (!Number.isInteger(Number(draft.replica)) || Number(draft.replica) < 1 || Number(draft.replica) > deployment.readyReplicas) return '副本序号超出当前部署的就绪副本范围。';
-  },
-  save(draft, records, current) {
-    if (current) return {};
-    const row = find(records, 'deployments', draft.targetId);
-    const requests = stagedProfile(draft) ? draft.stages.reduce((total, stage) => total + stage.requests, 0) : draft.requests;
-    const load = stagedProfile(draft) ? draft.stages.at(-1).load : adaptiveProfile(draft) ? draft.maxLoad : draft.load;
-    const node = list(records, nodesPage).find(node => node.clusterId === draft.clusterId && node.status === '就绪');
-    return { status: '排队中', operationStartedAt: Date.now(), targetMode: '模型实例', targetName: `${row.name} · 副本 ${draft.replica}`,
-      requests, load, randomSeed: randomDataset(draft) ? draft.pinSeed ? draft.randomSeed : Math.floor(Math.random() * 2147483646) + 1 : null,
-      environment: { cluster: find(records, 'clusters', draft.clusterId)?.name, node: node?.name, gpu: find(records, 'clusters', draft.clusterId)?.gpuType },
-      runEvents: addRunEvent({}, '基准测试已提交，等待模拟执行。'),
-      latencySlo: draft.profile === '延迟 SLO' ? draft.latencySlo : null };
-  },
-  canDelete: row => benchmarkActive(row) ? '请先停止正在排队或运行的测试。' : undefined,
   actions: [
     { label: '克隆', editor: { create: true, title: '克隆基准测试', prefill: benchmarkClone,
-      validate: (...args) => benchmarks.validate(...args), save: (...args) => benchmarks.save(...args),
     } },
     { label: '查看日志', panel: 'logs', sheet: true },
-    { label: '模拟开始测试', when: (row, records) => row.status === '排队中' && !row.operationStartedAt && benchmarkTargetReady(row, records), apply: row => ({ status: '运行中', operationStartedAt: Date.now(), runEvents: addRunEvent(row, '模拟执行开始。') }) },
-    { label: '生成模拟结果', when: (row, records) => row.status === '运行中' && !row.operationStartedAt && benchmarkTargetReady(row, records), apply: benchmarkResults },
     { label: '停止', when: benchmarkActive, confirm: '停止本次测试？已提交的测试参数将保留。', apply: row => ({ status: '已停止', operationStartedAt: null, runEvents: addRunEvent(row, '已停止模拟执行。') }) },
     { label: '导出结果', when: row => row.status === '已完成', download: row => benchmarkExport([row]) },
   ],
   batchActions: [
-    { label: '导出选中结果', when: rows => rows.length > 0 && rows.length <= 20, download: benchmarkExport },
+    { label: '导出选中结果', when: rows => rows.length > 0, download: benchmarkWorkbook },
     { label: '批量删除', when: rows => rows.length > 0 && rows.every(row => !benchmarkActive(row)), confirm: '删除所选基准测试和模拟报告？', apply: () => [] },
   ],
   seed: [
     { id: 'bench-glm-throughput', name: 'GLM-5.2 吞吐基线', profile: '吞吐量', clusterId: 'cluster-sz-a', targetMode: '模型实例', targetId: 'deployment-glm', replica: 1, targetName: 'GLM-5.2 生产服务 · 副本 1', dataset: 'ShareGPT', loadType: '并发数', load: 16, requests: 600, completed: 597, duration: 180, throughput: 1217, ttft: 342, tpot: 18.2, resultRate: 99.5, resultSource: '模拟结果', status: '已完成', createdAt: '2026-11-24 10:12:00' },
     { id: 'bench-glm-regression', name: 'GLM-5.2 固定速率回归', profile: '自定义', clusterId: 'cluster-sz-a', targetMode: '模型实例', targetId: 'deployment-glm', replica: 2, targetName: 'GLM-5.2 生产服务 · 副本 2', dataset: 'Random', inputTokens: 1024, outputTokens: 128, loadType: '固定请求速率', load: 8, requests: 500, duration: 120, status: '已停止', createdAt: '2026-11-25 15:30:00' },
+    completedBenchmarkSeed({
+      id: 'bench-ds-throughput-nj', name: 'DeepSeek-V4-Pro 南京吞吐摸底', profile: '最大吞吐量',
+      clusterId: 'cluster-nj-a', targetMode: '模型实例', targetId: 'deployment-ds', targetSelection: 'deployment-ds:1',
+      modelName: 'DeepSeek-V4-Pro 生产服务', modelInstanceName: 'deploy-deepseek-v4-1',
+      targetName: 'DeepSeek-V4-Pro 生产服务 / deploy-deepseek-v4-h7m2k', replica: 1,
+      dataset: 'Random', inputTokens: 2048, outputTokens: 128, loadType: '固定请求速率', loadPattern: '自动调优',
+      minLoad: 2, maxLoad: 12, maxPoints: 6, maxTotalSeconds: 1200, pinSeed: true, randomSeed: 113,
+      createdAt: '2026-11-26T15:10:00+08:00',
+      environment: { cluster: '南京智算一池', node: 'worker-nj-a-01', gpu: 'H20',
+        cacheServices: [{ id: 'cache-nanjing', name: 'nj-inference-kv' }] },
+    }),
+    completedBenchmarkSeed({
+      id: 'bench-glm-latency-sz', name: 'GLM-5.2 苏州延迟巡检', profile: '满足延迟 SLO',
+      clusterId: 'cluster-sz-a', targetMode: '模型实例', targetId: 'deployment-glm', targetSelection: 'deployment-glm:1',
+      modelName: 'GLM-5.2 生产服务', modelInstanceName: 'deploy-glm-52-1',
+      targetName: 'GLM-5.2 生产服务 / deploy-glm-52-a9k3m', replica: 1,
+      dataset: 'Random', inputTokens: 512, outputTokens: 128, loadType: '并发数', loadPattern: '自动调优',
+      minLoad: 4, maxLoad: 32, maxPoints: 8, maxTotalSeconds: 1200, pinSeed: true, randomSeed: 214,
+      sloTargets: { p95Ttft: 260, p95Tpot: 16 }, latencySlo: 260, tpotSlo: 16,
+      createdAt: '2026-11-27T09:40:00+08:00',
+      environment: { cluster: '苏州智算一池', node: 'worker-sz-a-01', gpu: 'L40S',
+        cacheServices: [{ id: 'cache-suzhou-glm', name: 'sz-glm-lmcache' }] },
+    }),
   ],
 };
 
 const plainEnv = value => !value || String(value).split('\n').filter(line => line.trim()).every(line => /^[A-Za-z_][A-Za-z0-9_]*=[^\n]*$/.test(line) && !/(?:TOKEN|SECRET|PASSWORD|API_KEY|CREDENTIAL)/i.test(line.split('=')[0]));
+
 const externalCache = draft => draft.provider === 'Mooncake';
-const l2Options = ['无', '本地文件系统', 'Redis / Valkey', 'S3'];
+export function cacheParameterGroups(draft, framework) {
+  const provider = activeCacheProvider(draft.provider);
+  if (!provider?.components?.length) return [{ key:'main',label:'启动参数' }];
+  const fieldMap = new Map(cacheFieldState(provider,draft.providerValues,framework,draft).map(item=>[item.field.key,item.effective]));
+  return provider.components.filter(role=>!role.enabledBy ||
+    (fieldMap.get(role.enabledBy) ?? draft[role.enabledBy]) === role.enabledWhen);
+}
+const pairKeysUnique = entries => new Set(entries.map(entry => entry.split('=')[0])).size === entries.length;
 const cacheNodes = (records, draft) => nodeOptions(records, draft).filter(option => {
-  const labels = names(find(records, nodesPage, option.value)?.labels);
-  return names(draft.selector).every(label => labels.includes(label));
+  const labels = labelMap(find(records, nodesPage, option.value)?.labels);
+  return normalizedLabelPairs(draft.selector).every(([key,value]) => labels.get(key) === value);
 });
-export const cacheAttachments = (row, records) => list(records, 'deployments').filter(deployment => [deployment, deployment.previousConfig].some(config => {
-  const cache = config?.cacheAcceleration;
-  return cache && cache.name === row.name && cache.provider === row.provider && cache.clusterId === row.clusterId;
-}));
+const acceleratorFramework = new Map([['nvidia','cuda'],['amd','rocm'],['ascend','cann'],['huawei','cann'],
+  ['hygon','dcu'],['cambricon','neuware'],['iluvatar','corex'],['metax','maca'],['moore threads','musa']]);
+function cacheWorkerFrameworks(worker, devices) {
+  const hardware = devices.filter(device=>device.nodeId===worker.id);
+  if (!hardware.length && worker.gpuCount === 0) return ['cpu'];
+  return hardware.map(device=>acceleratorFramework.get(String(device.vendor || '').toLowerCase()));
+}
+export function cacheClusterFrameworks(records, clusterId) {
+  const workers = list(records,nodesPage).filter(item=>item.clusterId===clusterId && item.status==='就绪');
+  const devices = list(records,'ops-gpus');
+  return [...new Set(workers.flatMap(worker=>cacheWorkerFrameworks(worker,devices)).filter(Boolean))];
+}
+export const singleCacheFramework = (records,clusterId) => {
+  const options = cacheClusterFrameworks(records,clusterId).filter(framework=>framework!=='cpu');
+  return options.length===1 ? options[0] : undefined;
+};
+const configurationUsesCache = (config, row) => config?.enabled !== false && config?.service?.id === row.id;
+const legacyUsesCache = (config, row) => config?.cacheAcceleration && config.cacheAcceleration.name === row.name &&
+  config.cacheAcceleration.provider === row.provider && config.cacheAcceleration.clusterId === row.clusterId;
+
+export const cacheAttachments = (row, records) => list(records, 'deployments').filter(deployment =>
+  [deployment, deployment.previousConfig, ...(deployment.configHistory || []).map(revision=>revision.config)].some(config =>
+    legacyUsesCache(config, row) || [config?.kvCache, ...Object.values(config?.roleConfigs || {}).map(role=>role.kvCache)]
+      .some(cache => configurationUsesCache(cache, row))));
+
+export function cacheAttachedInstances(row, records) {
+  const linked = cacheAttachments(row, records);
+  return deploymentInstances(linked, records).filter(({ state, role, deployment }) => {
+    if (state !== 'running' || role === 'router') return false;
+    const roleCache = deployment.roleConfigs?.[role]?.kvCache;
+    if (roleCache) return configurationUsesCache(roleCache, row);
+    return configurationUsesCache(deployment.kvCache, row) || legacyUsesCache(deployment, row);
+  });
+}
+export const cacheLogAvailable = state => ['启动中', '运行中', '异常', '不可达'].includes(state);
+export const cacheServiceLogAvailable = row => Boolean(row.workerId && activeCacheProvider(row.provider)?.topology !== 'per_node' && cacheLogAvailable(row.status));
 export const cacheInstances = (row, records) => {
   if (externalCache(row)) return row.serviceUrl ? [{ id: 'external', name: '外部服务', address: row.serviceUrl, state: row.status }] : [];
-  const candidates = cacheNodes(records, row).filter(node => !row.workerId || node.value === row.workerId);
+  const effective = row.runningConfiguration || row;
+  const candidates = cacheNodes(records, effective).filter(node => !effective.workerId || node.value === effective.workerId);
   const { state } = row.instanceStatus || {};
   const ready = Number.parseInt(row.ready, 10) || 0;
   return candidates.map((option, index) => ({ id: option.value, name: option.label,
     address: find(records, nodesPage, option.value)?.ip, state: state?.[option.value] ?? (row.status === '运行中' && index < ready ? '运行中' : row.status),
-    observedAt: row.instanceStatus?.events?.[option.value]?.at || '', memoryGiB: row.memoryGiB,
+    observedAt: row.instanceStatus?.events?.[option.value]?.at || '',
+    memoryGiB: row.instanceStatus?.revisions?.[option.value] === row.configRevision ? row.memoryGiB : effective.memoryGiB,
+    configPending: Boolean(row.runningConfiguration && row.instanceStatus?.revisions?.[option.value] !== row.configRevision),
   }));
 };
-export const cacheL2Entries = row => Array.isArray(row?.l2Entries) ? row.l2Entries : row?.l2Storage && row.l2Storage !== '无' ? [{ type: row.l2Storage, location: row.l2Location || '' }] : [];
+export const cacheL2Entries = row => (Array.isArray(row?.l2Entries) ? row.l2Entries : row?.l2Storage && row.l2Storage !== '无' ? [{ type: row.l2Storage, location: row.l2Location || '' }] : []).map(cacheL2Values);
 const cacheL2Config = (draft, current) => Array.isArray(draft.l2Entries) ? draft.l2Entries : cacheL2Entries(current);
-function configuredCacheProviders() {
-  try {
-    const settings = JSON.parse(globalThis.localStorage?.getItem('moma-5.12.0-estack:infrastructure:model-sources') || '{}');
-    return settings?.['cache-provider']?.definitions;
-  } catch { return undefined; }
-}
-const cacheProviderOptions = records => Array.from(new Set([...(configuredCacheProviders()?.map(item => item.name) || cacheProviders), ...list(records, cachePage).map(row => row.provider)]));
-const cacheVersionOptions = (_records, draft) => configuredCacheProviders()?.find(item => item.name === draft.provider)?.versions || cacheVersions[draft.provider] || ['自定义'];
+const cacheProviderOptions = records => Array.from(new Set([...(configuredCacheProviders() || cacheProviderCatalogue).map(item => item.name), ...list(records, cachePage).map(row => row.provider)]));
+const cacheVersionOptions = (records, draft, row) => cacheVersionsForProvider(activeCacheProvider(draft.provider),
+  records ? cacheClusterFrameworks(records,draft.clusterId) : [], row?.version);
 const cacheVersion = draft => {
-  const options = cacheVersionOptions(null, draft);
-  return options.length === 1 && options[0] === '自定义' ? '自定义' : draft.version;
+  const versions = cacheVersionOptions(null, draft);
+  return versions.length === 1 && versions[0] === '自定义' ? '自定义' : draft.version;
 };
 const cacheLog = (row, message) => [...(row.cacheEvents || []), { at: new Date().toISOString(), message }];
-export const cacheL2Kinds = l2Options.filter(option => option !== '无');
+
+const cacheWorkerPicker = draft => {
+  const provider = activeCacheProvider(draft.provider);
+  return !externalCache(draft) && provider?.topology !== 'per_node' && !provider?.components?.length;
+};
+const defaultCacheCluster = records => records.clusters?.find(row=>row.isDefault && row.status==='运行中')?.id ??
+  records.clusters?.find(row=>row.status==='运行中')?.id;
+const freeMemory = node => node.memoryGiB > 0 && Number.isFinite(node.ram) && node.ram >= 0 && node.ram <= 100
+  ? node.memoryGiB * (100 - node.ram) / 100 : undefined;
+const defaultCacheWorker = (draft, records) => cacheWorkerPicker(draft) ? cacheNodes(records,draft).map(option=>find(records,nodesPage,option.value))
+  .sort((left,right)=>(freeMemory(right) ?? -1) - (freeMemory(left) ?? -1))[0]?.id : undefined;
+
+export function cacheCreateDefaults(provider, records) {
+  const clusterId = defaultCacheCluster(records);
+  const draft = { provider, clusterId };
+  return { ...draft, version:cacheVersionOptions(records,draft)[0], workerId:defaultCacheWorker(draft,records) };
+}
+
+function unsupportedCacheFamily(release, node, devices) {
+  if (!release?.frameworks?.length) return undefined;
+  const [family] = cacheWorkerFrameworks(node,devices);
+  return family && !release.frameworks.includes(family) && !(family==='cpu' && release.plainImage) ? family : undefined;
+}
+
+export function cachePlacement(draft, records, onlyWorkerId) {
+  if (externalCache(draft)) return { workers: [] };
+  const options = cacheNodes(records, draft).filter(node => (!(onlyWorkerId || draft.workerId) || (onlyWorkerId || draft.workerId) === node.value));
+  if (!options.length) return { workers: [], blocking: nodeOptions(records,draft).length
+    ? '所选节点和标签下没有可调度的就绪节点，请调整选择或检查节点状态。'
+    : '当前集群没有可调度的就绪节点，请选择其他集群或检查节点状态。' };
+  if (cacheWorkerPicker(draft) && !(onlyWorkerId || draft.workerId)) return { workers: options };
+  const targets = options.map(option=>find(records,nodesPage,option.value));
+  const release = activeCacheProvider(draft.provider)?.releases?.[draft.version];
+  if (release?.frameworks?.length) {
+    const devices = list(records,'ops-gpus');
+    const unsupported = targets.map(node=>unsupportedCacheFamily(release,node,devices)).filter(Boolean);
+    const accelerators = unsupported.filter(family=>family!=='cpu');
+    if (accelerators.length) return { workers: options, warning:`${accelerators.length}/${targets.length} 个目标节点的加速器（${[...new Set(accelerators)].join('、')}）不受该版本支持，这些实例将无法启动。` };
+    if (unsupported.length) return { workers: options, warning:`${unsupported.length}/${targets.length} 个目标节点没有加速卡，该版本无可在此类节点上运行的镜像。` };
+  }
+  const request = cacheRequestedMemory(draft,singleCacheFramework(records,draft.clusterId));
+  if (!Number.isFinite(request) || request <= 0) return { workers: options };
+  const tightest = targets.filter(node=>node.memoryGiB > 0).sort((left,right)=>left.memoryGiB-right.memoryGiB)[0];
+  if (tightest && request >= tightest.memoryGiB) return { workers: options,
+    warning:`超过节点 ${tightest.name} 的物理内存上限（${Math.floor(tightest.memoryGiB)} GiB）。` };
+  const leastFree = targets.map(node=>({ node, free:freeMemory(node) })).filter(({free})=>free!==undefined).sort((left,right)=>left.free-right.free)[0];
+  if (leastFree && request > leastFree.free) {
+    return { workers: options, warning:`节点 ${leastFree.node.name} 的可用内存不足（剩余 ${Math.floor(leastFree.free)} GiB），缓存服务可能因内存不足而终止。` };
+  }
+  if (targets.every(node=>freeMemory(node)!==undefined)) {
+    if (activeCacheProvider(draft.provider)?.topology==='per_node' && !draft.workerId && !onlyWorkerId) {
+      return { workers:options, success:`资源满足，将在 ${targets.length} 个节点上各部署一个实例。` };
+    }
+    if (targets.length===1) return { workers:options, success:`资源满足，实例将部署在节点 ${targets[0].name}。` };
+  }
+  return { workers: options };
+}
+
+const runtimeCacheKeys = ['provider', 'version', 'clusterId', 'workerId', 'selector', 'memoryGiB', 'image', 'l2Entries', 'managementUrl',
+  'parameters', 'env', 'restartOnError', 'providerValues', ...cacheProviderFields.map(field => field.key)];
+const cacheRuntime = row => Object.fromEntries(runtimeCacheKeys.map(key => [key, key==='l2Entries' ? cacheL2Entries(row) :
+  key==='selector' ? Object.fromEntries(normalizedLabelPairs(row[key]).sort(([left],[right])=>left.localeCompare(right))) : row[key]]));
+export function cacheConfigurationChanged(current,draft) {
+  if (!current || externalCache(draft)) return false;
+  const original = cacheRuntime(current);
+  const proposed = cacheRuntime({ ...current,...draft });
+  return Object.entries(proposed).some(([key,value])=>jsonData(original[key] ?? '')!==jsonData(value ?? ''));
+}
+function cachePlacementSettings(draft, records) {
+  return { clusterId:draft.clusterId, workerId:draft.workerId || '', provider:draft.provider, version:draft.version,
+    selector:normalizedLabelPairs(draft.selector).sort(([left],[right])=>left.localeCompare(right)),
+    memory:cacheRequestedMemory(draft,singleCacheFramework(records,draft.clusterId)) };
+}
+export const cachePlacementChanged = (current,draft,records) => Boolean(current && !externalCache(draft) &&
+  jsonData(cachePlacementSettings(current,records)) !== jsonData(cachePlacementSettings({ ...current,...draft },records)));
 const cacheAcceleration = {
-  title: '缓存加速',
-  description: '为集群内的推理部署配置共享 KV 缓存。',
+  title: 'KV缓存',
   createLabel: '添加缓存服务',
   hideCreate: true,
-  searchPlaceholder: '搜索缓存服务或提供方',
-  searchKeys: ['name', 'provider'],
+  batchInToolbar: true,
+  collapsibleGroups: ['高级配置'],
+  submitLabel(draft,records,row) {
+    if (!cachePlacementChanged(row,draft,records)) return '确定';
+    const placement=cachePlacement(draft,records);
+    return placement.blocking || placement.warning ? '仍然提交' : '确定';
+  },
+  actionsInToolbar: true,
+  hideResetFilter: true,
+  searchPlaceholder: '名称搜索',
+  searchMatches: (row, query) => row.name.toLowerCase().includes(query),
   editable: true,
   deletable: true,
+  rowSelection: true,
   detailRoute: true,
   actionMenu: true,
   actionWidth: 128,
-  columns: [field('name', '服务名称', { width: 175 }), field('provider', '缓存提供方'), field('version', '版本'), field('clusterId', '集群', { format: labelOf('clusters'), width: 160 }), field('ready', '就绪实例'), status, created],
-  filters: [field('clusterId', '集群', { options: records => optionsOf(records, 'clusters') }), field('status', '服务状态', { options: ['待检查', '运行中', '异常'] })],
-  fields: [name('服务名称'), select('provider', '缓存提供方', cacheProviderOptions, { required: true, defaultValue: 'LMCache' }),
+  columns: [field('name', '名称', { width: 205, sorter: true }), field('provider', '提供方'), field('clusterId', '集群', { format: labelOf('clusters'), width: 160 }), status, created],
+  fields: [name('名称'), select('provider', '提供方', cacheProviderOptions, { required: true, disabled: true, defaultValue: 'LMCache' }),
     select('version', '版本', cacheVersionOptions, { defaultValue: (_records, params) => cacheVersionOptions(null, { provider: params?.get?.('provider') || params?.provider || 'LMCache' })[0],
       required: true, visible: (draft, records) => cacheVersionOptions(records, draft).some(version => version !== '自定义') }),
     field('image', '容器镜像', { required: true, visible: draft => cacheVersion(draft) === '自定义' && !externalCache(draft) }),
-    select('clusterId', '集群', clusterOptions, { required: true }),
-    select('workerId', '固定节点', cacheNodes, { visible: draft => !externalCache(draft) }),
+    select('clusterId', '集群', clusterOptions, { required: true, editable: false, defaultValue: defaultCacheCluster }),
+    select('workerId', '节点', cacheNodes, { visible: cacheWorkerPicker, help:'可选，留空时由调度器自动放置实例。' }),
     field('serviceUrl', '外部服务地址', { required: true, visible: externalCache, placeholder: 'https://cache.example.com' }),
-    quantity('memoryGiB', '内存容量（GiB）', 1, 2048, 64, { required: true, visible: draft => !externalCache(draft) }),
-    field('l2Entries', 'L2 存储优先级', { type: 'cacheL2', fullWidth: true, visible: draft => !externalCache(draft), group: 'L2 存储' }),
-    field('managementUrl', '管理界面地址', { placeholder: 'https://cache-console.example.com' }),
-    field('selector', '节点标签选择器', { placeholder: 'pool=nj-a', visible: draft => !externalCache(draft) }),
-    field('parameters', '组件启动参数', { type: 'textarea', placeholder: '每行填写组件名及启动参数', group: '高级配置' }),
-    field('env', '环境变量', { type: 'textarea', placeholder: '变量名=值，每行一个', group: '高级配置' }), description],
-  detail: [field('provider', '缓存提供方'), field('version', '版本'), field('image', '容器镜像'), field('clusterId', '集群', { format: labelOf('clusters') }), field('workerId', '固定节点', { format: labelOf(nodesPage) }), field('ready', '就绪实例'), field('memoryGiB', '内存容量', { format: suffix('GiB') }), field('l2Storage', 'L2 存储'), field('l2Location', 'L2 存储地址'), field('serviceUrl', '外部服务地址'), field('managementUrl', '管理界面地址'), field('selector', '节点标签选择器'), field('parameters', '组件启动参数'), status, field('checkResult', '状态信息'), description, created],
+    field('selector', '节点标签选择器', { type: 'cachePairs', fullWidth: true, visible: draft => !externalCache(draft) }),
+    ...cacheProviderFields.map(config => ({ ...config, visible: draft => !activeCacheProvider(draft.provider)?.declaredFields &&
+      activeCacheProvider(draft.provider)?.fields?.some(item => item.key === config.key) })),
+    field('providerValues', '提供方配置', { type: 'cacheDeclared', fullWidth: true, visible: draft => Boolean(activeCacheProvider(draft.provider)?.declaredFields?.length) }),
+    field('l2Entries', 'L2 存储后端', { type: 'cacheL2', fullWidth: true, visible: draft => Boolean(activeCacheProvider(draft.provider)?.l2) }),
+    field('managementUrl', '管理地址', { placeholder: 'https://cache-console.example.com', group: '高级配置',
+      visible: (draft, _records, row) => activeCacheProvider(draft.provider)?.management || Boolean(row?.managementUrl) }),
+    field('parameters', '启动参数', { type: 'cacheParameters', fullWidth: true, group: '高级配置' }),
+    field('env', '环境变量', { type: 'cachePairs', fullWidth: true, group: '高级配置' }),
+    field('restartOnError', '异常时自动重启', { type: 'checkbox', defaultValue: true, group: '高级配置' })],
+  detail: [field('provider', '缓存提供方'), field('version', '版本'), field('image', '容器镜像'), field('clusterId', '集群', { format: labelOf('clusters') }), field('workerId', '固定节点', { format: labelOf(nodesPage) }), field('ready', '就绪实例'), field('memoryGiB', '内存容量', { format: suffix('GiB') }), field('l2Storage', 'L2 存储'), field('l2Location', 'L2 存储地址'), field('serviceUrl', '外部服务地址'), field('managementUrl', '管理界面地址'), field('selector', '节点标签选择器', { format:labelList }), field('parameters', '启动参数', {
+    format: value => typeof value === 'string' ? value : Object.entries(value || {}).map(([component, args]) =>
+      [component, ...args].join(' ')).join('\n') }), status, field('checkResult', '状态信息'), description, created],
   onFieldChange(draft, key, value, records) {
     if (key === 'provider') return { version: cacheVersionOptions(records, { provider: value })[0], workerId: '' };
-    if (key === 'clusterId' || key === 'selector' && draft.workerId && !cacheNodes(records, { ...draft, selector: value }).some(node => node.value === draft.workerId)) return { workerId: '' };
+    if (key === 'clusterId') {
+      const versions = cacheVersionOptions(records,{ ...draft,clusterId:value,version:undefined });
+      return { workerId:defaultCacheWorker({ ...draft,clusterId:value },records) || '',version:draft.version==='自定义' && versions.includes(draft.version) ? draft.version : versions[0] };
+    }
+    if (key === 'selector' && draft.workerId && !cacheNodes(records, { ...draft, selector: value }).some(node => node.value === draft.workerId)) return { workerId: '' };
   },
   validate(draft, records, current) {
-    if (!cacheVersionOptions(records, draft).includes(cacheVersion(draft))) return '请选择缓存提供方支持的版本。';
+    if (!current && activeCacheProvider(draft.provider)?.unavailable) return activeCacheProvider(draft.provider).detail || '所选提供方暂不可用。';
+    if (current && draft.provider !== current.provider) return '创建后不能更改缓存提供方。';
+    const versions = cacheVersionOptions(records, draft, current);
+    if (versions.length > 0 && !versions.includes(cacheVersion(draft))) return '请选择缓存提供方支持的版本。';
     if (find(records, 'clusters', draft.clusterId)?.status !== '运行中') return '请选择运行中的集群。';
-    if (names(draft.selector).some(label => !/^[\w./-]+=[\w.-]+$/.test(label))) return '节点标签须使用 key=value 格式，多个标签用逗号分隔。';
+    const selectorIssue = labelIssue(draft.selector);
+    if (selectorIssue) return selectorIssue;
     if (draft.workerId && !externalCache(draft) && !cacheNodes(records, draft).some(option => option.value === draft.workerId)) return '固定节点须符合所选集群、节点标签和就绪条件。';
     if (externalCache(draft) && !urlValid(draft.serviceUrl.trim())) return '请输入不含凭证的 HTTP(S) 服务地址。';
     if (draft.managementUrl && !urlValid(draft.managementUrl.trim())) return '请输入不含凭证的 HTTP(S) 管理地址。';
-    for (const { type, location } of !externalCache(draft) ? cacheL2Config(draft, current) : []) {
-      if (type === '本地文件系统' && !absolutePath(location?.trim())) return '本地 L2 存储需填写绝对路径。';
-      if (type === 'Redis / Valkey' && !/^rediss?:\/\/[\w.-]+(?::\d+)?(?:\/\d+)?$/.test(location || '')) return '请填写不含凭证的 Redis 或 Valkey 地址。';
-      if (type === 'S3' && !/^s3:\/\/[\w.-]+(?:\/[\w./-]*)?$/.test(location || '')) return '请输入 S3 存储路径，例如 s3://cache-bucket/kv。';
+    const l2Issue = cacheL2Issue(draft.provider, externalCache(draft) ? [] : cacheL2Config(draft, current));
+    if (l2Issue) return l2Issue;
+    if (!current && cachePlacement(draft, records).blocking) return cachePlacement(draft, records).blocking;
+    if (!plainEnv(draft.env) || !pairKeysUnique(String(draft.env || '').split('\n').filter(line => line.trim()))) {
+      return '请填写有效且唯一的环境变量名称。访问密钥须通过凭证配置。';
     }
-    if (!plainEnv(draft.env)) return '环境变量须使用变量名=值格式。访问密钥请通过凭证入口管理。';
     if (current && cacheAttachments(current, records).length && ['name', 'provider', 'clusterId'].some(key => draft[key] !== current[key])) return '请先解除模型部署关联，再修改缓存服务的标识。';
   },
-  save(draft, _records, current) {
+  save(draft, records, current) {
     const external = externalCache(draft);
-    const l2Entries = external ? [] : cacheL2Config(draft, current).map(entry => ({ type: entry.type, location: entry.location.trim() }));
     const version = cacheVersion(draft);
-    const configuration = { version, serviceUrl: external ? draft.serviceUrl : '', workerId: external ? '' : draft.workerId || '',
+    const l2Entries = external ? [] : cacheL2Config(draft, current).map(entry => {
+      const { type } = entry;
+      const fields = activeCacheProvider(draft.provider)?.l2?.[type] || [];
+      return { type,...(typeof entry.adapterEnabled==='boolean' && { adapterEnabled:entry.adapterEnabled }),
+        ...Object.fromEntries(fields.filter(field => !field.credential && entry[field.key] !== undefined)
+        .map(field => [field.key, entry[field.key]])) };
+    });
+    const primary = l2Entries[0];
+    const framework = singleCacheFramework(records,draft.clusterId);
+    const configuration = { version, serviceUrl: external ? draft.serviceUrl : '', workerId: external ? '' : draft.workerId ?? current?.workerId ?? '',
       image: version === '自定义' ? draft.image : '',
-      memoryGiB: external ? null : draft.memoryGiB, l2Storage: l2Entries[0]?.type || '无', selector: external ? '' : names(draft.selector).join(', '),
-      l2Location: l2Entries[0]?.location || '', l2Entries };
-    const compared = { ...configuration, provider: draft.provider, clusterId: draft.clusterId, parameters: draft.parameters, env: draft.env };
-    const changed = !current || Object.entries(compared).some(([key, value]) => jsonData(current[key] ?? '') !== jsonData(value ?? ''));
-    return { ...configuration, status: changed ? '待检查' : current.status, ready: changed ? '' : current.ready, checkResult: changed ? '' : current.checkResult,
-      operationStartedAt: changed ? Date.now() : current.operationStartedAt,
-      cacheEvents: changed ? cacheLog(current || {}, '配置已保存，等待实例就绪检查。') : current.cacheEvents };
+      l2Storage: primary?.type || '无', selector: external ? {} : Object.fromEntries(normalizedLabelPairs(draft.selector)),
+      l2Location: primary?.basePath || primary?.endpoint || [primary?.host, primary?.port].filter(Boolean).join(':'), l2Entries };
+    if (activeCacheProvider(draft.provider)?.declaredFields?.length) {
+      configuration.providerValues = cacheDeclaredValues(draft.provider, draft.providerValues || {},framework,current);
+    }
+    configuration.memoryGiB = external ? null : cacheRequestedMemory({ ...current,...draft,...configuration },framework);
+    if (!current) return { ...configuration, status: '待检查', ready: '', checkResult: '', operationStartedAt: Date.now(), configRevision: 1 };
+    if (!cacheConfigurationChanged(current,{ ...draft,...configuration })) return configuration;
+    return { ...configuration, configRevision: (current.configRevision || 1) + 1, runningConfiguration: current.runningConfiguration || cacheRuntime(current),
+      cacheEvents: cacheLog(current, '配置已更新。重建缓存实例后生效。') };
   },
   canDelete: (row, records) => cacheAttachments(row, records).length ? '缓存服务仍由模型部署或回滚配置使用。' : undefined,
-  actions: [{ label: '查看日志', panel: 'logs', sheet: true }, { label: '监控', panel: 'monitor' }, { label: '检查服务', apply: cacheCheck }],
+  actions: [{ label: '查看日志', panel: 'logs', sheet: true, when: cacheServiceLogAvailable },
+    { label: '指标详情', panel: 'monitor' }],
+  batchActions: [{ label: '批量删除', toolbarLabel: '删除', danger: true, when: rows => rows.length > 0, confirm: rows => `删除选中的 ${rows.length} 个缓存服务？`,
+    apply(rows, records) {
+      if (rows.some(row => cacheAttachments(row, records).length)) throw Error('所选缓存服务仍被模型部署或回滚配置使用。');
+      return [];
+    } }],
   seed: [
     { id: 'cache-nanjing', name: 'nj-inference-kv', provider: 'LMCache', version: '0.4.2', clusterId: 'cluster-nj-a', memoryGiB: 128, l2Storage: '本地文件系统', l2Location: '/mnt/nvme/kv-cache', ready: '6 / 6', status: '运行中', checkResult: '模拟健康检查通过。', createdAt: '2026-11-21 11:00:00' },
     { id: 'cache-suzhou', name: 'sz-shared-kv', provider: 'Mooncake', version: '外部服务', clusterId: 'cluster-sz-a', serviceUrl: 'https://cache-sz.example.com', ready: '1 / 1', status: '运行中', checkResult: '模拟健康检查通过。', createdAt: '2026-11-22 09:15:00' },
     { id: 'cache-suzhou-test', name: 'sz-cache-validation', provider: 'LMCache', version: '0.4.1', clusterId: 'cluster-sz-a', workerId: 'worker-sz-a-02', memoryGiB: 48, l2Storage: 'Redis / Valkey', l2Location: 'redis://cache-sz.example.com:6379', ready: '0 / 1', status: '异常', checkResult: '模拟状态：L2 存储连接超时。', createdAt: '2026-11-25 14:05:00' },
+    {
+      id: 'cache-suzhou-glm', name: 'sz-glm-lmcache', provider: 'LMCache', version: '0.5.6',
+      clusterId: 'cluster-sz-a', selector: { pool: 'sz-a' }, memoryGiB: 64, providerValues: { ram_size: 64 },
+      l2Storage: '本地文件系统', l2Location: '/mnt/nvme/kv-cache/glm-5.2',
+      l2Entries: [{ type: '本地文件系统', basePath: '/mnt/nvme/kv-cache/glm-5.2' }],
+      status: '运行中', ready: '3 / 3', checkResult: '模拟健康检查通过。3 个节点的缓存实例已就绪。',
+      createdAt: '2026-11-26T16:40:00+08:00',
+      cacheEvents: [
+        { at: '2026-11-26T16:40:00+08:00', message: '模拟配置校验通过，准备启动 LMCache 0.5.6。' },
+        { at: '2026-11-26T16:42:00+08:00', message: 'worker-sz-a-01 缓存实例就绪，L2 目录可写。' },
+        { at: '2026-11-26T16:42:05+08:00', message: 'worker-sz-a-02 缓存实例就绪，L2 目录可写。' },
+        { at: '2026-11-26T16:42:08+08:00', message: 'worker-sz-a-03 缓存实例就绪，L2 目录可写。' },
+      ],
+      metrics: [
+        { at: '2026-11-27T09:25:00+08:00', worker: 'worker-sz-a-01', hit: 59.8, lookups: 326, occupancy: 41.3, l1Usage: 26.4, l2Usage: 83.2, reads: 126.8, writes: 98.7 },
+        { at: '2026-11-27T09:35:00+08:00', worker: 'worker-sz-a-01', hit: 64.2, lookups: 348, occupancy: 49.5, l1Usage: 31.7, l2Usage: 101.2, reads: 146.5, writes: 109.4 },
+        { at: '2026-11-27T09:45:00+08:00', worker: 'worker-sz-a-01', hit: 69.1, lookups: 391, occupancy: 58.4, l1Usage: 37.4, l2Usage: 112.2, reads: 168.3, writes: 123.9 },
+        { at: '2026-11-27T09:55:00+08:00', worker: 'worker-sz-a-01', hit: 66.7, lookups: 372, occupancy: 55.9, l1Usage: 35.8, l2Usage: 109.5, reads: 153.2, writes: 114.6 },
+      ],
+      attachedMetrics: {
+        30: { 'deployment-glm:1': { hitTokens: 214080, queriedTokens: 320000, hitRate: 0.669 },
+          'deployment-glm:2': { hitTokens: 205840, queriedTokens: 310000, hitRate: 0.664 } },
+        60: { 'deployment-glm:1': { hitTokens: 413600, queriedTokens: 640000, hitRate: 0.64625 },
+          'deployment-glm:2': { hitTokens: 390600, queriedTokens: 620000, hitRate: 0.63 } },
+        360: { 'deployment-glm:1': { hitTokens: 1944000, queriedTokens: 3200000, hitRate: 0.6075 },
+          'deployment-glm:2': { hitTokens: 1740000, queriedTokens: 3000000, hitRate: 0.58 } },
+        1440: { 'deployment-glm:1': { hitTokens: 4884000, queriedTokens: 8800000, hitRate: 0.555 },
+          'deployment-glm:2': { hitTokens: 4400000, queriedTokens: 8000000, hitRate: 0.55 } },
+      },
+    },
   ],
 };
 
 const localFile = draft => draft.source === '本地路径';
-const mountPath = draft => draft.mountPath || `/mnt/models/${draft.repository.split('/').at(-1)}`;
-const fileInUse = (row, records) => list(records, 'deployments').some(deployment => row.mountPath && [deployment.weightPath, deployment.previousConfig?.weightPath].includes(row.mountPath));
-const selectFileModels = records => records.deployableModels.map(model => ({
-  value: model.id, label: `${model.name} · ${model.modelId}`,
-}));
-function cacheCheck(row, records) {
-  const pool = cacheNodes(records, row);
-  const instances = externalCache(row) ? 1 : row.workerId ? Number(pool.some(node => node.value === row.workerId)) : pool.length;
-  const passed = find(records, 'clusters', row.clusterId)?.status === '运行中' && instances > 0;
-  const checkResult = passed ? '模拟健康检查通过。' : '没有符合条件的就绪资源。';
-  return { status: passed ? '运行中' : '异常', ready: passed ? `${instances} / ${instances}` : '0 / 1', checkResult,
-    operationStartedAt: null, instanceStatus: { ...row.instanceStatus, state: {} }, cacheEvents: cacheLog(row, checkResult) };
+const filePath = value => String(value || '').trim().replaceAll('\\', '/').replace(/\/+$/, '');
+const validFilePath = value => /^(?:\/|[a-z]:\/).+/i.test(value) && !value.split('/').includes('..') &&
+  !Array.from(value).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
+const selectedFilename = value => String(value || '').trim();
+const relativeArtifact = value => Boolean(value && !value.startsWith('/') && !value.includes('\\') &&
+  !value.split('/').includes('..') && !Array.from(value).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127));
+const globPrefix = filename => filename.endsWith('-*.gguf') ? filename.slice(0, -6).toLowerCase() : '';
+const artifactMatches = (left, right) => {
+  const a = selectedFilename(left), b = selectedFilename(right);
+  if (a === b) return true;
+  const one = globPrefix(a), two = globPrefix(b);
+  if (one) return b.toLowerCase().startsWith(one) && /-\d{5}-of-\d{5}\.gguf$/i.test(b);
+  return Boolean(two && a.toLowerCase().startsWith(two) && /-\d{5}-of-\d{5}\.gguf$/i.test(a));
+};
+const defaultDownloadDirectory = repository => `/var/lib/gpustack/cache/${repository}`;
+const remoteDirectory = row => {
+  if (Object.hasOwn(row, 'localDir')) return row.localDir || '';
+  if (!row.repository || [defaultDownloadDirectory(row.repository), `/mnt/models/${row.repository.split('/').at(-1).toLowerCase()}`]
+    .includes(row.mountPath)) return '';
+  return row.mountPath;
+};
+
+function fileReferences(row, records) {
+  const nodeId = row.workerId;
+  const gpuIds = new Set(list(records, 'ops-gpus').filter(device => device.nodeId === nodeId).map(device => device.id));
+  return list(records, 'deployments').filter(deployment =>
+    [deployment, deployment.previousConfig, ...(deployment.configHistory || []).map(revision => revision.config)].some(config => {
+      if (!config) return false;
+      if (config.modelFileId) return config.modelFileId === row.id;
+      if ((config.clusterId || deployment.clusterId) !== row.clusterId) return false;
+      const targets = config.placementTargets || [];
+      if (config.placement === '指定节点' && targets.length && !targets.includes(nodeId)) return false;
+      if (config.placement === '指定 GPU' && targets.length && !targets.some(id => gpuIds.has(id))) return false;
+      const weightPath = filePath(config.weightPath);
+      if (weightPath && [row.mountPath, ...(row.resolvedPaths || [])].some(path => filePath(path) === weightPath)) return true;
+      return !localFile(row) && config.source === row.source && config.repository === row.repository &&
+        artifactMatches(config.filename, row.filename);
+    }));
 }
 
-function fileCheck(row, records) {
-  const ready = find(records, nodesPage, row.workerId)?.status === '就绪';
-  return ready ? { status: '可用', progress: row.source === '本地路径' ? null : 100, message: '模拟文件检查通过。', operationStartedAt: null }
-    : { status: '失败', message: '节点未就绪，无法读取模型文件。', operationStartedAt: null };
+export function modelFileNodeIssue(draft, records) {
+  const nodeFiles = list(records, filesPage).filter(row => row.workerId === draft.workerId);
+  if (localFile(draft)) {
+    const path = filePath(draft.mountPath);
+    if (path && nodeFiles.some(row => localFile(row) && filePath(row.mountPath) === path)) {
+      return '该节点上已登记此文件路径。';
+    }
+    return undefined;
+  }
+  const repository = String(draft.repository || '').trim();
+  if (!repository) return undefined;
+  const directory = filePath(draft.localDir);
+  if (nodeFiles.some(row => !localFile(row) && row.source === draft.source && row.repository === repository &&
+    artifactMatches(row.filename, draft.filename) && filePath(remoteDirectory(row)) === directory)) {
+    return '该节点上已有相同来源和本地目录的模型文件。';
+  }
+  if (directory && nodeFiles.some(row => !localFile(row) && !row.filename && filePath(remoteDirectory(row)) === directory)) {
+    return '该节点的本地目录已被另一个下载任务占用。';
+  }
 }
+
 export function modelFileDeploymentName(row) {
   const path = row.repository || row.mountPath || row.resolvedPaths?.[0] || row.filename || '';
   return path.split(/[\\/]/).filter(Boolean).at(-1)?.toLowerCase().replace(/-\d+-of-\d+(?:\.gguf)?$|\.gguf$/, '') || '';
 }
 
+export function modelFileCreation(draft, records) {
+  const local = localFile(draft);
+  if (!sources.includes(draft.source)) throw Error('请选择有效的模型来源。');
+  const worker = find(records, nodesPage, draft.workerId);
+  if (!worker || worker.status !== '就绪') throw Error('请选择处于就绪状态的节点。');
+  const repository = String(draft.repository || '').trim();
+  const filename = selectedFilename(draft.filename);
+  if (!local && !/^[\w.-]+\/[\w.-]+$/.test(repository)) throw Error('请先选择模型仓库。');
+  if (!local && filename && (!relativeArtifact(filename) || filename.includes('*') && !/^[\w.()/-]+-\*\.gguf$/i.test(filename))) {
+    throw Error('请选择仓库内的有效文件。');
+  }
+  const parts = !local && Array.isArray(draft.downloadParts) ? draft.downloadParts : [];
+  if (parts.some(part => !relativeArtifact(part) || !artifactMatches(filename, part))) throw Error('所选分片和模型文件不匹配。');
+  const localPath = filePath(draft.mountPath);
+  const localDir = filePath(draft.localDir);
+  if (local && !validFilePath(localPath)) throw Error('请填写节点上的绝对文件路径。');
+  if (!local && localDir && !validFilePath(localDir)) throw Error('本地目录须为节点上的绝对路径。');
+  const conflict = modelFileNodeIssue(draft, records);
+  if (conflict) throw Error(conflict);
+  const matched = !local && list(records, 'ops-model-library').filter(model => model.repository === repository ||
+    model.specs?.some(spec => spec.repository === repository));
+  const model = matched?.length === 1 ? matched[0] : null;
+  return { source: draft.source, workerId: worker.id, clusterId: worker.clusterId,
+    name: (local ? localPath : filename || repository).split('/').at(-1),
+    repository: local ? '' : repository, filename: local ? '' : filename,
+    mountPath: local ? localPath : (localDir || defaultDownloadDirectory(repository)),
+    downloadParts: local ? undefined : parts,
+    sizeGiB: !local && Number.isFinite(draft.sizeBytes) && draft.sizeBytes > 0 ? draft.sizeBytes / (1024 ** 3) : undefined,
+    localDir: local ? null : localDir || null, modelId: model?.modelId, modelCode: model?.modelCode,
+    lora: Boolean(!local && draft.lora), status: '下载中', progress: local ? null : 0,
+    operationStartedAt: Date.now(), message: local ? '等待核验本地文件。' : '等待节点下载。' };
+}
+function cacheCheck(row, records) {
+  const pool = cacheNodes(records,row).filter(node=>!row.workerId || node.value===row.workerId);
+  const release = activeCacheProvider(row.provider)?.releases?.[row.version];
+  const devices = list(records,'ops-gpus');
+  const runningCluster = find(records,'clusters',row.clusterId)?.status==='运行中';
+  const state = Object.fromEntries(pool.map(({value})=>[value,runningCluster && !unsupportedCacheFamily(release,find(records,nodesPage,value),devices) ? '运行中' : '异常']));
+  const expected = externalCache(row) ? 1 : pool.length;
+  const ready = externalCache(row) ? Number(runningCluster) : Object.values(state).filter(value=>value==='运行中').length;
+  const checkResult = !runningCluster || !expected ? '没有符合条件的就绪资源。' : ready < expected
+    ? '模拟健康检查发现部分实例的运行环境不受所选版本支持。' : '模拟健康检查通过。';
+  return { status:ready ? '运行中' : '异常', ready:`${ready} / ${expected || 1}`, checkResult,
+    operationStartedAt:null, instanceStatus:{ ...row.instanceStatus, state }, cacheEvents:cacheLog(row,checkResult) };
+}
+
+function fileCheck(row, records) {
+  const ready = find(records, nodesPage, row.workerId)?.status === '就绪';
+  const at = filePath(row.mountPath);
+  const parts = row.downloadParts?.length ? row.downloadParts : row.filename && !row.filename.includes('*') ? [row.filename] : [];
+  const resolvedPaths = parts.length ? parts.map(part => `${at}/${part}`) : at ? [at] : [];
+  return ready ? { status: '可用', progress: row.source === '本地路径' ? null : 100, resolvedPaths, message: '', operationStartedAt: null }
+    : { status: '失败', message: '节点未就绪，无法读取模型文件。', operationStartedAt: null };
+}
 const fileSources = {
   title: '模型文件',
-  description: '下载模型或登记节点上的本地权重，查看文件状态并用于部署。',
   createLabel: '添加模型文件',
   hideCreate: true,
-  searchPlaceholder: '搜索模型、仓库或本地路径',
-  searchKeys: ['name', 'repository', 'mountPath'],
+  actionsInToolbar: true,
+  hideResetFilter: true,
+  searchPlaceholder: '路径查询',
+  searchMatches: (row, query) => [row.repository, row.filename, row.mountPath, ...(row.resolvedPaths || [])].some(value => String(value || '').toLowerCase().includes(query)),
   rowSelection: true,
+  hideSelectionSummary: true,
   actionMenu: true,
   actionWidth: 128,
-  columns: [field('name', '模型文件', { width: 190 }), field('source', '来源'), field('workerId', '所在节点', { format: labelOf(nodesPage), width: 165 }), field('mountPath', '本地路径', { width: 205 }), field('sizeGiB', '大小', { format: suffix('GiB') }), field('progress', '下载进度', { format: value => value == null ? undefined : `${value}%` }), status],
-  filters: [field('source', '来源', { options: sources }), field('workerId', '节点', { options: records => optionsOf(records, nodesPage) }), field('status', '文件状态', { options: ['可用', '下载中', '失败'] })],
-  fields: [name('模型文件名称'), select('source', '来源', sources, { required: true, defaultValue: 'Hugging Face' }),
-    field('repository', '模型仓库', { type: 'modelRepository', required: true, fullWidth: true, placeholder: '组织名/模型名', visible: draft => !localFile(draft) }),
-    field('filename', '指定文件', { placeholder: '可填写 GGUF 量化文件名', visible: draft => !localFile(draft) }),
-    select('workerId', '目标节点', nodeOptions, { required: true }),
-    select('modelId', '关联可部署模型', selectFileModels),
-    field('mountPath', '节点本地路径', { placeholder: '/mnt/models/模型目录', help: '本地路径来源须填写。仓库下载可留空，由节点分配目录。' }),
-    field('lora', 'LoRA 适配器', { type: 'switch' }),
-    field('baseModel', '基础模型', { required: true, visible: draft => Boolean(draft.lora) }), description],
-  detail: [field('name', '文件名称'), field('source', '来源'), field('repository', '模型仓库'), field('filename', '指定文件'), field('workerId', '所在节点', { format: labelOf(nodesPage) }), field('clusterId', '集群', { format: labelOf('clusters') }), field('mountPath', '节点本地路径'), field('lora', 'LoRA 适配器', { format: yesNo }), field('baseModel', '基础模型'), field('sizeGiB', '文件大小', { format: suffix('GiB') }), field('progress', '下载进度', { format: value => value == null ? undefined : `${value}%` }), status, field('message', '状态信息'), description, created],
+  showDetailsAction: false,
+  detailModal: '删除模型文件',
+  columns: [field('source', '来源', { sorter: true, sortValue: row=>[row.source, row.repository || row.mountPath].filter(Boolean).join('/') }), field('workerId', '节点', { format: labelOf(nodesPage), sortValue: (row, records) => find(records, nodesPage, row.workerId)?.name, width: 160, sorter: true }),
+    { ...status, width: 150 }, field('mountPath', '存储路径', { width: 235, sorter: true, sortValue:row=>row.resolvedPaths?.[0] || row.mountPath }),
+    field('sizeGiB', '文件大小', { width: 110, align: 'right', format: value => Number.isFinite(value) ? `${value.toFixed(1)} GiB` : undefined }), created],
+  filters: [field('workerId', '按节点筛选', { searchable: true, options: records => optionsOf(records, nodesPage) })],
   editable: false,
-  validate(draft, records) {
-    if (!localFile(draft) && !/^[\w.-]+\/[\w.-]+$/.test(draft.repository.trim())) return '请填写组织名/模型名格式的仓库名称。';
-    const path = localFile(draft) ? draft.mountPath : mountPath(draft);
-    if (!absolutePath(path)) return '请填写有效的绝对路径，例如 /mnt/models/qwen。';
-    if (!nodeOptions(records, {}).some(node => node.value === draft.workerId)) return '请选择就绪的目标节点。';
-    if (list(records, filesPage).some(row => row.workerId === draft.workerId && row.mountPath === path)) return '所选节点上已登记相同的本地路径。';
+  canDelete(row, records) {
+    const usedBy = fileReferences(row, records);
+    if (usedBy.length) return `模型文件仍由 ${usedBy.map(item => item.displayName || item.name).join('、')} 使用。`;
   },
-  save(draft, records) {
-    return { clusterId: find(records, nodesPage, draft.workerId)?.clusterId, baseModel: draft.lora ? draft.baseModel : '', mountPath: localFile(draft) ? draft.mountPath : mountPath(draft),
-      repository: localFile(draft) ? '' : draft.repository, filename: localFile(draft) ? '' : draft.filename,
-      status: '下载中', progress: localFile(draft) ? null : 0, operationStartedAt: Date.now(), message: localFile(draft) ? '等待核验本地目录。' : '等待节点下载。' };
-  },
-  canDelete: (row, records) => fileInUse(row, records) ? '此路径仍由部署当前配置或回滚配置引用。' : undefined,
   actions: [
     { label: '部署', when: row => row.status === '可用' && !row.lora, deployModelFile: true },
-    { label: '删除', panel: 'delete' },
-    { label: '重试下载', when: row => row.status === '失败' && row.source !== '本地路径', apply: () => ({ status: '下载中', progress: 0, operationStartedAt: Date.now(), message: '重新提交模拟下载。' }) },
-    { label: '检查文件', when: row => row.status === '下载中' && !row.operationStartedAt || row.status === '失败' && row.source === '本地路径', apply: fileCheck },
+    { label: '重新下载', confirm: false, apply: row => ({ status: '下载中', progress: localFile(row) ? null : 0, operationStartedAt: Date.now(), message: '' }) },
+    { label: '删除', panel: 'delete', danger: true },
   ],
   seed: [
     { id: 'file-bge-m3-nj', name: 'BGE-M3 权重', source: 'Hugging Face', repository: 'BAAI/bge-m3', modelCode: 'bge-m3', workerId: 'worker-nj-a-01', clusterId: 'cluster-nj-a', mountPath: '/mnt/models/bge-m3', sizeGiB: 2.27, progress: 100, status: '可用', createdAt: '2026-11-20 10:30:00' },
     { id: 'file-glm52-sz', name: 'GLM-5.2 权重', source: '本地路径', modelCode: 'glm-5.2', workerId: 'worker-sz-a-01', clusterId: 'cluster-sz-a', mountPath: '/mnt/models/glm-5.2', sizeGiB: 236.8, status: '可用', createdAt: '2026-11-21 09:30:00' },
     { id: 'file-qwen35-nj', name: 'Qwen3.5-9B 权重', source: 'ModelScope', repository: 'Qwen/Qwen3.5-9B', workerId: 'worker-nj-a-02', clusterId: 'cluster-nj-a', mountPath: '/mnt/models/qwen3.5-9b', progress: 65, status: '下载中', createdAt: '2026-11-26 16:12:00' },
     { id: 'file-rerank-sz', name: 'BGE Reranker 权重', source: 'Hugging Face', repository: 'BAAI/bge-reranker-v2-m3', modelCode: 'bge-reranker-v2-m3', workerId: 'worker-sz-a-02', clusterId: 'cluster-sz-a', mountPath: '/mnt/models/bge-reranker-v2-m3', progress: 22, status: '失败', message: '模拟下载记录：模型仓库连接超时。', createdAt: '2026-11-25 16:10:00' },
+    { id: 'file-dsv4-pro-nj', name: 'DeepSeek-V4-Pro 权重', source: '本地路径', modelId: 'model-1',
+      modelCode: 'deepseek-v4-pro', workerId: 'worker-nj-a-01', clusterId: 'cluster-nj-a',
+      mountPath: '/mnt/models/deepseek-v4-pro', resolvedPaths: ['/mnt/models/deepseek-v4-pro'],
+      sizeGiB: 314, status: '可用', message: '模拟核验通过，节点可读取模型目录。', createdAt: '2026-11-25T10:20:00+08:00' },
+    { id: 'file-glm52-fp8-sz', name: 'GLM-5.2 FP8 权重', source: 'ModelScope', repository: 'ZhipuAI/GLM-5.2-FP8',
+      modelId: 'model-2', modelCode: 'glm-5.2', workerId: 'worker-sz-a-01', clusterId: 'cluster-sz-a',
+      mountPath: '/mnt/models/glm-5.2-fp8', resolvedPaths: ['/mnt/models/glm-5.2-fp8'], localDir: '/mnt/models/glm-5.2-fp8',
+      sizeGiB: 146, progress: 100, status: '可用', createdAt: '2026-11-26T14:10:00+08:00' },
+    { id: 'file-bge-m3-nj-03', name: 'BGE-M3 权重', source: 'Hugging Face', repository: 'BAAI/bge-m3', modelId: 'catalog-demo-embedding',
+      modelCode: 'bge-m3', workerId: 'worker-nj-a-03', clusterId: 'cluster-nj-a',
+      mountPath: '/mnt/models/bge-m3', resolvedPaths: ['/mnt/models/bge-m3'], localDir: '/mnt/models/bge-m3',
+      sizeGiB: 2.27, progress: 100, status: '可用', createdAt: '2026-11-26T10:15:00+08:00' },
+    { id: 'file-qwen3-06b-nj', name: 'Qwen3-0.6B-Base 权重', source: 'ModelScope', repository: 'Qwen/Qwen3-0.6B-Base',
+      modelCode: 'qwen3-0.6b-base', workerId: 'worker-nj-a-04', clusterId: 'cluster-nj-a',
+      mountPath: '/mnt/models/qwen3-0.6b-base', localDir: '/mnt/models/qwen3-0.6b-base', sizeGiB: 1.15, progress: 47,
+      status: '下载中', message: '模拟下载中，已取得配置文件和分词器，正在下载权重。', createdAt: new Date(Date.now() - 50 * 60_000).toISOString() },
   ],
 };
 
@@ -454,6 +695,7 @@ export function reconcileModelOperation(pageId, row, records, now) {
   if (pageId === benchmarksPage) {
     if (!benchmarkTargetReady(row, records)) patch = { status: '失败', operationStartedAt: null, runEvents: addRunEvent(row, '测试目标已不可用。') };
     else if (row.status === '排队中') patch = { status: '运行中', runEvents: addRunEvent(row, '模拟执行开始。') };
+    else if (row.targetSelection) patch = completeAlignedBenchmark(row, new Date(now));
     else patch = { ...benchmarkResults(row), operationStartedAt: null };
   }
   if (pageId === cachePage) patch = cacheCheck(row, records);
@@ -466,8 +708,27 @@ export function reconcileModelOperation(pageId, row, records, now) {
 
 export const MODEL_SERVICE_PAGES = {
   'ops-model-library': modelCatalog,
-  [benchmarksPage]: benchmarks,
+  [benchmarksPage]: alignBenchmarkPage(benchmarks),
   [backendsPage]: INFERENCE_BACKEND_PAGE,
   [cachePage]: cacheAcceleration,
   [filesPage]: fileSources,
 };
+
+export function inferenceDemoOpsModels(base, now = Date.now()) {
+  const cache = cacheAcceleration.seed.find(row => row.id === 'cache-suzhou-glm');
+  const startingFile = fileSources.seed.find(row => row.id === 'file-qwen3-06b-nj');
+  const rowsByPage = {
+    [benchmarksPage]: benchmarks.seed.filter(row => ['bench-ds-throughput-nj', 'bench-glm-latency-sz'].includes(row.id)),
+    [cachePage]: [{ ...cache, metrics: cache.metrics.map((sample, index) => ({
+      ...sample, at: new Date(now - (35 - index * 10) * 60_000).toISOString(),
+    })) }],
+    [filesPage]: [
+      ...fileSources.seed.filter(row => ['file-dsv4-pro-nj', 'file-glm52-fp8-sz', 'file-bge-m3-nj-03'].includes(row.id)),
+      { ...startingFile, modelId: 'model-inference-demo-qwen3-0.6b-base', createdAt: new Date(now - 50 * 60_000).toISOString() },
+    ],
+  };
+  const merged = Object.entries(rowsByPage).map(([page, examples]) => [
+    page, [...new Map([...list(base, page), ...examples].map(row => [row.id, row])).values()],
+  ]);
+  return { ...base, ...Object.fromEntries(merged) };
+}

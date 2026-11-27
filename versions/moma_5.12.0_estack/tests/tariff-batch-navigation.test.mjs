@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appendCommonTariffScenarios, tariffDictionarySeed } from '../src/admin-v2/tariff-dictionary.js';
-import { adminSections, sections, pages, pageFromHash, pageWorkspace, canAccessPage } from '../src/admin-v2/navigation.mjs';
+import { adminSections, pages, pageFromHash, pageWorkspace, canAccessPage } from '../src/admin-v2/navigation.mjs';
 
 const unit = '百万 Token', currency = 'CNY', state = { tariffDictionary: tariffDictionarySeed() };
 const blank = { name: '', unit: '', currency, listPrice: '' };
@@ -38,6 +38,7 @@ test('materials management keeps model-library and tariff routes with normal wor
   const models = adminSections.find(item => item.id === 'models');
   assert.deepEqual(models.items.map(item => item.children[0][0]), ['providers-reference', 'listing-new', 'model-links', 'model-market', 'model-templates']);
   assert.equal(pageWorkspace('model-links'), 'operations');
+  assert.equal(canAccessPage('平台管理员', 'model-links'), true);
   assert.equal(canAccessPage('运营人员', 'model-links'), true);
   assert.equal(canAccessPage('运维人员', 'model-links'), false);
   assert.equal(pageFromHash('#/admin-2/model-links', '运营人员'), 'model-links');

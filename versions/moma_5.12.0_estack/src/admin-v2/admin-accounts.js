@@ -5,7 +5,7 @@ export const ADMIN_ROLE_LABELS = { 运营人员: '运营管理员', 运维人员
 export const ROLE_DESCRIPTIONS = {
   平台管理员: '管理后台账号及平台业务配置。',
   运营人员: '管理模型运营、商业运营和租户。',
-  运维人员: '管理调用数据、集群、部署和网关配置。',
+  运维人员: '查看模型性能和调用日志，管理集群、部署和网关配置。',
 };
 
 export function generateAdminPassword() {

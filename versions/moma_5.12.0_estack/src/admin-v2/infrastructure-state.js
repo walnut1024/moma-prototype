@@ -1,8 +1,9 @@
 import { MODEL_SERVICE_PAGES } from './ops-models.js';
 import { RESOURCE_PAGES } from './ops-resources.js';
+import { INFRASTRUCTURE_STORAGE, MODEL_SOURCE_SLOTS, modelSourceSettings } from './infrastructure-source-settings.js';
 
 export const infrastructurePages = { ...MODEL_SERVICE_PAGES, ...RESOURCE_PAGES };
-export const INFRASTRUCTURE_STORAGE = 'moma-5.12.0-estack:infrastructure';
+export { INFRASTRUCTURE_STORAGE };
 
 function readSaved() {
   const saved = JSON.parse(localStorage.getItem(INFRASTRUCTURE_STORAGE) ?? '{}');
@@ -29,12 +30,18 @@ export async function changeInfrastructure(pageId, change) {
   const update = () => {
     const saved = readSaved();
     const records = withSeeds(saved);
-    const result = change(records[pageId], records);
+    const slot = MODEL_SOURCE_SLOTS[pageId];
+    const settings = slot ? modelSourceSettings(saved) : undefined;
+    const result = change(records[pageId], records, settings?.[slot]);
     const updates = Array.isArray(result) ? { [pageId]: result } : { ...result.related, [pageId]: result.rows };
     if (Object.entries(updates).some(([key, rows]) => !Object.hasOwn(records, key) || !Array.isArray(rows))) {
       throw Error('运维演示数据更新范围无效');
     }
     const next = { ...saved, ...updates };
+    if (Object.hasOwn(result, 'modelSource')) {
+      if (!slot || !result.modelSource || typeof result.modelSource.mode !== 'string') throw Error('运维演示数据更新范围无效');
+      next.modelSources = { ...settings, [slot]: result.modelSource };
+    }
     const validated = withSeeds(next);
     localStorage.setItem(INFRASTRUCTURE_STORAGE, JSON.stringify(next));
     return validated;

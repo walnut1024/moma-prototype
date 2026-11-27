@@ -1,154 +1,289 @@
-import { useChannelText } from './channel-language';
-import AdminStatus from './AdminStatus';
-import Table from './AdminTable';
-import { useLayoutEffect, useRef, useState } from 'react';
-import { Card, DatePicker, RadioGroup, Select, Typography } from '@douyinfe/semi-ui';
-import AdminPageHeading from './AdminPageHeading';
+import { useId, useMemo, useState } from 'react';
+import { Button, Card, DatePicker, Input, RadioGroup, Tag, Typography } from '@douyinfe/semi-ui';
+import { IconActivity, IconPieChart2Stroked, IconSearch } from '@douyinfe/semi-icons';
 import { format } from 'date-fns';
-import { PACKAGE_KINDS, PACKAGE_STATUS, PACKAGE_USER_TYPES } from './token-packages';
-import { operationsPeriodFromQuery, usagePreset, usagePresets, usageWindow } from './usage-analysis';
-import { packageOrdersThrough, summarizePackageOrders } from './package-order-report.js';
-import './package-production.css';
+import { Chart } from '../components/AnalyticsCharts';
+import { AdminModal } from './AdminOverlay';
+import AdminStatus from './AdminStatus';
+import Table, { AdminPagination } from './AdminTable';
+import { dayOf } from './analytics';
+import { useChannelText } from './channel-language';
+import { packageClaimDemo } from './package-claim-demo.js';
+import { packageReport } from './package-order-report.js';
+import { usageWindow } from './usage-analysis';
+import './package-data.css';
 
-const route = '#/admin-2/package-data';
-const kinds = [{ value: 'all', label: '全部套餐' }, ...Object.entries(PACKAGE_KINDS).map(([value, label]) => ({ value, label }))];
-const presets = usagePresets.map(([value, label]) => ({ value, label }));
-const pageSize = 20;
+const periods = [['today', '今日'], ['yesterday', '昨日'], ['7d', '近7天'], ['30d', '近30天'], ['custom', '自定义']];
+const people = [['individual', '个人'], ['enterprise', '企业']];
+const claimGroups = ['个人版-Free', '团队版-Free'];
+const seriesColors = ['#2768df', '#00a871', '#8c6ce0', '#ea9b3d'];
+const dateTime = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'medium' });
 const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
-const currency = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' });
-const percent = new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 2 });
-const rangeText = ({ start, end }) => start === end ? start : `${start} 至 ${end}`;
-const packageName = item => item.name || '未命名套餐';
-function pageHref(params, updates) {
-  const next = new URLSearchParams(params);
-  next.delete('demo');
-  for (const [key, value] of Object.entries(updates)) {
-    if (value == null) next.delete(key);
-    else next.set(key, value);
+const yuan = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' });
+const numberText = value => Number.isFinite(value) ? number.format(value) : '—';
+const moneyText = value => Number.isFinite(value) ? yuan.format(value) : '—';
+const dateText = value => Number.isFinite(Date.parse(value)) ? dateTime.format(new Date(value)) : '—';
+const tokenParts = value => !Number.isFinite(value) ? ['—', ''] :
+  value >= 1e8 ? [numberText(value / 1e8), '亿 Tokens'] : value >= 1e4 ? [numberText(value / 1e4), '万 Tokens'] : [numberText(value), 'Tokens'];
+const tokenText = value => tokenParts(value).join(' ').trim();
+const emptyRecords = [];
+const dayMs = 86400000;
+
+function reportPeriod(params, now) {
+  const today = dayOf(now);
+  const requested = params.get('period') || (params.has('start') && params.has('end') ? 'custom' : 'today');
+  const custom = { start: params.get('start'), end: params.get('end') };
+  if (requested === 'custom' && custom.start && custom.end && custom.end <= today && usageWindow(custom, now)) {
+    return { period: requested, range: custom };
   }
-  return next.size ? `${route}?${next}` : route;
+  const end = requested === 'yesterday' ? dayOf(now - dayMs) : today;
+  const days = requested === '7d' ? 7 : requested === '30d' ? 30 : 1;
+  return { period: periods.some(([id]) => id === requested && id !== 'custom') ? requested : 'today',
+    range: { start: days === 1 ? end : dayOf(now - (days - 1) * dayMs), end } };
 }
 
-const entitlementColumns = [
-  { title: '订购时间', width: 170, dataIndex: 'orderedAt' },
-  { title: '套餐 ID', width: 156, dataIndex: 'packageId', render: (id, row) => <>
-    <div>{id}</div><Typography.Text type="tertiary" size="small">权益 {row.id}</Typography.Text>
-  </> },
-  { title: '用户 ID', width: 112, dataIndex: 'userId' },
-  { title: '账号名', width: 114, dataIndex: 'accountName' },
-  { title: '账号类型', width: 120, dataIndex: 'accountType', render: value => PACKAGE_USER_TYPES[value],
-    filters: Object.entries(PACKAGE_USER_TYPES).map(([value, text]) => ({ value, text })),
-    filterMultiple: false, onFilter: (value, row) => row.accountType === value },
-  { title: '套餐档位', width: 105, dataIndex: 'tier' },
-  { title: '套餐额度', width: 118, align: 'right', dataIndex: 'quota', render: value => Number.isFinite(value)?number.format(value):'—' },
-  { title: '有效期至', width: 112, dataIndex: 'expires' },
-  { title: '状态', width: 92, dataIndex: 'status', render: value => <AdminStatus value={value}/> },
-  { title: '已消耗 Tokens', width: 136, align: 'right', dataIndex:'deducted',render:value=>value==null?'—':number.format(value) },
-  { title: '剩余额度（Tokens）', width: 166, align: 'right', dataIndex:'remaining',render:value=>value==null?'—':number.format(value) },
-  { title: '累计成本（元）', width: 132, align: 'right', dataIndex: 'cost',
-    render: value => value === null ? '待核算' : currency.format(value / 100) },
-];
-
-export default function PackageData({ state, params }) {
-  const translateLabel = useChannelText();
-  const [page, setPage] = useState(1);
-  const [dateError, setDateError] = useState('');
-  const heading = useRef(null);
-  const previousPackage = useRef(null);
-  const overviewScroll = useRef(0);
-  const packageId = params.get('package');
-  const kind = Object.hasOwn(PACKAGE_KINDS, params.get('kind')) ? params.get('kind') : 'all';
-  const { period, range } = operationsPeriodFromQuery(params);
-  const today = usagePreset('today').end;
-  const orderFacts = packageOrdersThrough(state.packageOrders || [], range.end);
-  const packageFacts = id => orderFacts.filter(row => row.packageId === id);
-  const records = state.tokenPackages;
-  const selected = packageId ? records.find(item => item.id === packageId) : null;
-  const rights=selected ? packageFacts(selected.id).filter(row=>!row.expires || row.expires>=range.start).map(row=>{
-      const deducted=range.end===today && Number.isFinite(row.used)?row.used:null,expired=row.expires && row.expires<=range.end;
-      return { id:row.id,orderedAt:row.day,packageId:row.packageId,userId:row.userId,accountName:row.accountName,
-        accountType:row.accountType,tier:PACKAGE_KINDS[selected.kind],quota:row.entitlement,expires:row.expires,
-        status:expired?'已到期':row.status,deducted,remaining:deducted==null || !Number.isFinite(row.entitlement)?null:expired?0:row.entitlement-deducted,cost:null };
-    }) : [];
-
-  useLayoutEffect(() => {
-    if (packageId) {
-      overviewScroll.current = window.scrollY;
-      heading.current?.focus({ preventScroll: true });
-      window.scrollTo(0, 0);
-    } else if (previousPackage.current) {
-      const source = document.getElementById(`package-data-link-${previousPackage.current}`);
-      (source ?? heading.current)?.focus({ preventScroll: true });
-      window.scrollTo(0, overviewScroll.current);
-    }
-    previousPackage.current = packageId;
-  }, [packageId]);
-
-  const changeOverview = updates => {
-    setPage(1);
-    setDateError('');
-    location.replace(pageHref(params, updates));
+function ReportCharts({ trend, distribution, demo }) {
+  const t = useChannelText();
+  const trendTitle = t(demo ? '每日领取趋势' : '每日订购趋势');
+  const distributionTitle = t(demo ? '套餐领取分布' : '套餐订购分布');
+  const series = people.map(([type, title], index) => ({ type: 'bar', name: t(demo ? claimGroups[index] : title),
+    data: trend.map(row => row[type]), barMaxWidth: 22 }));
+  const tierColor = (label, index) => seriesColors[claimGroups.includes(label) ? claimGroups.indexOf(label) : (demo ? index + 2 : index) % seriesColors.length];
+  const tiers = distribution.map(({ label, value }, index) => ({ name: t(label), value, itemStyle: { color: tierColor(label, index) } }));
+  const legend = { bottom: 2, icon: 'roundRect', textStyle: { color: '#4e5969', fontSize: 12 } };
+  const bars = {
+    animation: false, color: seriesColors, grid: { top: 36, left: 38, right: 18, bottom: 48 },
+    legend, tooltip: { trigger: 'axis', renderMode: 'richText', confine: true },
+    xAxis: { type: 'category', data: trend.map(row => row.label), axisLabel: { hideOverlap: true, color: '#687283' } },
+    yAxis: { type: 'value', name: t(demo ? '领取数' : '订购份数'), minInterval: 1, splitNumber: 5,
+      axisLabel: { color: '#687283' }, splitLine: { lineStyle: { color: '#dce4f1' } } },
+    series,
   };
-  const overviewHref = pageHref(params, { package: null });
-  const changeRange = (start, end) => {
-    if (!start || !end) return;
-    if (end > today || !usageWindow({ start, end })) {
+  const donut = {
+    animation: false, legend, tooltip: { trigger: 'item', renderMode: 'richText', formatter: '{b}\n{c} ({d}%)', confine: true },
+    series: [{ type: 'pie', radius: ['36%', '64%'], center: ['50%', '46%'], data: tiers,
+      label: { color: '#4e5969', formatter: '{b}\n{d}%' }, stillShowZeroSum: false }],
+  };
+  return <div className="package-report-charts">
+    <section className="package-report-chart">
+      <h2 className="package-report-chart-heading"><IconActivity aria-hidden="true"/>{trendTitle}</h2>
+      <p>{t('按时段汇总 · 个人 vs 企业')}</p>
+      <Chart option={bars} height={270} label={trendTitle}/>
+    </section>
+    <section className="package-report-chart">
+      <h2 className="package-report-chart-heading"><IconPieChart2Stroked aria-hidden="true"/>{distributionTitle}</h2>
+      <p>{t(demo ? '按套餐档位统计领取次数占比' : '按套餐统计订购次数占比')}</p>
+      {tiers.length ? <Chart option={donut} height={270}
+        label={distributionTitle + ' — ' + tiers.map(tier => `${tier.name} ${tier.value}`).join('、')}/> :
+        <div className="package-report-distribution-empty">{t('暂无数据')}</div>}
+    </section>
+  </div>;
+}
+
+function ReportDetails({ rows, prices, demo, narrowToPackage, showAllPackages }) {
+  const t = useChannelText();
+  const headingId = useId();
+  const [search, setSearch] = useState('');
+  const [types, setTypes] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [dialog, setDialog] = useState(null);
+  const query = search.trim().toLowerCase();
+  const filtered = rows.filter(row => (!types.length || types.includes(row.accountType)) &&
+    [row.userId, row.accountName, row.packageId].some(value => String(value ?? '').toLowerCase().includes(query)));
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize)));
+  const detailTitle = t(demo ? '领取明细' : '订购明细');
+  const columns = [
+    { title: demo ? '领取时间' : '订购时间', dataIndex: 'createdAt', width: 158, render: dateText },
+    { title: '套餐 ID', dataIndex: 'packageId', width: 154 },
+    { title: '实例 ID', dataIndex: 'id', width: 140, ellipsis: { showTitle: true } },
+    { title: '用户 ID', dataIndex: 'userId', width: 128 },
+    { title: demo ? '用户名' : '租户名称', dataIndex: 'accountName', width: 140 },
+    { title: '用户类型', dataIndex: 'accountType', width: 116,
+      render: value => people.some(([id]) => id === value) ? t(people.find(([id]) => id === value)[1]) : '—',
+      filters: people.map(([value, text]) => ({ value, text: t(text) })), filteredValue: types },
+    { title: '套餐档位', dataIndex: 'tier', width: 125, render: value => t(value) },
+    { title: '套餐额度', dataIndex: 'entitlement', width: 110, align: 'right', render: tokenText },
+    { title: '有效期至', dataIndex: 'expiresAt', width: 158, render: dateText },
+    { title: '状态', dataIndex: 'status', width: 96, render: value => value && value !== '—' ? <AdminStatus value={value}/> : '—' },
+    { title: demo ? '已消耗 Tokens' : '已抵扣 Tokens', dataIndex: 'used', width: 158, align: 'right',
+      render: (value, row) => <span className="package-report-usage">{tokenText(value)}
+        <Button size="small" theme="borderless" onClick={() => setDialog(row)}>{t('详情')}</Button>
+      </span> },
+    { title: '剩余额度（Tokens）', dataIndex: 'remaining', width: 146, align: 'right', render: tokenText },
+    { title: '累计成本（元）', dataIndex: 'cost', width: 124, align: 'right',
+      render: value => Number.isFinite(value) ? moneyText(value) : t('待核算') },
+  ];
+  const priceRows = prices.flatMap(row => [
+    { ...row, id: `${row.provider}/${row.model}/input`, scenario: '输入 · 百万 Token', rate: row.inputRate },
+    { ...row, id: `${row.provider}/${row.model}/output`, scenario: '输出 · 百万 Token', rate: row.outputRate },
+  ]);
+  const priceColumns = [
+    { title: '模型名称', dataIndex: 'model', render: (model, row) => `${row.provider}/${model}` },
+    { title: '资费场景', dataIndex: 'scenario', render: value => t(value) },
+    { title: '成本价（元/百万 Tokens）', dataIndex: 'rate', align: 'right', render: moneyText },
+  ];
+  const usage = dialog && dialog !== 'prices' ? dialog.usage : null;
+  const usageRows = (usage ?? []).map(item => ({ ...item, id: `${item.provider}/${item.model}`,
+    total: item.inputTokens + item.outputTokens }));
+  const usageColumns = [
+    { title: '服务商 / 模型', dataIndex: 'model', render: (model, row) => `${row.provider}/${model}` },
+    { title: '消耗 Tokens', dataIndex: 'total', align: 'right', render: numberText },
+  ];
+  const close = () => setDialog(null);
+
+  return <>
+    <div className="package-report-detail-heading">
+      <h2 id={headingId}>{detailTitle}</h2>
+      <div className="package-report-detail-controls">
+        {narrowToPackage && <Button theme="borderless" onClick={showAllPackages}>{t('查看全部套餐')}</Button>}
+        <Button theme="light" type="tertiary" onClick={() => setDialog('prices')}>{t('成本单价')}</Button>
+        <Input value={search} onChange={value => { setSearch(value); setPage(1); }} showClear prefix={<IconSearch aria-hidden="true"/>}
+          aria-label={t('搜索用户 ID / 用户名 / 套餐 ID')} placeholder={t('搜索用户 ID / 用户名 / 套餐 ID')}/>
+      </div>
+    </div>
+    <section className="package-report-table" aria-labelledby={headingId} tabIndex={0}>
+      <Table rowKey="id" columns={columns} dataSource={filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
+        scroll={{ x: 'max(100%, 1765px)', y: 530, scrollToFirstRowOnChange: true }}
+        onChange={({ extra, filters }) => {
+          if (extra?.changeType !== 'filter') return;
+          setTypes(filters.find(filter => filter.dataIndex === 'accountType')?.filteredValue ?? []);
+          setPage(1);
+        }}
+        pagination={false}
+        empty={demo ? '暂无领取记录' : '暂无订购记录'}/>
+    </section>
+    <AdminPagination currentPage={currentPage} pageSize={pageSize} pageSizeOpts={[10, 20, 50, 100]}
+      total={filtered.length} showSizeChanger onPageChange={setPage}
+      onPageSizeChange={value => { setPageSize(value); setPage(1); }}/>
+    <Typography.Paragraph type="tertiary" size="small" className="package-report-footnote">
+      {t('累计成本 = Σ（模型实际消耗 Tokens × 模型成本单价），按基础 Tokens 口径。')}
+    </Typography.Paragraph>
+    {dialog && <AdminModal visible title={t(dialog === 'prices' ? '成本单价' : '消耗详情')}
+      width="min(720px, calc(100vw - 32px))" onCancel={close} closeOnEsc
+      footer={<Button onClick={close}>{t('关闭')}</Button>}>
+      {dialog === 'prices' ? <Table rowKey="id" columns={priceColumns} dataSource={priceRows} pagination={false}
+        scroll={{ x: 472, y: 420 }} empty="当前数据源未提供模型成本单价。"/> :
+        <>
+          <Typography.Paragraph type="tertiary">{[dialog.packageId, dialog.userId, t(dialog.tier)].filter(Boolean).join(' · ')}</Typography.Paragraph>
+          <Table rowKey="id" columns={usageColumns} dataSource={usageRows} pagination={false} scroll={{ x: 350, y: 340 }}
+            empty={usage ? '暂无用量记录' : '当前数据源未提供实例消耗明细。'}/>
+          <Typography.Paragraph strong>{t('合计')} {usage ? numberText(usageRows.reduce((sum, row) => sum + row.total, 0)) : '—'}</Typography.Paragraph>
+        </>}
+    </AdminModal>}
+  </>;
+}
+
+export default function PackageData({ state, params, refreshRead }) {
+  const t = useChannelText();
+  const dateLabel = useId();
+  const actual = state.packageOrders ?? emptyRecords;
+  const [demo, setDemo] = useState(() => actual.length === 0 && !params.has('package'));
+  const [now, setNow] = useState(Date.now);
+  const [custom, setCustom] = useState(false);
+  const [dateError, setDateError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const sample = useMemo(() => packageClaimDemo(now), [now]);
+  const { period, range } = reportPeriod(params, now);
+  const selectingCustom = custom || period === 'custom';
+  const packageId = params.get('package');
+  const source = demo ? sample.orders : actual;
+  const orders = packageId ? source.filter(row => row.packageId === packageId) : source;
+  const { rows, trend, distribution, totals } = packageReport(orders, state.tokenPackages ?? emptyRecords, range, now);
+  const [quotaValue, quotaUnit] = tokenParts(totals.tokens);
+  const title = demo ? '套餐申领统计' : '套餐数据';
+  const updateQuery = patch => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value == null) next.delete(key);
+      else next.set(key, value);
+    }
+    location.replace('#/admin-2/package-data' + (next.size ? '?' + next : ''));
+  };
+
+  const changePeriod = option => {
+    setDateError('');
+    setCustom(option === 'custom');
+    if (option !== 'custom') updateQuery({ period: option, start: null, end: null });
+  };
+  const changeDates = dates => {
+    if (!Array.isArray(dates) || dates.length !== 2 || !dates.every(Boolean)) return;
+    const [start, end] = dates.map(date => format(date, 'yyyy-MM-dd'));
+    if (end > dayOf(now) || !usageWindow({ start, end }, now)) {
       setDateError('请选择不晚于今天且不超过 365 天的日期范围。');
       return;
     }
-    changeOverview({ period: 'custom', start, end });
+    setDateError('');
+    updateQuery({ period: 'custom', start, end });
+  };
+  const query = async () => {
+    setDateError('');
+    if (demo) {
+      setNow(Date.now());
+      return;
+    }
+    setBusy(true);
+    try {
+      await refreshRead();
+      setNow(Date.now());
+    } catch {
+      setDateError('套餐数据加载失败，请重试。');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const rows = packageId ? [] : records
-    .filter(item => kind === 'all' || item.kind === kind)
-    .map(item => ({ ...item, stats:summarizePackageOrders(packageFacts(item.id), range, today) }));
-  const overviewColumns = [
-    { title: '套餐名称', width: 240, render: (_, item) =>
-      <Typography.Text link={{ href: pageHref(params, { package: item.id }), id: `package-data-link-${item.id}` }}>
-        {packageName(item)}
-      </Typography.Text>
-    },
-    { title: '资费ID', width: 160, dataIndex: 'id' },
-    { title: '新增销售数', width: 120, align: 'right', render: (_, { stats }) => number.format(stats.quantity) },
-    { title: '累计到期数', width: 120, align: 'right', render: (_, { stats }) => number.format(stats.expiredThroughEnd) },
-    { title: '额度消耗率（平均值）', width: 180, align: 'right',
-      render: (_, { stats }) => stats.averageConsumptionRate === null ? '—' : percent.format(stats.averageConsumptionRate) },
-  ];
-
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / pageSize)));
-  return <div className="admin-page-stack">
-      <AdminPageHeading title={<span ref={heading} tabIndex={-1}>{selected ? packageName(selected) : packageId ? '套餐详情' : '套餐数据'}</span>}>
-        {packageId && <Typography.Text link={{ href: overviewHref }}>返回概览</Typography.Text>}
-      </AdminPageHeading>
-      {packageId ? <>
-        {selected ? <>
-          <Typography.Text type="tertiary">{selected.id} · {PACKAGE_KINDS[selected.kind]} · {PACKAGE_STATUS[selected.status]} · {rangeText(range)}（北京时间）</Typography.Text>
-          <Card><section aria-label="已购权益明细">
-            <Table size="small" key={selected.id} rowKey="id" dataSource={rights} columns={entitlementColumns} scroll={{ x: 'max(100%, 1533px)' }}
-              pagination={{ pageSize, hideOnSinglePage: true }}
-              empty="暂无符合条件的权益记录"/>
-          </section></Card>
-        </> : <Typography.Text role="status">套餐不存在或当前数据来源无此套餐。</Typography.Text>}
-      </> : <Card>
-        <div className="admin-list-toolbar package-data-filters" role="group" aria-label="套餐数据筛选">
-          <RadioGroup type="button" aria-label="统计时间范围" value={period} options={presets}
-            onChange={event => changeOverview({ period: event.target.value, start: null, end: null })}/>
-          <span id="package-data-date-label" className="sr-only">{translateLabel("自定义日期范围")}</span>
-          <DatePicker className="package-data-dates" aria-labelledby="package-data-date-label" type="dateRange"
-            value={[range.start, range.end]} format="yyyy-MM-dd" showClear={false}
-            disabledDate={date => Boolean(date && format(date, 'yyyy-MM-dd') > today)}
-            onChange={(_, dates) => { if (Array.isArray(dates)) changeRange(...dates); }}/>
-          <Typography.Text type="tertiary">{translateLabel("北京时间")}</Typography.Text>
-          <span id="package-data-kind-label" className="sr-only">套餐类型</span>
-          <Select aria-labelledby="package-data-kind-label" value={kind} optionList={kinds}
-            onChange={value => changeOverview({ kind: value === 'all' ? null : value })}/>
+  return <div className="package-report">
+    <div className="package-report-hero">
+      <div>
+        <h1>{t(title)}</h1>
+        <p>{t(demo ? '查看套餐申领记录及汇总数据。' : '查看套餐订购权益及汇总数据。')}</p>
+      </div>
+      <div className="package-report-hero-end">
+        {demo && <Tag color="blue" size="small">{t('模拟数据')}</Tag>}
+        <Button size="small" type="tertiary" theme="borderless" onClick={() => setDemo(value => !value)}>
+          {t(demo ? '退出模拟' : '模拟数据')}
+        </Button>
+        <img width="80" height="80" src={import.meta.env.BASE_URL + 'assets/package-claim-statistics.png'} alt=""/>
+      </div>
+    </div>
+    <Card className="package-report-body">
+      <div className="package-report-toolbar">
+        <span id={dateLabel}>{t('时间范围')}</span>
+        <RadioGroup className="package-report-periods" type="button" aria-labelledby={dateLabel}
+          value={selectingCustom ? 'custom' : period} options={periods.map(([value, label]) => ({ value, label: t(label) }))}
+          onChange={event => changePeriod(event.target.value)}/>
+        {selectingCustom ? <DatePicker className="package-report-dates" type="dateRange" aria-label={t('选择日期范围')}
+          placeholder={[t('开始日期'), t('结束日期')]} value={period === 'custom' ? [range.start, range.end] : []}
+          format="yyyy-MM-dd" showClear={false} disabledDate={date => Boolean(date && format(date, 'yyyy-MM-dd') > dayOf(now))}
+          onChange={(_, dates) => changeDates(dates)}/> :
+          <Typography.Text className="package-report-dates" type="tertiary">{range.start} 00:00 — {range.end} 23:59</Typography.Text>}
+        <Button className="package-report-query" theme="solid" onClick={query} loading={busy}
+          disabled={selectingCustom && period !== 'custom'}>{t('查询')}</Button>
+      </div>
+      {dateError && <Typography.Paragraph role="alert" type="danger">{t(dateError)}</Typography.Paragraph>}
+      <div className="package-report-metrics">
+        <div className="package-report-metric">
+          <span>{t(demo ? '累计领取' : '累计订购')}</span>
+          <div className="package-report-metric-values">
+            <div><strong>{numberText(demo ? totals.individualAccounts : totals.individual)}</strong>
+              <small>{t(demo ? '人 · 个人版-Free' : '份 · 个人')}</small></div>
+            <div><strong>{numberText(demo ? totals.enterpriseAccounts : totals.enterprise)}</strong>
+              <small>{t(demo ? '家 · 团队版-Free' : '份 · 企业')}</small></div>
+          </div>
         </div>
-        {dateError && <Typography.Text type="danger" role="alert">{dateError}</Typography.Text>}
-        <section aria-label="套餐汇总">
-          <Table size="small" rowKey="id" dataSource={rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)} columns={overviewColumns} scroll={{ x: 'max(100%, 820px)' }}
-            pagination={{ pageSize, currentPage, total: rows.length, onPageChange: setPage, hideOnSinglePage: true }}
-            empty="暂无套餐记录"/>
-        </section>
-      </Card>}
-    </div>;
+        <div className="package-report-metric">
+          <span>{t('累计发放额度')}</span>
+          <div className="package-report-metric-values"><div><strong>{quotaValue}</strong><small>{t(quotaUnit)}</small></div></div>
+        </div>
+        <div className="package-report-metric">
+          <span>{t('累计成本')}</span>
+          <div className="package-report-metric-values"><div><strong>{moneyText(totals.cost)}</strong></div></div>
+        </div>
+      </div>
+      <ReportCharts trend={trend} distribution={distribution} demo={demo}/>
+      <ReportDetails key={`${demo}/${range.start}/${range.end}/${packageId}`} rows={rows} prices={demo ? sample.prices : emptyRecords}
+        demo={demo} narrowToPackage={packageId} showAllPackages={() => updateQuery({ package: null })}/>
+    </Card>
+  </div>;
 }

@@ -110,33 +110,11 @@
   .admin-log-period { flex-wrap: wrap; }
   .admin-call-log-detail .semi-sidesheet-body { padding-inline: 20px; }
 }
-.admin-v2 .admin-monitor-attempt-detail { border-color: var(--semi-color-primary); }
-.admin-service-monitor > .semi-tabs { min-width: 0; }
-.admin-service-monitor > .semi-tabs > .semi-tabs-content { padding-block-start: var(--admin-section-gap); }
-.admin-service-monitor .admin-monitor-summary dl {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; gap: 16px;
-}
-.admin-service-monitor .admin-monitor-summary dt {
-  color: var(--semi-color-text-2); font-size: 13px;
-}
-.admin-service-monitor .admin-monitor-summary dd {
-  margin: 4px 0 0; font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
-}
-.admin-service-monitor .admin-monitor-summary .admin-monitor-sample-count {
-  color: var(--semi-color-text-2); font-size: 12px; font-weight: 400;
-}
-.admin-service-monitor .admin-monitor-section-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.admin-service-monitor .admin-monitor-group-link { max-width: 100%; }
-.admin-service-monitor .admin-monitor-group-link .semi-button-content {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+.channel-health-trend-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .admin-log-policy section { display: grid; gap: 10px; }
 .admin-log-policy-switch { display: flex; align-items: center; gap: 12px; }
 .admin-log-policy-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .admin-log-policy-fields > label { display: grid; gap: 4px; }
-@media (max-width: 900px) {
-  .admin-service-monitor .admin-monitor-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (max-width: 460px) {
   .admin-log-policy-fields { grid-template-columns: 1fr; }
 }
@@ -149,8 +127,6 @@
 @media (max-width: 480px) {
   .admin-log-column-options.semi-checkboxGroup { grid-template-columns: minmax(0, 1fr); }
 }
-.admin-observe-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--admin-section-gap); }
-@media (max-width: 600px) { .admin-observe-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .admin-request-log-sheet .semi-sidesheet-header { border-bottom: 1px solid var(--semi-color-border); }
 .admin-request-log-sheet .semi-sidesheet-body { padding-block-start: 0; overflow-wrap: anywhere; }

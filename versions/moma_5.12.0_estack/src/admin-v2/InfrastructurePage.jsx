@@ -1,7 +1,8 @@
 import { Fragment, Suspense, lazy, useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Checkbox, Empty, Input, InputNumber, Select, Space, Switch, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Checkbox, Collapse, Empty, Input, InputNumber, Select, Space, Switch, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
 import { IconArrowDown, IconArrowUp, IconPlus, IconRefresh, IconSearch } from '@douyinfe/semi-icons';
 import AdminDescriptions from './AdminDescriptions';
+import AdminCollapsePanel from './AdminCollapsePanel';
 import AdminActionMenu from './AdminActionMenu';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import AdminPageHeading from './AdminPageHeading';
@@ -16,6 +17,7 @@ import { resourceId } from '../resource-id.mjs';
 import { deployableModels } from './deployments';
 import { canMutate } from './state-transaction';
 import { changeInfrastructure, INFRASTRUCTURE_STORAGE, infrastructurePages, readInfrastructure } from './infrastructure-state';
+import { readInferenceDemoInfrastructure } from './inference-demo-infrastructure.js';
 import './infrastructure.css';
 
 const collator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' });
@@ -31,10 +33,12 @@ const labelOf = (row) => row.displayName || row.name;
 const normalized = value => typeof value === 'string' ? value.trim() : value;
 const emptyRecords = Object.fromEntries(Object.keys(infrastructurePages).map(id => [id, []]));
 const views = { ...MODEL_SERVICE_VIEWS, ...RESOURCE_VIEWS };
+const changesInfrastructure = action => Boolean(action.apply || action.editor || action.deployModelFile ||
+  action.panel === 'delete' || action.target?.mode === 'create');
 const ModelFileDeploymentDrawer = lazy(() => import('./DeploymentManagement').then(module => ({ default:module.ModelFileDeploymentDrawer })));
 
-function readSource() {
-  try { return readInfrastructure(); }
+function readSource(inferenceDemo) {
+  try { return inferenceDemo ? readInferenceDemoInfrastructure() : readInfrastructure(); }
   catch { return null; }
 }
 
@@ -113,6 +117,10 @@ function InfrastructureField({ field, value, draft, row, records, onChange, t, F
   };
   const placeholder = field.placeholder ? t(field.placeholder) : undefined;
   const Custom = Fields?.[field.type];
+  if (field.type === 'checkbox') return <div className="infra-field infra-field-wide">
+    <Checkbox disabled={common.disabled} checked={Boolean(value)} onChange={event => onChange(event.target.checked)}>{label}</Checkbox>
+    {field.help && <Typography.Text type="tertiary" size="small">{t(field.help)}</Typography.Text>}
+  </div>;
   let control;
   if (Custom) {
     control = <Custom {...common} field={field} value={value} onChange={onChange}
@@ -139,12 +147,14 @@ function InfrastructureField({ field, value, draft, row, records, onChange, t, F
   </div>;
 }
 
-function InfrastructureForm({ page, row, records, preset, t, onSave, onClose, dirtyRef, busy, Fields }) {
+function InfrastructureForm({ page, row, records, preset, t, onSave, onClose, previous, wasDirty = false, dirtyRef, busy, Fields, FormNotice }) {
   const id = useId();
   const [draft, setDraft] = useState(() => initialDraft(page, row, records, preset));
   const [error, setError] = useState('');
+  const errorSummary = useRef(null);
   const [discard, setDiscard] = useState(false);
-  const [changed, setChanged] = useState(false);
+  const [changed, setChanged] = useState(wasDirty);
+  useEffect(() => { if (error) errorSummary.current?.focus(); }, [error]);
   const submit = async event => {
     event.preventDefault();
     if (busy) return;
@@ -164,26 +174,33 @@ function InfrastructureForm({ page, row, records, preset, t, onSave, onClose, di
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push(field);
   }
+  const renderGroup = (group, fields) => <section className="infra-fields" key={group} aria-label={group ? t(group) : undefined}>
+    {group && !page.collapsibleGroups?.includes(group) && <Typography.Title heading={5} component="h3">{t(group)}</Typography.Title>}
+    {fields.map(field => <InfrastructureField key={field.key} field={field} row={row}
+      value={draft[field.key]} draft={draft} records={records} t={t} Fields={Fields}
+      onChange={value => {
+        setDraft(current => ({ ...current, [field.key]: value, ...page.onFieldChange?.(current, field.key, value, records, row) }));
+        setChanged(true);
+        dirtyRef.current = true;
+        setError('');
+      }}/>)}
+  </section>;
   return <>
     <AdminSideSheet title={t(page.editorTitle ?? (row ? `编辑${page.title}` : page.createLabel ?? `添加${page.title}`))} visible
       className="infra-sheet" width="min(620px, 100vw)" onCancel={close} closeOnEsc={!discard && !busy}
       footer={<>
+        {previous && <Button disabled={busy} onClick={() => previous(draft, changed)}>{t('上一步')}</Button>}
         <Button disabled={busy} onClick={close}>{t('取消')}</Button>
-        <Button type="primary" theme="solid" htmlType="submit" form={id} loading={busy}>{t('保存')}</Button>
+        <Button type="primary" theme="solid" htmlType="submit" form={id} loading={busy}>
+          {t((typeof page.submitLabel==='function' ? page.submitLabel(draft,records,row) : page.submitLabel) || '保存')}
+        </Button>
       </>}>
       <form className="infra-form" id={id} onSubmit={submit}>
-        {error && <Banner type="danger" closeIcon={null} description={error}/>}
-        {[...groups].map(([group, fields]) => <section className="infra-fields" key={group} aria-label={group ? t(group) : undefined}>
-          {group && <Typography.Title heading={5} component="h3">{t(group)}</Typography.Title>}
-          {fields.map(field => <InfrastructureField key={field.key} field={field} row={row}
-            value={draft[field.key]} draft={draft} records={records} t={t} Fields={Fields}
-            onChange={value => {
-              setDraft(current => ({ ...current, [field.key]: value, ...page.onFieldChange?.(current, field.key, value, records, row) }));
-              setChanged(true);
-              dirtyRef.current = true;
-              setError('');
-            }}/>)}
-        </section>)}
+        {error && <div ref={errorSummary} tabIndex={-1}><Banner type="danger" closeIcon={null} description={error}/></div>}
+        {[...groups].map(([group, fields]) => page.collapsibleGroups?.includes(group) ?
+          <Collapse key={group} keepDOM><AdminCollapsePanel itemKey={group} header={t(group)}>{renderGroup(group, fields)}</AdminCollapsePanel></Collapse> :
+          renderGroup(group, fields))}
+        {FormNotice && <FormNotice draft={draft} row={row} records={records}/>}
       </form>
     </AdminSideSheet>
     {discard && serviceOperationsUi.renderLeaveDialog({ cancel: () => setDiscard(false), discard: onClose })}
@@ -199,23 +216,32 @@ function saveFile({ name, content, type }) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function InfrastructurePage({ pageId, state, params, navigate, dirtyRef, dispatch, conflict }) {
+export default function InfrastructurePage({ pageId, state, params, navigate, dirtyRef, dispatch, conflict, inferenceDemo = false }) {
   const t = useChannelText();
   const headingId = useId();
   const page = infrastructurePages[pageId];
   const columnsKey = INFRASTRUCTURE_STORAGE + ':columns:' + pageId;
-  const { Header, Detail, Extra, ExpandedRow, Fields, Cells, Card: CardView, Empty: EmptyView, Editor } = views[pageId] ?? {};
-  const [source, setSource] = useState(readSource);
+  const { Header, Detail, Extra, ExpandedRow, Fields, Cells, FormNotice, Card: CardView, Editor, Empty: EmptyView, afterCreate } = views[pageId] ?? {};
+  const [source, setSource] = useState(() => readSource(inferenceDemo));
   const [storageError, setStorageError] = useState('');
   const [keyword, setKeyword] = useState(params.get('q') ?? '');
-  const [filters, setFilters] = useState(() => Object.fromEntries(
-    (page.filters ?? []).flatMap(({ key, multiple }) => params.has(key) ? [[key, multiple ? params.getAll(key) : params.get(key)]] : []),
-  ));
+  const [filters, setFilters] = useState(() => {
+    const deploymentBenchmark = pageId === 'ops-benchmarks' && params.get('view') === 'create' && params.has('targetId');
+    return Object.fromEntries((page.filters ?? []).flatMap(({ key, multiple }) => {
+      if (!params.has(key) || deploymentBenchmark && ['clusterId', 'targetMode'].includes(key)) return [];
+      return [[key, multiple ? params.getAll(key) : params.get(key)]];
+    }));
+  });
   const [tab, setTab] = useState(0);
   const [sort, setSort] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const isCatalogue = pageId==='ops-model-library';
+  const [currentPage, setCurrentPage] = useState(()=>{
+    const page = isCatalogue ? Number(params.get('catalogPage')) : 1;
+    return Number.isSafeInteger(page) && page>0 ? page : 1;
+  });
+  const catalogueTop = useRef(isCatalogue && params.has('catalogTop') ? Number(params.get('catalogTop')) : null);
   const [pageSize, setPageSize] = useState(page.initialPageSize ?? 10);
-  const [editor, setEditor] = useState(() => params.get('view') === 'create' && page.fields?.length ? { preset: params } : null);
+  const [editor, setEditor] = useState(() => !inferenceDemo && params.get('view') === 'create' && page.fields?.length ? { preset: params } : null);
   const [fileDeployment, setFileDeployment] = useState(null);
   const [detail, setDetail] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
@@ -223,22 +249,27 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
   const [view, setView] = useState(() => page.views?.includes(params.get('layout')) ? params.get('layout') : page.views?.[0] ?? 'table');
   const [selected, setSelected] = useState([]);
   const [hidden, setHidden] = useState(() => {
+    const defaults = page.defaultHiddenColumns ?? [];
+    if (inferenceDemo) return defaults;
     try {
-      const stored = JSON.parse(localStorage.getItem(columnsKey) ?? '[]');
-      return Array.isArray(stored) ? stored : [];
-    } catch { return []; }
+      const stored = JSON.parse(localStorage.getItem(columnsKey));
+      return Array.isArray(stored) ? stored : defaults;
+    } catch { return defaults; }
   });
   const [showColumns, setShowColumns] = useState(false);
   const [draftHidden, setDraftHidden] = useState([]);
   const [expanded, setExpanded] = useState([]);
   const pending = useRef(false);
+  const loadMarker = useRef(null);
 
   const refresh = () => {
     try {
-      setSource(readInfrastructure());
+      setSource(inferenceDemo ? readInferenceDemoInfrastructure() : readInfrastructure());
       setStorageError('');
+      return true;
     } catch {
       setStorageError('无法读取运维演示数据。请刷新后重试。');
+      return false;
     }
   };
   useEffect(() => {
@@ -246,40 +277,72 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     const sync = event => {
       if (event.key == null || event.key === INFRASTRUCTURE_STORAGE) refresh();
     };
-    window.addEventListener('storage', sync);
+    if (!inferenceDemo) window.addEventListener('storage', sync);
     return () => { window.removeEventListener('storage', sync); dirtyRef.current = false; };
-  }, [dirtyRef]);
+  }, [dirtyRef, inferenceDemo]);
 
   const shared = {
     clusters: state.clusters, deployments: state.deployments.filter(row => !row.retiredAt),
+    routes: state.routes, endpoints: state.endpoints,
     deployableModels: deployableModels(state),
     actorRole: state.currentRole,
     actorName: state.admins.find(account => account.id === state.adminSession?.accountId)?.name,
   };
   const records = { ...shared, ...(source ?? emptyRecords) };
-  const rows = (records[pageId] ?? []).filter(row => !page.showRow || page.showRow(row));
+  const rows = records[pageId] ?? [];
   const tabs = page.tabs ?? [];
   const activeTab = tabs[tab];
   const query = keyword.trim().toLocaleLowerCase();
-  const filtered = rows.filter(row => {
+  const hasFilters = Boolean(query || Object.values(filters).some(value => !blank(value)));
+  const candidates = page.searchRows ? page.searchRows(rows, query) : rows;
+  const filtered = candidates.filter(row => {
+    if (page.showRow && !page.showRow(row, records)) return false;
     if (activeTab?.key && !filterMatch(activeTab.value, row[activeTab.key])) return false;
     if (!(page.filters ?? []).every(({ key, match }) => blank(filters[key]) ||
         (match ? match(filters[key], row, records) : filterMatch(filters[key], row[key])))) return false;
+    if (page.searchRows || !query) return true;
     const searchKeys = page.searchKeys ?? ['name', 'displayName'];
-    return !query || [row.id, ...searchKeys.map(key => row[key])].some(value => String(value ?? '').toLocaleLowerCase().includes(query));
+    const searchable = page.searchMatches ? page.searchMatches(row, query) :
+      [row.id, ...searchKeys.map(key => row[key])].some(value => String(value ?? '').toLocaleLowerCase().includes(query));
+    return searchable;
   });
   if (sort) {
     const field = page.columns.find(column => column.key === sort.key);
-    const sortValue = row => field.key === 'name' ? display(field, row, records) : row[field.key];
-    filtered.sort((left, right) => sort.direction * collator.compare(String(sortValue(left) ?? ''), String(sortValue(right) ?? '')));
+    const sortValue = row => field.sortValue ? field.sortValue(row, records) : field.key === 'name' ? display(field, row, records) : row[field.key];
+    filtered.sort((left, right) => {
+      const a = sortValue(left), b = sortValue(right);
+      return sort.direction * (typeof a === 'number' && typeof b === 'number' ? a - b : collator.compare(String(a ?? ''), String(b ?? '')));
+    });
   }
   const pageNumber = Math.max(1, Math.min(currentPage, Math.ceil(filtered.length / pageSize)));
   const displayed = view === 'cards' && page.loadMore ? filtered.slice(0, pageSize * currentPage) : filtered.slice((pageNumber - 1) * pageSize, pageNumber * pageSize);
+  useEffect(()=>{
+    const top = catalogueTop.current;
+    if (!source || !displayed.length || top==null || !Number.isSafeInteger(top) || top<0) return undefined;
+    const frame = requestAnimationFrame(()=>{
+      window.scrollTo({top,behavior:'instant'});
+      catalogueTop.current=null;
+    });
+    return ()=>cancelAnimationFrame(frame);
+  },[source,displayed.length]);
+  const canLoadMore = view === 'cards' && page.loadMore && displayed.length < filtered.length;
+  const loadOnScroll = canLoadMore && page.loadOnScroll && typeof IntersectionObserver !== 'undefined';
+  useEffect(() => {
+    if (!loadOnScroll || !loadMarker.current) return undefined;
+    const marker = loadMarker.current;
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.unobserve(marker);
+      setCurrentPage(page => page + 1);
+    });
+    observer.observe(marker);
+    return () => observer.disconnect();
+  }, [loadOnScroll, currentPage]);
   const standalone = params.get('view') === 'detail' && params.has('record');
   const detailContext = standalone ? { id: params.get('record'), panel: params.get('panel') } : detail;
-  const selectedDetail = rows.find(row => row.id === detailContext?.id);
+  const selectedDetail = inferenceDemo && detailContext?.panel === 'delete' ? undefined : rows.find(row => row.id === detailContext?.id);
   const selectedRows = rows.filter(row => selected.includes(row.id));
-  const writable = Boolean(source && !storageError);
+  const writable = !inferenceDemo && Boolean(source && !storageError);
   const canDeployFile = writable && !conflict && !state.storageError && canMutate(state.currentRole,{type:'deploymentOperation'});
 
   const listQuery = () => {
@@ -289,6 +352,10 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     Object.entries(filters).forEach(([key, value]) => {
       if (!blank(value)) (Array.isArray(value) ? value : [value]).forEach(item => query.append(key, item));
     });
+    if (isCatalogue) {
+      query.set('catalogPage',String(currentPage));
+      query.set('catalogTop',String(Math.max(0,Math.round(window.scrollY))));
+    }
     return query;
   };
   const openDetail = (row, settings = {}) => {
@@ -308,7 +375,9 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
       navigate(pageId + (query.size ? '?' + query : ''));
     }
   };
-  const openEditor = (options = {}) => setEditor(options);
+  const openEditor = (options = {}) => {
+    if (!inferenceDemo) setEditor(options);
+  };
   const closeEditor = () => {
     dirtyRef.current = false;
     setEditor(null);
@@ -322,7 +391,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     pending.current = true;
     setBusy(true);
     try {
-      const next = await changeInfrastructure(pageId, (latest, local) => change(latest, { ...shared, ...local }));
+      const next = await changeInfrastructure(pageId, (latest, local, modelSource) => change(latest, { ...shared, ...local }, modelSource));
       setSource(next);
       if (message) Toast.success(t(message));
       return next;
@@ -336,6 +405,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         validate: editor.action.editor.validate, save: editor.action.editor.save }
     : { ...page, editorTitle: editor?.title };
   const save = async draft => {
+    let createdRow;
     await commit((latest, all) => {
       const previous = editor.row && latest.find(row => row.id === editor.row.id);
       const editRule = editor.action ? editor.action.when : editorPage.editable;
@@ -353,9 +423,14 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
       const next = previous
         ? { ...previous, ...patch, id: previous.id, updatedAt: now }
         : { status: '可用', createdAt: now, ...patch, id: resourceId(pageId) };
+      if (!previous) createdRow = next;
       return previous ? latest.map(row => row.id === previous.id ? next : row) : [next, ...latest];
     }, '已保存');
     closeEditor();
+    if (afterCreate && createdRow) {
+      try { await afterCreate({ row: createdRow, params, dispatch, records, navigate }); }
+      catch (issue) { Toast.error(issue.message); }
+    }
   };
   const closeFileDeployment = () => {
     const { opener, left, top } = fileDeployment;
@@ -367,14 +442,14 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     });
   };
   const runAction = (action, row, opener) => {
+    if (inferenceDemo && changesInfrastructure(action)) return;
     if (action.deployModelFile) {
       if (canDeployFile) setFileDeployment({ id:row.id, opener, left:window.scrollX, top:window.scrollY });
       return;
     }
     if (action.target) {
-      const { page: target, field, mode } = action.target;
+      const { page: target, field } = action.target;
       const query = new URLSearchParams();
-      if (mode === 'create') query.set('view', 'create');
       if (field) query.set(field, action.value?.(row, records) ?? row.id);
       navigate(target + (query.size ? '?' + query : ''));
       return;
@@ -425,25 +500,26 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         return action.related ? { rows, related: action.related(current, all) } : rows;
       }, action ? '操作已完成' : '已删除');
       setConfirmation(null);
+      if (!action && detailContext?.id === row?.id) closeDetail();
       if (batch) setSelected([]);
     } catch (issue) { Toast.error(issue.message); }
   };
 
   const hasNameColumn = page.columns.some(column => column.key === 'name');
-  const renderActions = row => {
+  const renderActions = (row, { allowEdit = true, panelActions = {} } = {}) => {
     const items = [];
-    if (!hasNameColumn) items.push({ key: 'details', name: t('详情'), onClick: () => openDetail(row) });
-    if (page.fields?.length && page.editable && allowed(page.editable, row, records)) {
+    if (!hasNameColumn && page.showDetailsAction !== false) items.push({ key: 'details', name: t('详情'), onClick: () => openDetail(row) });
+    if (!inferenceDemo && allowEdit && page.fields?.length && page.editable && allowed(page.editable, row, records)) {
       items.push({ key: 'edit', name: t('编辑'), disabled: !writable, onClick: () => openEditor({ row }) });
     }
     for (const action of page.actions ?? []) {
-      if (!allowed(action.when, row, records)) continue;
+      if (!allowed(action.when, row, records) || inferenceDemo && changesInfrastructure(action)) continue;
       items.push({ key: action.label, name: t(action.label), type: action.danger ? 'danger' : undefined,
         disabled: action.deployModelFile && !canDeployFile || !writable && Boolean(action.apply || action.editor) ||
           Boolean(typeof action.disabled === 'function' ? action.disabled(row, records) : action.disabled),
-        onClick: opener => runAction(action, row, opener) });
+        onClick: opener => panelActions[action.panel] ? panelActions[action.panel]() : runAction(action, row, opener) });
     }
-    if (page.deletable && allowed(page.deletable, row, records)) {
+    if (!inferenceDemo && page.deletable && allowed(page.deletable, row, records)) {
       items.push({ key: 'delete', name: t('删除'), type: 'danger', disabled: !writable, onClick: () => {
         const reason = page.canDelete?.(row, records);
         if (reason) Toast.warning(t(reason));
@@ -467,6 +543,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         } : undefined}/> : column.label,
       onHeaderCell: () => ({ scope: 'col', 'aria-sort': sorted ? sort.direction === 1 ? 'ascending' : 'descending' : undefined }),
       width: column.width,
+      align: column.align,
       render: (_, row) => {
         const Custom = Cells?.[column.key];
         if (Custom) return <Custom row={row} column={column} records={records} openDetail={openDetail} t={t}
@@ -489,22 +566,23 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
   if (page.actions?.length || page.editable && page.fields?.length || page.deletable || !hasNameColumn) {
     columns.push({ key: 'actions', title: '操作', width: page.actionWidth ?? 178, render: (_, row) => renderActions(row) });
   }
-  const selectable = page.rowSelection || page.batchActions?.length > 0;
+  const selectable = (!inferenceDemo || pageId === 'ops-benchmarks') && (page.rowSelection || page.batchActions?.length > 0);
   const rowSelection = selectable ? { selectedRowKeys: selected, onChange: setSelected,
     getCheckboxProps: row => ({ disabled: !allowed(page.rowSelection, row, records) }) } : undefined;
   const tableWidth = page.tableWidth ?? columns.reduce((width, column) => width + (column.width ?? 106), selectable ? 42 : 0);
   const info = detailContext?.fields ?? page.detail ?? page.columns;
-  const widgetProps = { pageId, page, records, rows, filtered, selectedRows, params, navigate, listQuery, commit, refresh, openDetail, openEditor, closeEditor, t, busy };
+  const widgetProps = { pageId, page, records, rows, filtered, selectedRows, clearSelection: () => setSelected([]), params, navigate, listQuery, commit, refresh, openDetail, openEditor, closeEditor, dispatch: inferenceDemo ? undefined : dispatch, t, busy: busy || inferenceDemo, inferenceDemo };
   const renderDetail = selectedDetail && (Detail && !detailContext?.fields ?
-    <Detail {...widgetProps} detail={detailContext} row={selectedDetail} panel={detailContext.panel} close={closeDetail} standalone={standalone}/> :
+    <Detail {...widgetProps} detail={detailContext} row={selectedDetail} panel={detailContext.panel} close={closeDetail} standalone={standalone}
+      renderActions={renderActions}/> :
     <AdminDescriptions align="left" data={info.map(column => ({
       key: t(column.label), value: column.status ? <AdminStatus value={display(column, selectedDetail, records)}/> :
         <Typography.Text className="infra-detail-value" copyable={column.copyable}>{display(column, selectedDetail, records)}</Typography.Text>,
     }))}/>);
   const runBatch = action => {
-    if (!selectedRows.length || action.when && !action.when(selectedRows, records)) return;
+    if (!selectedRows.length || inferenceDemo && !action.download || action.when && !action.when(selectedRows, records)) return;
     if (action.download) {
-      try { saveFile(action.download(selectedRows, records)); }
+      try { saveFile(action.download(selectedRows, records, page.columns.filter(column => !hidden.includes(column.key)))); }
       catch (issue) { Toast.error(issue.message); }
     } else if (action.confirm === false) void execute({ action, batch: selectedRows });
     else setConfirmation({ action, batch: selectedRows });
@@ -515,16 +593,20 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     : action?.confirm || (confirmation?.batch ? `对选中的 ${confirmation.batch.length} 条记录执行${action.label}？`
       : action ? `对「${labelOf(confirmation.row)}」执行${action.label}？` : confirmation
         ? `删除「${labelOf(confirmation.row)}」？` : '');
+  const pageActions = <Space wrap>
+    {Header && (!inferenceDemo || pageId === 'ops-nodes') && <Header {...widgetProps}/>}
+    {page.quickLinks?.map(link => <Button key={link.page} onClick={() => navigate(link.page)}>{t(link.label)}</Button>)}
+    {!inferenceDemo && page.createLabel && !page.hideCreate && <Button type="primary" theme="solid" icon={<IconPlus/>} disabled={!writable}
+      onClick={() => openEditor()}>{t(page.createLabel)}</Button>}
+    {page.batchInToolbar && page.batchActions?.map(action => <Button key={action.label} type={action.danger ? 'danger' : 'primary'}
+      disabled={!writable || !selectedRows.length || !allowed(action.when, selectedRows, records)}
+      onClick={() => runBatch(action)}>{t(action.toolbarLabel || action.label)}{selectedRows.length > 0 && `（${selectedRows.length}）`}</Button>)}
+  </Space>;
 
   return <div className="admin-page-stack infra-page">
     <AdminPageHeading title={<span id={headingId}>{standalone && selectedDetail ? labelOf(selectedDetail) : t(page.title)}</span>}
       description={!standalone && page.description ? t(page.description) : undefined}>
-      {standalone ? <Button onClick={closeDetail}>{t('返回列表')}</Button> : <Space wrap>
-        {Header && <Header {...widgetProps}/>}
-        {page.quickLinks?.map(link => <Button key={link.page} onClick={() => navigate(link.page)}>{t(link.label)}</Button>)}
-        {page.createLabel && !page.hideCreate && <Button type="primary" theme="solid" icon={<IconPlus/>} disabled={!writable}
-          onClick={() => openEditor()}>{t(page.createLabel)}</Button>}
-      </Space>}
+      {standalone ? <Button onClick={closeDetail}>{t('返回列表')}</Button> : !page.actionsInToolbar && pageActions}
     </AdminPageHeading>
     {storageError && <Banner type="danger" closeIcon={null} description={t(storageError)}/>}
     {standalone ? selectedDetail ? renderDetail : <Banner type="warning" closeIcon={null} description={t('记录不存在')}/> : <Card>
@@ -546,10 +628,10 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
               onChange={value => { setFilters(previous => ({ ...previous, [filter.key]: value })); setCurrentPage(1); }}/>
           </Fragment>;
         })}
-        <Button theme="borderless" type="tertiary" disabled={!keyword && !Object.values(filters).some(value => !blank(value))}
-          onClick={() => { setKeyword(''); setFilters({}); setCurrentPage(1); }}>{t('重置')}</Button>
+        {!page.hideResetFilter && <Button theme="borderless" type="tertiary" disabled={!hasFilters}
+          onClick={() => { setKeyword(''); setFilters({}); setCurrentPage(1); }}>{t('重置')}</Button>}
         <Button icon={<IconRefresh/>} theme="borderless" type="tertiary" aria-label={t('刷新')}
-          onClick={refresh}/>
+          onClick={() => { refresh(); if (page.loadOnScroll) setCurrentPage(1); }}/>
         {page.views?.length > 1 && <Space>
           {page.views.map(item => <Button key={item} aria-pressed={item === view} type={item === view ? 'primary' : 'tertiary'}
             theme={item === view ? 'light' : 'borderless'} onClick={() => { setView(item); setCurrentPage(1); }}>
@@ -559,16 +641,17 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         {page.columnSettings && view === 'table' && <Button theme="borderless" onClick={() => { setDraftHidden(hidden); setShowColumns(true); }}>
           {t('列设置')}
         </Button>}
-        {ExpandedRow && view === 'table' && displayed.length > 0 && <Button theme="borderless"
+        {ExpandedRow && !page.hideExpandAll && view === 'table' && displayed.length > 0 && <Button theme="borderless"
           onClick={() => setExpanded(expanded.length ? [] : displayed.map(row => row.id))}>
           {t(expanded.length ? '全部收起' : '全部展开')}
         </Button>}
+        {page.actionsInToolbar && <div className="infra-toolbar-actions">{pageActions}</div>}
       </div>
-      {Extra && <Extra {...widgetProps}/>}
-      {selectedRows.length > 0 && <Space wrap className="infra-batch-actions">
+      {Extra && (!inferenceDemo || pageId === 'ops-benchmarks') && <Extra {...widgetProps}/>}
+      {selectedRows.length > 0 && !page.batchInToolbar && !page.hideSelectionSummary && <Space wrap className="infra-batch-actions">
         <Typography.Text>{`已选 ${selectedRows.length} 条`}</Typography.Text>
         {page.batchActions?.map(action => <Button key={action.label} type={action.danger ? 'danger' : 'primary'}
-          disabled={!writable || !allowed(action.when, selectedRows, records)} onClick={() => runBatch(action)}>{t(action.label)}</Button>)}
+          disabled={(!writable && !(inferenceDemo && action.download)) || !allowed(action.when, selectedRows, records)} onClick={() => runBatch(action)}>{t(action.label)}</Button>)}
         <Button theme="borderless" onClick={() => setSelected([])}>{t('清空选择')}</Button>
       </Space>}
       {view === 'cards' ? displayed.length > 0 ? <div className="infra-card-grid">
@@ -578,7 +661,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
             <AdminDescriptions data={(page.cardColumns ?? page.columns.filter(column => column.key !== 'name').slice(0, 4))
               .map(column => ({ key: column.label, value: display(column, row, records) }))}/>
           </Card>)}
-      </div> : EmptyView ? <EmptyView {...widgetProps} hasFilters={Boolean(query || Object.values(filters).some(value => !blank(value)))}/> : <Empty description={t('没有符合条件的记录')}/> :
+      </div> : EmptyView ? <EmptyView {...widgetProps} hasFilters={hasFilters}/> : <Empty description={t('没有符合条件的记录')}/> :
       <div className="infra-table-scroll" role="region" aria-labelledby={headingId} tabIndex={0}>
         <div style={{ minWidth: tableWidth }}>
           <AdminTable aria-labelledby={headingId} columns={columns} dataSource={displayed}
@@ -586,14 +669,14 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
             expandedRowRender={ExpandedRow ? row => <ExpandedRow {...widgetProps} row={row}/> : undefined}
             expandedRowKeys={ExpandedRow ? expanded : undefined}
             onExpandedRowsChange={ExpandedRow ? rows=>setExpanded((rows ?? []).map(row=>row.id)) : undefined}
-            pagination={false} rowKey="id" empty={query || Object.values(filters).some(value => !blank(value)) ? '没有符合条件的记录' : '暂无数据'}/>
+            pagination={false} rowKey="id" empty={hasFilters ? '没有符合条件的记录' : '暂无数据'}/>
         </div>
       </div>}
       {sort && <div className="sr-only" role="status">
         {t(page.columns.find(column => column.key === sort.key).label)} {t(sort.direction === 1 ? '升序' : '降序')}
       </div>}
-      {view === 'cards' && page.loadMore ? displayed.length < filtered.length &&
-        <Button className="infra-load-more" onClick={() => setCurrentPage(currentPage + 1)}>{t('加载更多')}</Button> :
+      {view === 'cards' && page.loadMore ? canLoadMore && (loadOnScroll ? <div className="infra-load-marker" ref={loadMarker} aria-hidden="true"/> :
+        <Button className="infra-load-more" onClick={() => setCurrentPage(currentPage + 1)}>{t('加载更多')}</Button>) :
         <AdminPagination total={filtered.length} currentPage={pageNumber} pageSize={pageSize} showSizeChanger
         pageSizeOpts={[10, 20, 50, 100]} onPageChange={setCurrentPage}
         onPageSizeChange={size => { setPageSize(size); setCurrentPage(1); }}/>}
@@ -604,9 +687,10 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
       className="infra-sheet" width={page.detailWidth ?? 'min(720px, 100vw)'} visible onCancel={closeDetail} closeOnEsc={!editor}>
       {renderDetail}
     </AdminSideSheet>)}
-    {editor && source && (Editor ? <Editor {...widgetProps} editor={editor} page={editorPage} onSave={save} onClose={closeEditor} dirtyRef={dirtyRef}/> :
+    {editor && source && !inferenceDemo && (Editor ? <Editor {...widgetProps} editor={editor} page={editorPage} onSave={save} onClose={closeEditor} dirtyRef={dirtyRef}/> :
       <InfrastructureForm page={editorPage} row={editor.row} records={records} preset={editor.preset}
-      Fields={Fields} t={t} onSave={save} onClose={closeEditor} dirtyRef={dirtyRef} busy={busy}/>)}
+        Fields={Fields} FormNotice={FormNotice} t={t} onSave={save} onClose={closeEditor}
+        previous={editor.previous} wasDirty={editor.changed} dirtyRef={dirtyRef} busy={busy}/>)}
     {fileDeployment && <Suspense fallback={null}>
       <ModelFileDeploymentDrawer fileId={fileDeployment.id} state={state} dispatch={dispatch} can={canDeployFile}
         infrastructure={records} dirtyRef={dirtyRef} onClose={closeFileDeployment} onSaved={id=>{
@@ -618,7 +702,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
     {showColumns && <AdminModal title={t('列设置')} visible closeOnEsc onCancel={() => setShowColumns(false)}
       okText={t('保存')} onOk={() => {
         try {
-          localStorage.setItem(columnsKey, JSON.stringify(draftHidden));
+          if (!inferenceDemo) localStorage.setItem(columnsKey, JSON.stringify(draftHidden));
           setHidden(draftHidden);
           setShowColumns(false);
         } catch { Toast.error(t('列设置保存失败')); }
@@ -627,7 +711,7 @@ export default function InfrastructurePage({ pageId, state, params, navigate, di
         {page.columns.filter(column => column.key !== 'name').map(column => <Checkbox key={column.key}
           checked={!draftHidden.includes(column.key)} onChange={event => setDraftHidden(previous =>
             event.target.checked ? previous.filter(key => key !== column.key) : [...previous, column.key])}>{t(column.label)}</Checkbox>)}
-        <Button theme="borderless" onClick={() => setDraftHidden([])}>{t('恢复默认')}</Button>
+        <Button theme="borderless" onClick={() => setDraftHidden(page.defaultHiddenColumns ?? [])}>{t('恢复默认')}</Button>
       </Space>
     </AdminModal>}
     {confirmation && <AdminModal title={t(action?.label ?? '删除记录')} visible closeOnEsc={!busy}

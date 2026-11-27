@@ -58,7 +58,7 @@ test('package management routes are in commercial operations and legacy browser 
   assert.equal(pageFromHash('#/admin-2/package-data', '运营人员'), 'package-data');
   assert.equal(canAccessPage('运营人员', 'package-data'), true);
   assert.equal(canAccessPage('运维人员', 'package-data'), false);
-  assert.deepEqual(adminBreadcrumbs('package-data', new URLSearchParams()), [{ label: '商业运营' }, { label: '套餐管理', href: '#/admin-2/package-production' }, { label: '套餐数据' }]);
+  assert.deepEqual(adminBreadcrumbs('package-data', new URLSearchParams()), [{ label: '商业运营' }, { label: '套餐数据' }]);
   assert.deepEqual(adminBreadcrumbs('package-production', new URLSearchParams('view=new')), [
     { label: '商业运营' }, { label: '套餐管理', href: '#/admin-2/package-production' }, { label: '新建套餐' },
   ]);

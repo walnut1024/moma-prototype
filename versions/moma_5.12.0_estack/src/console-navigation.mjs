@@ -1,12 +1,14 @@
 export function consoleNavigation({ personal, internal, canManage, canManageOrganization }) {
   return [
-    { id:'public', label:'', scope:'space', items:['首页','模型广场'] },
+    { id:'public', label:'', scope:'space', items:personal ? ['首页','模型广场'] : ['首页','模型广场','项目管理'] },
     { id:'experience', scope:'project', label:'模型体验', items:['文本生成','图片生成','视频生成','语音识别'] },
     { id:'connection', scope:'project', label:'接入与调用', items:['API 密钥','工具接入','智能路由'] },
     { id:'observation', scope:'project', label:'调用观测', items:['用量统计','调用日志'] },
     ...(!internal && canManage ? [{label:'模型订购'}] : []),
     { label:'账户管理' },
-    { id:'system', label:'系统管理', scope:'space', items:personal ? ['使用设置'] : [...(canManageOrganization ? ['组织及成员'] : []),'项目管理'] },
+    ...(personal || canManageOrganization ? [
+      { id:'system', label:'系统管理', scope:'space', items:personal ? ['使用设置'] : ['组织及成员'] },
+    ] : []),
   ];
 }
 

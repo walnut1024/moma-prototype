@@ -1,8 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
 import { IconUpload } from '@douyinfe/semi-icons';
-import { Banner, Button, Card, Form, Image, Input, Space, Tabs, Toast } from '@douyinfe/semi-ui';
-import SiteAgreementsEditor from './SiteAgreementsEditor';
+import { Banner, Button, Card, Form, Image, Input, Space, Toast } from '@douyinfe/semi-ui';
 import AdminPageHeading from './AdminPageHeading';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../portal-home.mjs';
@@ -74,10 +73,8 @@ export default function SiteConfiguration({ dirtyRef }) {
   const translateLabel = useChannelText();
   const raw = useSiteConfigSnapshot();
   const [draft, setDraft] = useState(null);
-  const [tab, setTab] = useState('basic');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
-  const [agreementDirty, setAgreementDirty] = useState(false);
   const [portal, setPortal] = useState(null);
   const [portalDraft, setPortalDraft] = useState(null);
   const [portalError, setPortalError] = useState('');
@@ -88,9 +85,9 @@ export default function SiteConfiguration({ dirtyRef }) {
   const conflict = Boolean(draft && draft.base !== raw);
 
   useEffect(() => {
-    dirtyRef.current = Boolean(draft || portalDraft !== null || busy || agreementDirty);
+    dirtyRef.current = Boolean(draft || portalDraft !== null || busy);
     return () => { dirtyRef.current = false; };
-  }, [dirtyRef, draft, portalDraft, busy, agreementDirty]);
+  }, [dirtyRef, draft, portalDraft, busy]);
   useEffect(() => () => operation.current?.abort(), []);
   useEffect(() => {
     const controller = new AbortController();
@@ -151,7 +148,6 @@ export default function SiteConfiguration({ dirtyRef }) {
       Toast.success('站点配置已保存');
     } catch (issue) {
       if (controller.signal.aborted) return;
-      setTab('basic');
       const message = (brandSaved ? '其他基础配置已保存。' : '') + (issue instanceof DOMException
         ? '无法保存到浏览器，请检查存储权限或空间。'
         : issue.message);
@@ -163,49 +159,42 @@ export default function SiteConfiguration({ dirtyRef }) {
     }
   }
 
-  return <section className="admin-page-stack site-config">
+  return <section className="admin-page-stack">
     <AdminPageHeading title={translateLabel("站点配置")}>
-      {tab === 'basic' && <Button theme="solid" onClick={save} disabled={(!draft && portalDraft === null) ||
-        Boolean(busy) || conflict || (portalDraft !== null && (!portal || Boolean(portalError)))} loading={busy === 'save'}>{translateLabel("保存")}</Button>}
+      <Button theme="solid" onClick={save} disabled={(!draft && portalDraft === null) ||
+        Boolean(busy) || conflict || (portalDraft !== null && (!portal || Boolean(portalError)))} loading={busy === 'save'}>{translateLabel("保存")}</Button>
     </AdminPageHeading>
     {conflict && <Banner type="warning" closeIcon={null} description={<>配置已在其他页面更新。 <Button disabled={Boolean(busy)} onClick={() => { setDraft(null); setError(''); }}>载入已保存配置</Button></>} />}
     {error && <Banner type="danger" closeIcon={null} description={<span role="alert">{error}</span>} />}
-    <Tabs keepDOM type="line" activeKey={tab} onChange={setTab} aria-label={translateLabel("站点配置")}>
-      <Tabs.TabPane tab="基础配置" itemKey="basic">
-        <Card className="site-config-card">
-          <Form.Slot label={{ text: '用户控制台展示名称', name: 'site-user-console-name' }}>
-            <Input id="site-user-console-name" aria-label="用户控制台展示名称" value={config.userConsoleName} maxLength={MAX_SITE_TEXT}
-              placeholder={DEFAULT_USER_CONSOLE_NAME} disabled={Boolean(busy)} onChange={value => update('userConsoleName', value)} />
-          </Form.Slot>
-          <Form.Slot label={{ text: '管理工作台展示名称', name: 'site-workbench-name' }}>
-            <Input id="site-workbench-name" aria-label="管理工作台展示名称" value={config.workbenchName} maxLength={MAX_SITE_TEXT}
-              placeholder={DEFAULT_WORKBENCH_NAME} disabled={Boolean(busy)} onChange={value => update('workbenchName', value)} />
-          </Form.Slot>
-          <Form.Slot label={{ text: '浏览器标题', name: 'site-title' }}>
-            <Input id="site-title" aria-label="浏览器标题" value={config.title} maxLength={MAX_SITE_TEXT} placeholder="留空使用默认标题"
-              disabled={Boolean(busy)} onChange={value => update('title', value)} />
-          </Form.Slot>
-          <Form.Slot label={{ text: '门户首页地址', name: 'site-portal-home' }}>
-            <Input id="site-portal-home" aria-label="门户首页地址" value={portalDraft ?? portal?.url ?? ''} maxLength={MAX_SITE_URL}
-              placeholder="留空使用默认首页" disabled={Boolean(busy) || !portal || Boolean(portalError)}
-              onChange={value => { setError(''); setPortalDraft(value === portal.url ? null : value); }} />
-            {portalError && <Banner type="warning" closeIcon={null} description={<>
-              <span role="alert">{portalError}</span>
-              <Button size="small" disabled={Boolean(busy)} onClick={() => {
-                setPortal(null);
-                setPortalDraft(null);
-                setPortalError('');
-                setPortalLoad(value => value + 1);
-              }}>{portal ? '载入已保存地址' : '重试'}</Button>
-            </>} />}
-          </Form.Slot>
-          {SITE_IMAGES.map(field => <SiteImageField key={field[0]} field={field} value={config[field[0]]} disabled={Boolean(busy)}
-            onChange={value => update(field[0], value)} onUpload={file => upload(field[0], file)} />)}
-        </Card>
-      </Tabs.TabPane>
-      <Tabs.TabPane tab="协议管理" itemKey="agreements">
-        <SiteAgreementsEditor legacy={saved} onDirtyChange={setAgreementDirty} />
-      </Tabs.TabPane>
-    </Tabs>
+    <Card className="site-config-card">
+      <Form.Slot label={{ text: '用户控制台展示名称', name: 'site-user-console-name' }}>
+        <Input id="site-user-console-name" aria-label="用户控制台展示名称" value={config.userConsoleName} maxLength={MAX_SITE_TEXT}
+          placeholder={DEFAULT_USER_CONSOLE_NAME} disabled={Boolean(busy)} onChange={value => update('userConsoleName', value)} />
+      </Form.Slot>
+      <Form.Slot label={{ text: '管理工作台展示名称', name: 'site-workbench-name' }}>
+        <Input id="site-workbench-name" aria-label="管理工作台展示名称" value={config.workbenchName} maxLength={MAX_SITE_TEXT}
+          placeholder={DEFAULT_WORKBENCH_NAME} disabled={Boolean(busy)} onChange={value => update('workbenchName', value)} />
+      </Form.Slot>
+      <Form.Slot label={{ text: '浏览器标题', name: 'site-title' }}>
+        <Input id="site-title" aria-label="浏览器标题" value={config.title} maxLength={MAX_SITE_TEXT} placeholder="留空使用默认标题"
+          disabled={Boolean(busy)} onChange={value => update('title', value)} />
+      </Form.Slot>
+      <Form.Slot label={{ text: '门户首页地址', name: 'site-portal-home' }}>
+        <Input id="site-portal-home" aria-label="门户首页地址" value={portalDraft ?? portal?.url ?? ''} maxLength={MAX_SITE_URL}
+          placeholder="留空使用默认首页" disabled={Boolean(busy) || !portal || Boolean(portalError)}
+          onChange={value => { setError(''); setPortalDraft(value === portal.url ? null : value); }} />
+        {portalError && <Banner type="warning" closeIcon={null} description={<>
+          <span role="alert">{portalError}</span>
+          <Button size="small" disabled={Boolean(busy)} onClick={() => {
+            setPortal(null);
+            setPortalDraft(null);
+            setPortalError('');
+            setPortalLoad(value => value + 1);
+          }}>{portal ? '载入已保存地址' : '重试'}</Button>
+        </>} />}
+      </Form.Slot>
+      {SITE_IMAGES.map(field => <SiteImageField key={field[0]} field={field} value={config[field[0]]} disabled={Boolean(busy)}
+        onChange={value => update(field[0], value)} onUpload={file => upload(field[0], file)} />)}
+    </Card>
   </section>;
 }

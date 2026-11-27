@@ -39,7 +39,7 @@ function narrowSupply(supply, providers, channels) {
     .flatMap(id => narrowKeys(channel, channels).map(channelId => [id, channelId])));
 }
 
-export function observationViewFilters({ provider, channel, supply, ...filters }) {
+function observationViewFilters({ provider, channel, supply, ...filters }) {
   if (supply === undefined) {
     supply = [provider, channel].every(keys => keys == null || validKeys(keys))
       ? narrowSupply(null, provider, channel) : [];
@@ -90,12 +90,6 @@ export function observationHash(page, filters, extra = {}) {
     params.set(key, key === 'supply' ? JSON.stringify(value) : Array.isArray(value) ? value.join(',') || '__none__' : String(value));
   }
   return '#/admin-2/' + page + (params.size ? '?' + params : '');
-}
-
-export function observationDrill(filters, window, { provider, channel, ...extra } = {}) {
-  const supply = narrowSupply(filters.supply ?? null, provider, channel);
-  return observationHash('logs', filters, { period: 'custom', start: new Date(window.start).toISOString(),
-    end: new Date(window.end).toISOString(), supply, ...extra });
 }
 
 const httpStatus = value => Number.isInteger(value) && (value === 0 || value >= 100 && value <= 599) ? value : null;
@@ -323,12 +317,6 @@ export function observationGroups(rows, dimension) {
     .sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name, 'zh-CN'));
 }
 
-export function observationGroupScope(dimension, { id, rows }) {
-  return dimension === 'channel' ? { channel: [id], provider: [...new Set(rows.map(row => observationKey(row, 'provider')))] }
-    : dimension === 'project' ? { project: [id], tenant: [...new Set(rows.map(row => observationKey(row, 'tenant')))] }
-      : { [dimension]: [id] };
-}
-
 export function observationBuckets(rows, window, granularity) {
   if (!window || window.start >= window.end) return [];
   const step = grains.find(([id]) => id === granularity)?.[2] || day;
@@ -398,15 +386,6 @@ export function attemptCapacity(rows, window) {
   }
   return { averageRpm: rows.length / duration, peakRpm,
     averageTpm: observed && !incomplete ? tokens / duration : null, peakTpm: observed && !incomplete ? peakTpm : null };
-}
-
-export function attemptPerformance(rows) {
-  const ttft = attemptsForMetric(rows, 'ttft').map(row => row.ttft);
-  const outputSamples = attemptsForMetric(rows, 'otps');
-  const generationDuration = sum(outputSamples, 'generationDuration');
-  return { ttft: percentile(ttft, .95), ttftSamples: ttft.length,
-    otps: generationDuration > 0 ? sum(outputSamples, 'output') * 1000 / generationDuration : null, otpsSamples: outputSamples.length,
-    timeoutRate: rows.length ? attemptsForMetric(rows, 'timeout').length * 100 / rows.length : null };
 }
 
 export function logCsv(rows) {

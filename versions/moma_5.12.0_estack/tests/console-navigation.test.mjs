@@ -14,8 +14,10 @@ test('enterprise navigation has one project entry and groups calling controls by
   assert(labels(groups).includes('模型订购'));
   assert.equal(new Set(labels(groups)).size,labels(groups).length);
   assert.equal(groups.find(row=>row.id==='public').label,'');
-  assert.deepEqual(groups.find(row=>row.id==='public').items,['首页','模型广场']);
-  assert.deepEqual(groups.find(row=>row.label==='系统管理').items,['项目管理']);
+  assert.deepEqual(groups.find(row=>row.id==='public').items,['首页','模型广场','项目管理']);
+  assert(!groups.some(row=>row.id==='system'));
+  const organizationGroups=consoleNavigation({personal:false,internal:false,canManage:true,canManageOrganization:true});
+  assert.deepEqual(organizationGroups.find(row=>row.id==='system').items,['组织及成员']);
   assert(!labels(groups).includes('项目'));
   assert(!labels(groups).includes('我的项目'));
   assert.deepEqual(groups.find(row=>row.id==='connection').items,['API 密钥','工具接入','智能路由']);
@@ -63,8 +65,14 @@ test('deep detail links highlight their original navigation entry without mergin
   }
 });
 
-test('access control exposes tenant management and project management',()=>{
-  assert.deepEqual(adminSections.find(group=>group.title==='访问控制').items.map(item=>item.label),['租户管理','项目管理']);
+test('access control in the operations sidebar follows existing tenant and project permissions',()=>{
+  const customers=adminSections.find(group=>group.id==='customers');
+  assert.equal(customers.workspace,'operations');
+  const visible=role=>customers.items.map(item=>item.children[0][0]).filter(page=>canAccessPage(role,page));
+  assert.deepEqual(visible('平台管理员'),['tenants','projects']);
+  assert.deepEqual(visible('运营人员'),['tenants']);
+  assert.deepEqual(visible('运维人员'),[]);
+  assert(canAccessPage('运营人员','projects',undefined,new URLSearchParams({tenant:'customer-a'})));
   assert(canAccessPage('平台管理员','organization-members'));
   assert(!canAccessPage('运维人员','organization-members'));
 });
