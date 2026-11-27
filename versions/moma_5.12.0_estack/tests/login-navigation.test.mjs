@@ -28,10 +28,11 @@ test('customers return to their source, and customer logins cannot enter an admi
 test('backend identities land on an allowed home and only resume pages permitted by their role', () => {
   assert.equal(loginDestination('', {role:'平台管理员'}), LOGIN_BASE + '#/admin-2/dashboard');
   assert.equal(loginDestination('', {role:'运营人员'}), LOGIN_BASE + '#/admin-2/dashboard');
-  assert.equal(loginDestination('', {role:'运维人员'}), LOGIN_BASE + '#/admin-2/call-analysis');
+  assert.equal(loginDestination('', {role:'运维人员'}), LOGIN_BASE + '#/admin-2/model-performance');
   const source = LOGIN_BASE + '#/admin-2/listing-new?model=a';
   assert.equal(loginDestination(source, {role:'运营人员'}), source);
-  assert.equal(loginDestination(source, {role:'运维人员'}), LOGIN_BASE + '#/admin-2/call-analysis');
+  assert.equal(loginDestination(source, {role:'运维人员'}), LOGIN_BASE + '#/admin-2/model-performance');
+  assert.equal(loginDestination(LOGIN_BASE + '#/admin-2/call-analysis', {role:'运维人员'}), LOGIN_BASE + '#/admin-2/model-performance');
   assert.throws(() => loginDestination(source, {role:'普通成员'}), /没有可访问/);
 });
 

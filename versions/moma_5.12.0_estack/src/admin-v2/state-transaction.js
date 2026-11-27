@@ -17,7 +17,8 @@ import { deploymentTransaction } from './deployments.js';
 import { operationsTransaction } from './model-operations.js';
 import { lifecycleSignature, assertOrderAccess } from '../service-access.mjs';
 import { channelIdentity } from '../model-identities.mjs';
-import { clusterRemovalIssue } from './ops-cluster-domain.js';
+import { clusterGatherIssue, clusterRemovalIssue } from './ops-cluster-domain.js';
+import { validateTopologyLayers } from './ops-resources.js';
 const now='2026-09-15T10:30:00+08:00';
 const record=(id,value)=>({id,createdAt:now,updatedAt:now,...value});
 
@@ -83,6 +84,11 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   if (action.type === 'deploymentOperation') action = deploymentTransaction(state, action);
   for (const change of action.type === 'batch' ? action.changes : [action]) {
     if (change.type === 'update' && Object.hasOwn(change.changes || {}, 'id') && change.changes.id !== change.id) throw Error('永久 ID 创建后不可修改');
+    if (change.type === 'update' && change.collection === 'clusters' && Object.hasOwn(change.changes || {}, 'topologyLayers')) {
+      if (!canMutate(actor, change)) throw Error(`${actor}无权修改集群拓扑`);
+      if (!Array.isArray(change.changes.topologyLayers)) throw Error('集群拓扑须填写有效的层级列表');
+      validateTopologyLayers(change.changes.topologyLayers);
+    }
   }
   if ((action.type === 'batch' ? action.changes : [action]).some(change => change.type === 'remove' && change.collection === 'providers' && change.id === MOMA_PROVIDER.id)) throw new Error('内置平台服务商不可删除');
   const next = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData',...(preparingDataset?['tenants']:[])].map(key=>[key,structuredClone(state[key])])),audits:[...state.audits]} : structuredClone(state), timestamp = new Date().toISOString();
@@ -125,6 +131,13 @@ export function commitAdminState(state, action, actor = state.currentRole) {
       }
     }
   } else throw new Error("未知操作");
+  for (const change of identityChanges) {
+    if (change.type !== 'update' || change.collection !== 'clusters' || !Object.hasOwn(change.changes || {}, 'topologyLayers')) continue;
+    const cluster = next.clusters.find(row => row.id === change.id);
+    if (!cluster) continue;
+    const issue = clusterGatherIssue(next.deployments, cluster.id, cluster.topologyLayers);
+    if (issue) throw Error(issue);
+  }
   for (const order of next.orders.filter(row => !state.orders.some(old => old.id === row.id) || row.status === '已开通' && state.orders.find(old => old.id === row.id)?.status !== '已开通')) assertOrderAccess(next, order);
   for (const model of next.models) {
     const before = state.models.find(row => row.id === model.id);

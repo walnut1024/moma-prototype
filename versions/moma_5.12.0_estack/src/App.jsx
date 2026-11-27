@@ -3,7 +3,7 @@ import {useTenantData} from './useTenantData';
 import { marketModels } from './service-directory.mjs';
 import ConsoleNavigation from './components/ConsoleNavigation';
 import { consoleActiveItem } from './console-navigation.mjs';
-import { projectModelEnabled } from './project-access.mjs';
+import { projectModelEnabled, tenantProjectAdmin } from './project-access.mjs';
 import { MarketAction, marketRequest, useCloudMarket } from './CloudMarket';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
 import { Button as SemiButton, ConfigProvider, Modal, Input as SemiInput, Select as SemiSelect, Slider, Tabs as SemiTabs, Tag, Toast, Typography as SemiTypography } from '@douyinfe/semi-ui';
@@ -33,6 +33,7 @@ import {
   Calculator,
   ChartNoAxesCombined,
   FileText,
+  Flame,
   Image,
   Images,
   KeyRound,
@@ -48,17 +49,22 @@ import {
   ShieldCheck,
   Store,
   FolderKanban,
+  UsersRound,
   Video,
 } from "lucide-react";
 
 import "./frontend-pages.css";
+import "./model-catalogue.css";
+import "./role-demo.css";
 
 const A = "/moma_5.12.0_estack/assets/";
+const modalityIcons = { 文本: FileText, 图像: Image, 图片: Image, 视频: Video, 音频: AudioLines };
 
 const ModelOrderList = lazy(() => import('./ModelOrderList'));
 const MarketModelDetail = lazy(() => import('./MarketModelDetail'));
 const OrganizationWorkspace = lazy(() => import('./components/OrganizationWorkspace'));
 const ConsoleHome = lazy(() => import('./components/ConsoleHome'));
+const RoleDemo = lazy(() => import('./RoleDemo'));
 const WorkspaceBilling = lazy(() => import('./components/WorkspaceBilling'));
 const PublicAgreement = lazy(() => import('./components/PublicAgreement'));
 const SmartRouting = lazy(() => import('./components/SmartRouting'));
@@ -95,6 +101,7 @@ const navIcons = {
   调用日志: FileText,
   "API Key": KeyRound, "API 密钥": KeyRound,
   操作记录: History,
+  '组织及成员': UsersRound,
   账户管理: ShieldCheck,
   按量付费: KeyRound,
   "Token Plan": Calculator,
@@ -338,6 +345,12 @@ function PrototypeApp({ version }) {
       !projectTenant.accountProjects.some(row=>row.id===detailProject.id))) ? 'projects' : 'my-projects';
   const spaceLogs = activeRoute==='call-logs' && projectScope.space && !projectScope.id && market.tenant?.type!=='个人';
   const reportScope = { ...projectScope, id:projectScope.id || selectedProject };
+  const demoView = activeRoute === 'experience' ? routeParams.task : {
+    'my-projects':'projects', 'account-certification':'account', 'organization-members':'organization',
+  }[activeRoute] || activeRoute;
+  const selectedSpace = market.spaces?.find(space => space.id === market.tenant?.id);
+  const demoRole = personal ? 'personal' : tenantProjectAdmin(selectedSpace) ? 'tenantAdmin'
+    : project?.canManage ? 'projectAdmin' : 'member';
   const projectRequired = projectPages.has(activeRoute) &&
     (projectReportPages.has(activeRoute) ? !spaceLogs && !reportScope.id : detailRoute ? personal && !detailProject : !project);
   const openProjectPage = (row, page = 'my-projects', extra = {}, replace = false) => {
@@ -438,10 +451,10 @@ function PrototypeApp({ version }) {
     openProjectPage(undefined,'model-market',{},true);
   };
   const [compactFilters, setCompactFilters] = useState(() => window.matchMedia('(max-width: 900px)').matches);
-  const [filtersExpanded, setFiltersExpanded] = useState(() => !window.matchMedia('(max-width: 900px)').matches);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)');
-    const change = () => { setCompactFilters(media.matches); setFiltersExpanded(!media.matches); };
+    const change = () => { setCompactFilters(media.matches); setFiltersExpanded(false); };
     media.addEventListener('change', change);
     return () => media.removeEventListener('change', change);
   }, []);
@@ -549,7 +562,7 @@ function PrototypeApp({ version }) {
         : toggleFilter(group, value)}>{label}</SemiButton>;
   };
   const resetFilters = () => { setFilters({}); setQuery(""); };
-  const catalogueFilters = (<div className="filters" id="catalogue-filters">
+  const catalogueFilters = (<div className="catalogue-filters" id="catalogue-filters">
                 <div className="filter-heading">
                   <h3>模型筛选</h3>
                   <SemiButton size="small" theme="borderless"
@@ -627,11 +640,15 @@ function PrototypeApp({ version }) {
       </SideSheet>}
       <SemiInput className="catalogue-search" aria-label="搜索模型" prefix={<Search size={16} aria-hidden="true"/>}
         value={query} placeholder="搜索模型名称或模型 ID" onChange={setQuery} showClear />
-      <span className="catalogue-count" role="status">{query.trim() || activeFilters.length ? '找到 ' : '模型 '}{visible.length} 个</span>
-      <SemiSelect aria-label="模型目录范围" value={catalogueScope} onChange={setCatalogueScope}
-        optionList={[{value:'showcase',label:'演示模型'},{value:'all',label:'全部模型'}]} />
-      <SemiSelect aria-label="模型排序" value={sortMode} onChange={setSortMode}
-        optionList={[{value:'latest',label:'最新'},{value:'recommended',label:'推荐'}]} />
+      <span id="catalogue-sort-label" className="sr-only">模型排序</span>
+      <SemiSelect aria-labelledby="catalogue-sort-label" value={sortMode} onChange={setSortMode}
+        optionList={[{value:'latest',label:'最近发布'},{value:'recommended',label:'推荐'}]} />
+      <span id="catalogue-scope-label" className="sr-only">模型目录范围</span>
+      <SemiSelect aria-labelledby="catalogue-scope-label" value={catalogueScope} onChange={setCatalogueScope}
+        optionList={[{value:'showcase',label:'精选模型'},{value:'all',label:'全部模型'}]} />
+      {!market.loading && !market.error && <span className="catalogue-count" role="status">
+        {query.trim() || activeFilters.length ? '找到 ' : '模型 '}{visible.length} 个
+      </span>}
     </div>
     {(query.trim() || activeFilters.length > 0) && <div className="catalogue-conditions" aria-label="已选条件">
       <span>已选条件</span>
@@ -668,6 +685,7 @@ function PrototypeApp({ version }) {
             <SemiButton theme="borderless" onClick={() => navigateAdmin("v2")}>后台</SemiButton>
           ) : null}
           {admin === "v2" ? <AuthBanner auth={auth} market={market} admin/> : !waitingForSession && auth.route !== 'login' ? <AuthBanner auth={auth} market={market}
+            demoHref={!auth.route && market.tenant ? '?' + new URLSearchParams({demo:'roles',role:demoRole,view:demoView}) : undefined}
             onSwitchSpace={()=>openProjectPage(undefined,'home',{},true)}/> : null}
         </div>
         {admin === "v2" && (
@@ -814,67 +832,55 @@ function PrototypeApp({ version }) {
             projectId={spaceLogs ? '' : reportScope.id} requestId={spaceLogs ? '' : reportScope.requestId} space={spaceLogs}
             openRetention={row=>openProjectPage(row,'project-logs')} />
         ) : (
-          <div className="content model-catalogue">
-            {marketTabs}
-                {(market.loading || market.error) && <p role="status">{market.error || '正在加载模型广场…'}</p>}
+          <section className="model-catalogue" aria-labelledby="model-catalogue-title">
+            <div className="catalogue-heading">
+              <h1 id="model-catalogue-title">模型广场</h1>
+              {marketTabs}
+            </div>
             {catalogueToolbar}
-            <section className={`catalog catalogue-layout ${compactFilters || !filtersExpanded ? 'catalogue-collapsed' : ''}`}>
+            <div className={`catalogue-layout ${!compactFilters && filtersExpanded ? 'catalogue-expanded' : ''}`}>
               {!compactFilters && <div hidden={!filtersExpanded}>{catalogueFilters}</div>}
-              <div className="results">
-                <div className="cards">
-                  {visible.map((m) => {
-                    const data = meta(m),
-                      icons = {
-                        文本: FileText,
-                        图像: Image,
-                        视频: Video,
-                        音频: AudioLines,
-                      },
-                      outputs = data.output;
-                    return (
-                      <article
-                        className="model-card"
-                        data-model-key={m.modelKey}
-                        key={m.modelKey}
-                        {...(!m.preview && { tabIndex: 0, role: "button", onKeyDown: event => {
-                          if (["Enter", " "].includes(event.key)) { event.preventDefault(); openModelDetails(event, m); }
-                        }, onClick: event => openModelDetails(event, m) })}
-                      >
-                        {m.hot && (
-                          <img className="hot" alt="热门" src={`${A}hot-7601e629.svg`} />
-                        )}{" "}
-                        {m.score != null && <span className="score">{m.score}</span>}
-                        <h4>
-                          {m.logo ? <img className="model-card-logo" src={m.logo} alt="" onError={event => { event.currentTarget.hidden = true; }}/> : <FileText aria-hidden="true" />}
-                          {m.name}
-                        </h4>
-                        <small>{[m.typeLabel, m.provider].filter(Boolean).join(' · ')}</small><p>{m.desc}</p>
-                        <div
-                          className="modalities"
-                          aria-label={`${data.input.join("+")} 转 ${data.output.join("+")}`}
-                        >
-                          <span>
-                            {data.input.map((type) => {
-                              const InputIcon = icons[type] || FileText;
-                              return <InputIcon key={type} />;
-                            })}
-                          </span>
-                          <img
-                            className="arrow"
-                            src={`${A}modelArrow-ae18ab15.svg`}
-                          />
-                          <span>{outputs.map(type => { const OutputIcon = icons[type] || FileText; return <OutputIcon key={type} aria-label={type}/>; })}</span>
+              <div className="catalogue-results">
+                {(market.loading || market.error) && <p className="catalogue-state" role="status">{market.error || '正在加载模型广场…'}</p>}
+                {!visible.length && !market.loading && !market.error && <div className="catalogue-state">
+                  {query.trim() || activeFilters.length ? <>未找到符合条件的模型<SemiButton theme="borderless" onClick={resetFilters}>清空条件</SemiButton></> : '暂无可展示的模型'}
+                </div>}
+                {visible.length > 0 && <div className="catalogue-cards">
+                  {visible.map(m => {
+                    const { input, output } = meta(m);
+                    const availability = m.callable ? m.features?.online_experience !== false && '可体验' : m.reason;
+                    return <article className="model-card" key={m.modelKey}>
+                      <div className="model-card-labels">
+                        {m.typeLabel && <Tag size="small" color="blue">{m.typeLabel}</Tag>}
+                        {m.preview ? <Tag className="model-card-indicator" size="small">敬请期待</Tag> :
+                          m.hot && <span className="model-card-indicator model-card-score" role="img" aria-label={`热度 ${m.score}`}><Flame size={14} aria-hidden="true"/>{m.score}</span>}
+                      </div>
+                      <h2 className="model-card-title">
+                        {m.logo ? <img src={m.logo} alt="" onError={event => { event.currentTarget.hidden = true; }}/> : <FileText aria-hidden="true" />}
+                        {m.preview ? <span>{m.name}</span> :
+                          <button className="model-card-link" type="button" data-model-key={m.modelKey}
+                            onClick={event => openModelDetails(event, m)}>{m.name}</button>}
+                      </h2>
+                      {m.desc && <p className="model-card-description">{m.desc}</p>}
+                      {m.provider && <small className="model-card-provider">服务商：{m.provider}</small>}
+                      <footer className="model-card-footer">
+                        <div className="model-card-facts">
+                          {(input.length > 0 || output.length > 0) &&
+                            <span className="model-card-modalities" role="img" aria-label={`输入 ${input.join('、') || '未填写'}，输出 ${output.join('、') || '未填写'}`}>
+                              {input.map(type => { const Icon = modalityIcons[type] || FileText; return <Icon key={'in-' + type} aria-hidden="true"/>; })}
+                              {input.length > 0 && output.length > 0 && <ArrowRight aria-hidden="true"/>}
+                              {output.map(type => { const Icon = modalityIcons[type] || FileText; return <Icon key={'out-' + type} aria-hidden="true"/>; })}
+                            </span>}
+                          {m.contextTokens != null && <span className="model-card-context">上下文长度：{m.context}</span>}
                         </div>
-                        <div className="context">上下文长度：{m.context}</div>
-                        {m.preview ? <footer>敬请期待</footer> : <footer>{m.callable && m.features?.online_experience !== false ? "可体验" : !m.callable && m.reason}{m.date && ` · 发布于 ${m.date}`}</footer>}
-                      </article>
-                    );
+                        {!m.preview && (availability || m.date) && <small className="model-card-availability">{[availability, m.date && `发布于 ${m.date}`].filter(Boolean).join(' · ')}</small>}
+                      </footer>
+                    </article>;
                   })}
-                </div>
-                {!visible.length && <div className="empty">未找到符合条件的模型<SemiButton theme="borderless" onClick={resetFilters}>清空条件</SemiButton></div>}
+                </div>}
               </div>
-            </section>
-          </div>
+            </div>
+          </section>
         )}
         </Suspense>
       </main>
@@ -899,5 +905,8 @@ export function App() {
   const version = prototypeVersions.find((item) =>
     location.pathname.startsWith(`/${item.id}/`),
   );
+  if (version && location.pathname === '/' + version.id + '/' && !location.hash && new URLSearchParams(location.search).get('demo') === 'roles') {
+    return <Suspense fallback={<p role="status">正在加载角色演示…</p>}><RoleDemo icons={navIcons} /></Suspense>;
+  }
   return version ? (documentKey ? <Suspense fallback={null}><PublicAgreement documentKey={documentKey} /></Suspense> : <PrototypeApp version={version} />) : <VersionIndex />;
 }

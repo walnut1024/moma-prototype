@@ -1,31 +1,55 @@
-.front-main > .console-home { min-width: 0; min-height: calc(100dvh - 48px); padding: 22px 22px 36px; background: #f5f7fb; display: grid; align-content: start; gap: 16px; }
-.console-home-heading, .console-home-hot-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.console-home-heading h1, .console-home-hot h2 { margin: 0; }
-.console-home-summary { display: grid; grid-template-columns: minmax(210px, .85fr) minmax(0, 2fr); gap: 16px; }
-.console-home-card.semi-card { min-width: 0; border-radius: 10px; background: var(--semi-color-bg-0); }
-.console-home-card .semi-card-header { border-bottom: 0; padding: 16px 18px 4px; }
-.console-home-card .semi-card-body { padding: 10px 18px 16px; }
-.console-home-total .semi-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.console-home-total .semi-card-body .semi-button { margin-top: 8px; }
-.console-home-value { display: block; margin: 6px 0; font-size: clamp(23px,3vw,34px); line-height: 1.24; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.console-home-caption { color: var(--semi-color-text-2); }
-.console-home-empty { min-height: 98px; display: grid; place-items: center; margin: 0; color: var(--semi-color-text-2); text-align: center; }
+.front-main > .console-home {
+  --home-panel-padding: clamp(16px, 2vw, 24px);
+  --home-panel-radius: 16px;
+  min-width: 0;
+  min-height: calc(100dvh - 50px);
+  padding: 28px clamp(16px, 2.4vw, 32px) 40px;
+  background: #f6f7fb;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+.console-home-heading, .console-home-card-heading, .console-home-hot-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.console-home-heading h1.semi-typography { margin: 0; font-size: 28px; line-height: 36px; letter-spacing: 0; }
+.console-home-hot h2 { margin: 0; }
+.console-home-summary { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: 16px; }
+.console-home-card.semi-card { min-width: 0; border-radius: var(--home-panel-radius); background: var(--semi-color-bg-0); }
+.console-home-card .semi-card-header { border-bottom: 0; padding: var(--home-panel-padding) var(--home-panel-padding) 0; }
+.console-home-card-heading { min-height: 32px; }
+.console-home-card-heading h2 { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.console-home-card-heading .semi-button { flex: none; }
+.console-home-card .semi-card-body { padding: 12px var(--home-panel-padding) var(--home-panel-padding); }
+.console-home-card > .semi-card-body:first-child { padding-top: var(--home-panel-padding); }
+.console-home-link.semi-button { min-height: 32px; border: 1px solid #d8deea; border-radius: 999px; padding-inline: 14px; background: var(--semi-color-bg-0); color: var(--semi-color-text-0); }
+.console-home-link.semi-button:hover { background: var(--semi-color-fill-0); }
+.console-home-value { display: block; margin: 8px 0 14px; font-size: 26px; line-height: 32px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.console-home-caption, .console-home-trend-label { color: var(--semi-color-text-2); }
+.console-home-trend-label { font-size: 12px; }
+.console-home-empty { min-height: 78px; display: grid; place-items: center; margin: 0; color: var(--semi-color-text-2); text-align: center; }
 .console-home-summary .console-home-empty { min-height: 136px; }
 .console-home-hot { display: grid; gap: 10px; min-width: 0; }
-.console-home-models { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,270px),1fr)); gap: 12px; }
+.console-home-models { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,245px),1fr)); gap: 16px; }
 .console-home-model-heading { display: flex; align-items: center; gap: 6px; }
-.console-home-model-heading img { width: 22px; height: 22px; object-fit: contain; }
+.console-home-model-heading img { flex: none; width: 24px; height: 24px; object-fit: contain; }
+.console-home-model-heading .semi-button { min-width: 0; }
+.console-home-model-heading .semi-button-content { white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .console-home-models p { color: var(--semi-color-text-2); margin: 3px 0 6px; overflow-wrap: anywhere; }
 .console-home-models p + p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.console-home-plan-list { list-style: none; margin: 4px 0; padding: 0; }
-.console-home-plan-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 10px 0; border-top: 1px solid var(--semi-color-border); }
-.console-home-plan-list li span:last-child { margin-left: auto; color: var(--semi-color-text-2); }
+.console-home-plan-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px; list-style: none; margin: 0; padding: 0; }
+.console-home-plan-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 14px; border: 1px solid var(--semi-color-border); border-radius: 10px; }
+.console-home-plan-list li strong { overflow-wrap: anywhere; }
+.console-home-plan-list .console-home-caption { grid-column: 1 / -1; font-size: 12px; }
+.console-home-plan-status { border-radius: 4px; padding: 2px 6px; background: var(--semi-color-success-light-default); color: var(--semi-color-success); font-size: 12px; }
 .front-main > .console-market-tabs { margin: 12px 14px 0; }
 .content > .console-market-tabs { margin-bottom: 10px; }
 .console-tool-connection { display: grid; gap: 12px; }
 .console-tool-field { display: grid; gap: 6px; overflow-wrap: anywhere; }
 .console-tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 850px) {
+  .console-home-summary { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 700px) {
   .front-main > .console-home { padding: 12px; gap: 12px; }
-  .console-home-summary, .console-home-models { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .console-home-summary, .console-home-models { gap: 12px; }
+  .console-home-heading h1.semi-typography { font-size: 24px; line-height: 32px; }
 }

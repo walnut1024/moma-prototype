@@ -11,7 +11,7 @@ import {sections,canAccessPage} from '../src/admin-v2/navigation.mjs';
 
 test('model operations modules share operator permissions while measurement stays a page-level destination',()=>{
   assert.deepEqual(sections.find(row=>row.id==='models').items.map(row=>row.children[0][0]),['providers-reference','listing-new','model-links','model-market','model-templates']);
-  assert.equal(sections.find(row=>row.id==='commerce').items[0].label,'模型销售');
+  assert.equal(sections.find(row=>row.id==='commerce').items[0].label,'模型售卖');
   for(const page of ['listing-new','model-market','model-prices','tariff-dictionary']){
     assert.equal(canAccessPage('运营人员',page),true);assert.equal(canAccessPage('运维人员',page),false);
   }

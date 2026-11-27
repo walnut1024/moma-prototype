@@ -1,0 +1,154 @@
+.role-tools {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  color: #142035;
+}
+.role-tools h1, .role-tools h2, .role-tools p, .role-tools dl { margin: 0; }
+.role-tools h1 { font-size: 19px; line-height: 28px; letter-spacing: 0; }
+.role-tools h2 { font-size: 16px; line-height: 24px; }
+.role-tools .role-tools-row p, .role-tools .role-tools-route-heading p, .role-tools .role-tools-muted { color: #657086; }
+.role-tools-panel { padding: 24px; min-width: 0; border-radius: 16px; background: #fff; }
+.role-tools-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.role-tools-route-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+.role-tools-route-heading p { margin-top: 4px; }
+.role-tools-route-heading > .semi-button { align-self: start; margin-inline-start: auto; }
+.role-tools-route-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 72px;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #e6f4ff, #edf2ff);
+  color: #3572f0;
+}
+.role-tools-route-table { min-height: 480px; }
+.role-tools-route-table > .role-tools-row { margin-bottom: 16px; }
+.role-tools-filters, .role-tools-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.role-tools-filters label { display: flex; align-items: center; gap: 8px; }
+.role-tools-filters .semi-select { min-width: min(150px, 100%); }
+.role-tools-filters .semi-input-wrapper { width: min(218px, 100%); }
+.role-tools-row-actions .semi-button { padding-inline: 5px; }
+.role-tools-route-form { display: grid; gap: 12px; }
+.role-tools-route-form > label { display: grid; gap: 4px; }
+.role-tools-route-form [role="alert"] { margin: 0; color: var(--semi-color-danger); }
+.role-tools-example { overflow: auto; padding: 12px; border-radius: 8px; background: #f4f6fa; }
+.role-tools-guide-list { padding-inline-start: 20px; line-height: 1.9; }
+.role-tools-rank {
+  background: radial-gradient(ellipse at 64% 1%, #e2edff 0%, transparent 48%),
+    linear-gradient(#edf3ff, #fff 240px);
+  padding-block: 32px 42px;
+}
+.role-tools-rank-heading { display: grid; justify-items: center; gap: 20px; }
+.role-tools-rank-heading h1 { display: flex; align-items: center; gap: 4px; }
+.role-tools-rank-heading h1 span, .role-tools-calc-heading h1 span {
+  background: linear-gradient(90deg, #225eff, #8427ff);
+  background-clip: text;
+  color: transparent;
+}
+.role-tools-rank-content { max-width: 980px; margin: 34px auto 0; }
+.role-tools-rank-content .unified-chart { margin-block: 8px 14px; }
+.role-tools-rank-list {
+  display: grid;
+  grid-template-rows: repeat(5, minmax(54px, auto));
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 64px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.role-tools-rank-list > li { display: grid; grid-template-columns: 24px 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.role-tools-rank-list strong { overflow-wrap: anywhere; }
+.role-tools-rank-list small { display: block; margin-top: 4px; color: #657086; }
+.role-tools-rank-list b { font-size: 12px; font-variant-numeric: tabular-nums; }
+.role-tools-rank-position { color: #676f92; font-size: 19px; font-weight: 700; font-style: italic; text-align: center; }
+.role-tools-rank-list li:nth-child(-n+3) .role-tools-rank-position { color: #a25320; }
+.role-tools-rank-monogram { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid #e4ebff; border-radius: 4px; font-size: 11px; color: #225eff; }
+.role-tools-calc-heading { text-align: center; }
+.role-tools-calc-heading p { margin-top: 6px; color: #657086; }
+.role-tools-calculator { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; min-height: min(680px, 76dvh); }
+.role-tools-calc-input > .role-tools-row { justify-content: start; margin-bottom: 12px; }
+.role-tools-calc-input > .role-tools-row .semi-button { margin-inline-start: auto; }
+.role-tools-calc-input .semi-input-textarea-wrapper { background: transparent; }
+.role-tools-calc-input textarea { color: inherit; font-size: 14px; line-height: 1.65; }
+.role-tools-calc-results { display: grid; grid-template-rows: auto auto 1fr; gap: 12px; padding: 20px; background: linear-gradient(120deg, #eff6fc, #f0f2ff); border-radius: 16px; }
+.role-tools-calc-results > dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.role-tools-calc-results dd { margin: 8px 0 0; font-size: 21px; }
+.role-tools-token-preview > p { margin: 0 0 12px; }
+.role-tools-token-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.role-tools-token-chips span { padding: 4px 8px; background: #e7efff; color: #263856; border-radius: 4px; }
+.role-tools-token-preview small { display: block; margin-top: 10px; color: #657086; }
+.role-tools-access-heading .semi-input-wrapper { width: min(280px, 100%); background: #fff; }
+.role-tools-access-heading p { margin-top: 4px; }
+.role-tools-protocol { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 16px; border: 1px solid #dce7fe; border-radius: 7px; background: #ebf2fe; color: #285287; }
+.role-tools-access-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
+.role-tools-access-choices button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 132px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+}
+.role-tools-access-choices button:hover, .role-tools-access-choices button[aria-pressed="true"] { border-color: #b9d0ff; }
+.role-tools-access-choices button:focus-visible { outline: 2px solid #225eff; outline-offset: 2px; }
+.role-tools-tool-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  border-radius: 10px;
+  color: #245efa;
+  background: #eef3ff;
+  font-weight: 700;
+}
+.role-tools-access-choices button:first-child .role-tools-tool-icon { color: #a65016; background: #fff0e5; }
+.role-tools-access-choices button:nth-child(2) .role-tools-tool-icon { color: #6d42bc; background: #f2edff; }
+.role-tools-access-choices button:nth-child(3) .role-tools-tool-icon { color: #167454; background: #e5f7ed; }
+.role-tools-access-choices button > strong { grid-column: 2 / -1; overflow-wrap: anywhere; }
+.role-tools-tool-description { grid-column: 1 / -1; color: #657086; }
+.role-tools-access-choices button small { grid-column: 1 / 3; color: #657086; }
+.role-tools-access-layout { display: grid; grid-template-columns: minmax(0, 1fr) 180px; align-items: start; gap: 16px; }
+.role-tools-access-guide { display: grid; gap: 22px; }
+.role-tools-access-guide > header { justify-content: start; padding-bottom: 20px; border-bottom: 1px solid #e4e9f2; }
+.role-tools-access-guide > header .semi-button { margin-inline-start: auto; }
+.role-tools-access-guide section { scroll-margin-top: 100px; }
+.role-tools-access-guide section > h2 { margin-bottom: 12px; }
+.role-tools-prepare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0; padding-inline-start: 20px; }
+.role-tools-prepare li > :is(span, button) { display: block; margin-top: 6px; }
+.role-tools-prepare li > span { color: #657086; }
+.role-tools-parameters { border: 1px solid #e4e9f2; border-radius: 8px; overflow: hidden; }
+.role-tools-parameters > div { display: grid; grid-template-columns: minmax(100px, 165px) minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px 12px; }
+.role-tools-parameters > div + div { border-top: 1px solid #e4e9f2; }
+.role-tools-parameters dt { color: #657086; }
+.role-tools-parameters dd { margin: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.role-tools-parameters code { overflow-wrap: anywhere; min-width: 0; }
+.role-tools-access-guide details { padding: 10px; border-bottom: 1px solid #e4e9f2; }
+.role-tools-access-guide summary { cursor: pointer; }
+.role-tools-access-guide details > p { margin-top: 6px; }
+.role-tools-toc { display: grid; justify-items: start; gap: 5px; position: sticky; top: 74px; padding: 12px; }
+.role-tools-toc strong { margin: 0 0 6px 10px; color: #657086; }
+@media (max-width: 1220px) {
+  .role-tools-access-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .role-tools-rank-list { column-gap: 24px; }
+}
+@media (max-width: 940px) {
+  .role-tools-rank-list { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-flow: row; }
+  .role-tools-rank-list > li { min-height: 50px; }
+  .role-tools-calculator, .role-tools-access-layout { grid-template-columns: minmax(0, 1fr); }
+  .role-tools-toc { position: static; display: flex; flex-wrap: wrap; align-items: center; order: -1; }
+  .role-tools-toc strong { margin: 0; }
+}
+@media (max-width: 520px) {
+  .role-tools-panel, .role-tools-calc-results { padding: 16px; }
+  .role-tools-access-choices, .role-tools-prepare { grid-template-columns: minmax(0, 1fr); }
+  .role-tools-access-choices button { min-height: 102px; }
+  .role-tools-parameters > div { grid-template-columns: minmax(0, 1fr); }
+}

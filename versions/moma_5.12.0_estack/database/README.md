@@ -29,6 +29,12 @@
 
 运行 `npm run dev:tenant-demo:5120` 启动独立内存库，再运行 `npm run dev:5120`。如果常规本地后端正在运行，两个命令使用同一个空闲 `MOMA_5120_BACKEND_PORT`。在 Vite 地址打开 `/moma_5.12.0_estack/#/admin-2/tenants?enterprise=zqzh`，登录账号为 `admin-001`，密码为 `moma-tenant-demo-5120`。进入「租户管理 → 政企演示账号」可查看顾宁、周婧、许明远三个虚构成员和「政务热线知识助手」项目。DeepSeek-V4-Flash-0731 和 GLM-5.3 经原型模拟验证后按租户范围上架。DeepSeek 已授权并订购，GLM 可继续授权。演示库退出后清除，下次启动重新创建。
 
+### 模型推理演示
+
+运行 `npm run dev:backend:5120 -- --inference-demo` 和 `npm run dev:5120`，再打开「运维 → 模型推理 → 部署」。如果默认端口已被占用，启动两个命令时指定同一个空闲的 `MOMA_5120_BACKEND_PORT`。
+
+演示包含已就绪的文本和向量服务、ModelScope 权重下载中的部署以及显存不足的失败实例。节点、GPU、共享缓存、模型文件和基准测试复用同一批实例的引用。演示使用独立内存 D1，退出后清除。普通本地启动使用原有本地数据库。
+
 ## 数据与事务
 
 模型接入的公开管理工作区返回 `supplyRelations`，供应登记从 `supplier_models` 关联 `materials`、`suppliers` 读取，上游模型从 `channel_models` 关联其供应登记及 `channels` 读取，排除已移除或已删除的关系。两个 tab 只改变分组方式，成员及计数共用这一集合。`suppliers.record_json` 内的配置只用于补充已保存的连接成本、容量、检测及来源信息，不决定列表成员。模型命令的回执使用同一关系投影，字段及 ID 与刷新读取一致。登记移除和恢复同步 `supplier_models.removed_at`，多个别名仍合并为同一服务商／主档关系，不删除历史 JSON 或其他服务商记录。

@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { startLocalBackend } from '../database/local-runtime.js';
 
-test('cluster management rejects deletion dependencies and commits eligible cluster deletions as a batch', async t => {
+test('cluster management protects deployed topology and removes eligible clusters as a batch', async t => {
   const accessCode = randomUUID();
   const hash = createHash('sha256').update(accessCode).digest('hex');
   const local = await startLocalBackend({ presets: true, loginHashes: { 'admin-002': hash, 'admin-003': hash } });
@@ -53,4 +53,38 @@ test('cluster management rejects deletion dependencies and commits eligible clus
   assert.equal(removed.status, 200, JSON.stringify(removed.data));
   const final = (await application()).data;
   assert.deepEqual(final.clusters, before.clusters.filter(row => row.id !== clusterId));
+
+  const topologyId = `topology-${randomUUID()}`;
+  const layers = [
+    { id: 'rack', name: '机架', labelKey: 'topology.gpustack.ai/rack' },
+    { id: 'room', name: '机房', labelKey: 'bench.example/room' },
+  ];
+  const newCluster = await command(final.revision, { type: 'add', collection: 'clusters', record: {
+    id: topologyId, clusterId: 'cluster-topology-test', name: '集群拓扑测试', nodes: 0, totalGpu: 0, allocatedGpu: 0,
+    topologyLayers: layers, status: '待注册',
+  } });
+  assert.equal(newCluster.status, 200, JSON.stringify(newCluster.data));
+  // Install prior persisted deployment references before exercising the topology command.
+  for (const [id, layer, retiredAt] of [['current-room', 'room'], ['stopped-rack', 'rack'], ['historical-zone', 'old-zone', '2026-10-01']]) {
+    await local.db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json, '$.deployments[#]', json(?)) WHERE id=1")
+      .bind(JSON.stringify({ id, name: id, clusterId: topologyId, status: '停止', retiredAt, pdSettings: { gather: { layer, strategy: 'MustGather' } } })).run();
+  }
+  const fixed = (await application()).data;
+  const topologyChange = topologyLayers => ({ type: 'update', collection: 'clusters', id: topologyId, changes: { topologyLayers } });
+  const blockedRemoval = await command(fixed.revision, topologyChange(layers.slice(0, 1)));
+  assert.equal(blockedRemoval.status, 422, JSON.stringify(blockedRemoval.data));
+  assert.match(JSON.stringify(blockedRemoval.data), /current-room/);
+  const disabledRack = topologyChange([{ ...layers[0], disabled: true }, layers[1]]);
+  const blockedDisabled = await command(fixed.revision, disabledRack);
+  assert.equal(blockedDisabled.status, 422, JSON.stringify(blockedDisabled.data));
+  assert.match(JSON.stringify(blockedDisabled.data), /stopped-rack/);
+  assert.equal((await command(fixed.revision, disabledRack, operator.cookie)).status, 403);
+  assert.equal((await application()).data.revision, fixed.revision);
+
+  const keepImplicitRack = await command(fixed.revision, topologyChange(layers.slice(1)));
+  assert.equal(keepImplicitRack.status, 200, JSON.stringify(keepImplicitRack.data));
+  assert.equal((await command(fixed.revision, topologyChange([]))).status, 409);
+  const saved = (await application()).data;
+  assert.deepEqual(saved.clusters.find(row => row.id === topologyId).topologyLayers, layers.slice(1));
+  assert.deepEqual(saved.deployments, fixed.deployments);
 });

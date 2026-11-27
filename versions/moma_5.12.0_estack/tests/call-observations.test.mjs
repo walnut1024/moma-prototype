@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import { sections, pages, canAccessPage } from '../src/admin-v2/navigation.mjs';
 import { buildRequestTrace, readRequestBody } from '../src/admin-v2/call-log-detail.mjs';
 import { applyLogPolicy, createCallLogSimulation, simulateLogRequest, routingDemoRequestId } from '../src/admin-v2/call-log-simulation.mjs';
+import { channelHealthPerformance } from '../src/admin-v2/channel-health-observations.mjs';
 import {
-  attemptCapacity, attemptPerformance, attemptsForMetric, callObservations, changeObservationTenant, compareLogRows, filterObservations, logCsv, observationBuckets, observationDrill,
-  observationFilters, observationGroups, observationGroupScope, observationHash, observationViewFilters, observationWindow,
+  attemptCapacity, attemptsForMetric, callObservations, changeObservationTenant, compareLogRows, filterObservations, logCsv, observationBuckets,
+  observationFilters, observationGroups, observationHash, observationWindow,
   searchObservationIdentities, summarizeObservations,
 } from '../src/admin-v2/call-observations.mjs';
 
@@ -53,7 +54,7 @@ test('channel health ignores retired request filters while keeping upstream mode
   assert.equal(observationHash('providers-health', filters), '#/admin-2/providers-health?period=24h&upstreamModelId=upstream');
 });
 
-test('channel health keeps inactive inventory and drills into failed upstream attempts within the same snapshot', async () => {
+test('channel health keeps inactive inventory and filters failed upstream attempts within the same snapshot', async () => {
   const { channelHealthRows } = await import('../src/admin-v2/channel-health-observations.mjs');
   const { channelHealthCatalogue } = await import('../src/admin-v2/channel-health-catalogue.mjs');
   const inventory = channelHealthCatalogue(['a', 'b', 'idle'].map(id => ({
@@ -74,8 +75,9 @@ test('channel health keeps inactive inventory and drills into failed upstream at
   assert.equal(result[0].baseUrl, 'https://example.test/v1');
   assert.equal(result[2].baseUrl, undefined);
   assert.deepEqual(channelHealthRows(inventory, [], { supply: [['provider', 'idle']] }, [], 10).map(row => row.channel), ['idle']);
-  const range = { start: 0, end: 10 };
-  const hash = observationDrill(filters, range, { provider: ['provider'], channel: ['b'], upstreamModelId: ['m'], view: 'upstream', outcome: 'failed' });
+  const hash = observationHash('logs', filters, { period: 'custom',
+    start: new Date(0).toISOString(), end: new Date(10).toISOString(),
+    supply: [['provider', 'b']], upstreamModelId: ['m'], view: 'upstream', outcome: 'failed' });
   const query = new URLSearchParams(hash.split('?')[1]);
   assert.equal(query.get('view'), 'upstream');
   assert.deepEqual(filterObservations(attempts, observationFilters(query), observationWindow(observationFilters(query))), [attempts[1]]);
@@ -110,7 +112,6 @@ test('channel availability counts three days of responses while health uses qual
 });
 
 test('channel trends use per-request P50 and cache telemetry from the upstream attempt', async () => {
-  const { channelHealthPerformance } = await import('../src/admin-v2/channel-health-observations.mjs');
   const records = [[100, 2, 1, 0], [200, 10, 2, 10], [900, 900, 30, undefined]].map(([ttftMs, output, duration, cached], index) => ({
     ...base, requestId: 'channel-metric-' + index, usage: { input: 100, cached: 90 },
     attempts: [{ dispatched: true, startedAt: time(index), status: 'success', ttftMs,
@@ -165,13 +166,15 @@ test('channel health simulation compares upstream channels and covers all four h
 
 test('independent maintenance navigation keeps the gateway configuration tabs', () => {
   const { items } = sections.find(section => section.id === 'gateway');
-  assert.deepEqual(items.map(item => item.id), ['gateway', 'logs', 'monitoring']);
+  assert.deepEqual(items.map(item => item.id), ['gateway', 'global-routing']);
+  assert.equal(pages.logs.groupId, 'runtime');
   assert.deepEqual(items[0].children.map(([id]) => id), ['routes', 'limits', 'fallback', 'cache', 'releases']);
-  for (const id of ['logs', 'monitoring', 'alerts', 'incidents', 'sla']) {
-    assert.equal(canAccessPage('运维人员', id), true);
-    assert.equal(canAccessPage('运营人员', id), false);
+  assert.equal(canAccessPage('运维人员', 'logs'), true);
+  assert.equal(canAccessPage('运营人员', 'logs'), false);
+  for (const id of ['monitoring', 'alerts', 'incidents', 'sla']) {
+    assert.equal(pages[id], undefined);
+    assert.equal(canAccessPage('平台管理员', id), false);
   }
-  assert.equal(pages.alerts.area, 'monitoring');
   const channelManagement = sections.find(section => section.id === 'models').items.find(item => item.id === 'channels-reference');
   assert.deepEqual(channelManagement.children, [['providers-reference', '连接列表'], ['providers-health', '连接健康']]);
   assert.equal(canAccessPage('运营人员', 'providers-health'), true);
@@ -228,7 +231,7 @@ test('tenant scope includes anonymous calls and narrows identity searches and fi
     { tenant: ['b'], user: null, key: ['key-b'] });
 });
 
-test('drill-down preserves the exact half-open window, view and failure conditions', () => {
+test('time buckets and request filters preserve half-open windows and failure conditions', () => {
   const data = callObservations(state);
   const filter = observationFilters(new URLSearchParams('period=1h'));
   const window = observationWindow(filter, now);
@@ -236,13 +239,8 @@ test('drill-down preserves the exact half-open window, view and failure conditio
   const buckets = observationBuckets(timed, window, 'minute');
   const failureBucket = buckets.find(bucket => bucket.rows.some(attempt => attempt.fallback));
   assert.equal(failureBucket.rows.length, 2);
-  const hash = observationDrill(filter, failureBucket, { channel: ['a'], http: '429' });
-  const params = new URLSearchParams(hash.split('?')[1]);
-  assert.equal(params.has('view'), false);
-  const drillFilter = observationFilters(params);
-  const drillWindow = observationWindow(drillFilter, now);
-  assert.deepEqual(drillWindow, { start: failureBucket.start, end: failureBucket.end });
-  assert.deepEqual(filterObservations(data.attempts, drillFilter, drillWindow).map(row => row.index), [1]);
+  assert.deepEqual(filterObservations(data.attempts, { supply: [[null, 'a']], http: '429' },
+    failureBucket).map(row => row.index), [1]);
   const failed = { ...filter, outcome: 'failed', http: '0' };
   assert.deepEqual(filterObservations(data.requests, failed, window).map(row => row.requestId), ['req-rejected']);
   assert.equal(timed.length, 2);
@@ -250,7 +248,7 @@ test('drill-down preserves the exact half-open window, view and failure conditio
   assert.equal(buildRequestTrace(data.requests.find(row => row.requestId === 'req-legacy')).recordedCount, 1);
 });
 
-test('provider and channel pairs stay scoped through filtering, saved views and drill-down', () => {
+test('provider and channel pairs retain their scope when serialized in observation URLs', () => {
   const rows = [
     { id: 'a-shared', provider: 'a', channel: 'shared' },
     { id: 'a-uncollected', provider: 'a' },
@@ -263,15 +261,9 @@ test('provider and channel pairs stay scoped through filtering, saved views and 
   const filters = { ...observationFilters(), supply: [['a', null], ['b', 'shared']] };
   const ids = scope => filterObservations(rows, scope, window).map(row => row.id);
   const fromHash = hash => observationFilters(new URLSearchParams(hash.split('?')[1]));
-  const drill = scope => fromHash(observationDrill(filters, window, scope));
   assert.deepEqual(ids(filters), ['a-shared', 'a-uncollected', 'b-shared']);
-  assert.deepEqual(fromHash(observationHash('call-analysis', filters)).supply, filters.supply);
-  assert.deepEqual(ids(drill({ provider: ['b'] })), ['b-shared']);
-  assert.deepEqual(ids(drill({ channel: ['shared'] })), ['a-shared', 'b-shared']);
-  const [group] = observationGroups([rows[2]], 'channel');
-  assert.deepEqual(drill(observationGroupScope('channel', group)).supply, [['b', 'shared']]);
-  assert.deepEqual(ids(drill({ provider: ['c'] })), []);
-  assert.deepEqual(ids(observationViewFilters({ provider: ['a', 'b'], channel: ['other'] })), ['b-other']);
+  assert.deepEqual(fromHash(observationHash('logs', filters)).supply, filters.supply);
+  assert.deepEqual(ids(observationFilters(new URLSearchParams('provider=a,b&channel=other'))), ['b-other']);
   assert.deepEqual(ids(observationFilters(new URLSearchParams('channel=shared'))),
     ['a-shared', 'b-shared', 'c-shared', 'provider-uncollected']);
   assert.deepEqual(ids(observationFilters(new URLSearchParams('supply=[null]'))), []);
@@ -360,9 +352,9 @@ test('channel model separates the actually selected upstream and computes perfor
   assert.equal(backup.rows[0].index, 4);
   assert.equal(backup.rows[0].project, 'demo-log-project');
   assert.equal(backup.rows[0].purpose, 'diagnostic');
-  assert.deepEqual(attemptPerformance(upstream),
-    { ttft: 214, ttftSamples: 1, otps: 44_000 / 180, otpsSamples: 1, timeoutRate: 50 });
-  assert.equal(attemptPerformance(upstream.slice(0, 3)).otps, null);
+  assert.equal(channelHealthPerformance(upstream).ttft, 214);
+  assert.equal(channelHealthPerformance(upstream).otps, 44_000 / 180);
+  assert.equal(channelHealthPerformance(upstream.slice(0, 3)).otps, null);
   assert.equal(attemptsForMetric(upstream, 'otps')[0].id, backup.rows[0].id);
   const [interrupted] = callObservations({ ...simulation.data, requests: [{
     ...simulation.data.requests[0],
@@ -473,7 +465,7 @@ test('body permissions and per-segment retention are enforced before presentatio
   assert.doesNotMatch(JSON.stringify(callObservations(simulation.data)), /列出三个服务巡检项/);
 });
 
-test('same Request ID in different customers has separate attempts, project scope and drill-down', () => {
+test('same Request ID in different customers has separate attempts and project scope', () => {
   const { requests, attempts: upstream } = callObservations({
     ...state,
     projects: [{ id: 'project-a', name: '项目 A' }, { id: 'project-b', name: '项目 B' }],
@@ -493,17 +485,14 @@ test('same Request ID in different customers has separate attempts, project scop
   const window = observationWindow(filters, now);
   const [request] = filterObservations(requests, filters, window);
   assert.equal(request.projectName, '项目 A');
-  const [group] = observationGroups([request], 'project');
-  const hash = observationDrill(filters, window, observationGroupScope('project', group));
-  const drilled = observationFilters(new URLSearchParams(hash.split('?')[1]));
-  assert.deepEqual(filterObservations(upstream, drilled, window).map(row => row.parentId), [request.id, request.id]);
+  assert.deepEqual(filterObservations(upstream, filters, window).map(row => row.parentId), [request.id, request.id]);
   assert.deepEqual(buildRequestTrace(request).nodes.find(node => node.id === 'project-route').fields,
     [['项目路由 ID', 'route-a'], ['匹配字段', 'metadata._user'], ['规则序号', 1]]);
   assert.equal(filterObservations(requests, { ...filters, tenant: ['b'] }, window).length, 0);
   assert.deepEqual(filterObservations(requests, { project: ['__uncollected__'] }, window).map(row => row.requestId), ['unassigned']);
 });
 
-test('diagnostic project calls remain traceable with their purpose across drills', () => {
+test('diagnostic project calls remain traceable with their purpose in log URLs', () => {
   const { requests, attempts: upstream } = callObservations({ ...state, requests: [
     { ...success, projectId: 'project-a', tenantId: 'a', purpose: 'customer' },
     { ...success, projectId: 'project-a', tenantId: 'a', requestId: 'probe', purpose: 'gateway-test' },
@@ -513,10 +502,10 @@ test('diagnostic project calls remain traceable with their purpose across drills
   const window = observationWindow(customer, now);
   assert.deepEqual(filterObservations(requests, customer, window).map(row => row.requestId), [success.requestId]);
   assert.equal(filterObservations(requests, { ...customer, project: ['unknown-project'] }, window).length, 0);
-  const hash = observationDrill({ ...customer, purpose: ['diagnostic'] }, window);
+  const hash = observationHash('logs', { ...customer, purpose: ['diagnostic'] });
   const filters = observationFilters(new URLSearchParams(hash.split('?')[1]));
   assert.deepEqual(filterObservations(upstream, filters, window).map(row => row.requestId), ['probe', 'probe']);
-  const all = observationHash('monitoring', { ...customer, purpose: null });
+  const all = observationHash('logs', { ...customer, purpose: null });
   assert.equal(observationFilters(new URLSearchParams(all.split('?')[1]), '24h', ['customer']).purpose, null);
 });
 

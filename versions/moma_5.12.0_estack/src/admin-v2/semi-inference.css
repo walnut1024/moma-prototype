@@ -1,6 +1,19 @@
 .admin-analysis-metrics.admin-analysis-metrics-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .admin-cluster-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--admin-section-gap); }
 .admin-cluster-grid .admin-analysis-detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-node-label-editor, .admin-node-label-field { display: grid; justify-items: start; gap: 6px; min-width: 0; }
+.admin-node-label-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: start; gap: 8px; width: 100%; }
+.admin-worker-label-chip { max-width: 145px; }
+.admin-worker-label-chip .semi-button-content { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.admin-resource-load-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 112px), 1fr)); gap: 12px; margin: 0; }
+.admin-resource-load-summary dd { margin: 4px 0 0; }
+.admin-resource-instance-table { overflow-x: auto; min-width: 0; }
+.admin-resource-model-group > td { background: var(--semi-color-fill-0); }
+.admin-resource-instance-name, .admin-resource-instance-meta { display: grid; justify-items: start; gap: 4px; }
+.admin-resource-instance-name { padding-inline-start: 32px; }
+.admin-resource-time-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.admin-resource-time-fields .semi-datepicker { width: 100%; }
+.admin-resource-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 600px) {
   .admin-analysis-metrics.admin-analysis-metrics-three { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 }

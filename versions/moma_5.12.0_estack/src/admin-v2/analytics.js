@@ -36,16 +36,6 @@ export function usageChanges(current, previous, key = 'modelId', measure = token
   const now = totals(current), before = totals(previous);
   return [...new Set([...Object.keys(now), ...Object.keys(before)])].map(id => ({ id, current: now[id] || 0, previous: before[id] || 0, delta: (now[id] || 0) - (before[id] || 0), percent: before[id] ? ((now[id] || 0) / before[id] - 1) * 100 : null })).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 }
-export function inputLengthDistribution(rows) {
-  const bands = [{ label: '0–4K', max: 4096 }, { label: '4–16K', max: 16384 }, { label: '16–32K', max: 32768 }, { label: '32K+', max: Infinity }].map(b => ({ ...b, calls: 0, tokens: 0 }));
-  for (const row of rows) {
-    const value = row.usage?.input;
-    if (!Number.isFinite(value) || value < 0) continue;
-    const band = bands.find(b => value < b.max);
-    band.calls++; band.tokens += value;
-  }
-  return bands;
-}
 export function firstTenantCalls(rows) {
   const first = new Map();
   for (const row of rows) if (row.tenantId && (!first.has(row.tenantId) || Date.parse(row.createdAt) < Date.parse(first.get(row.tenantId)))) first.set(row.tenantId, row.createdAt);

@@ -14,7 +14,7 @@ import './gateway-settings.css';
 const collection = { routes: 'routes', limits: 'limits', fallback: 'fallbacks', cache: 'caches', releases: 'releases' };
 export const gatewaySettingsPages = Object.keys(collection);
 const meta = {
-  routes: ['路由策略', '配置模型到端点的加权或优先级选路。'],
+  routes: ['模型路由', '配置模型到端点的加权或优先级选路。'],
   limits: ['限流与并发', '按租户、项目、API 密钥、模型或端点设置有效上限。'],
   fallback: ['熔断与回退', '配置超时、错误率阈值和无环回退链。'],
   cache: ['缓存策略', '按权限上下文控制缓存、TTL 和命中统计。'],
@@ -234,6 +234,7 @@ function rowCells(pageId, item, state) {
 }
 
 export default function GatewayPage({ pageId, state, dispatch }) {
+  const translateLabel = useChannelText();
   const [creating, setCreating] = useState(false);
   const [title, description] = meta[pageId];
   const releases = pageId === 'releases';
@@ -242,7 +243,7 @@ export default function GatewayPage({ pageId, state, dispatch }) {
   const update = (item, changes) => dispatch({ type: 'update', collection: collection[pageId], id: item.id, changes });
   return (
     <div className="gateway-settings admin-page-stack">
-      <AdminPageHeading title={title} description={description}>
+      <AdminPageHeading title={translateLabel(title)} description={description}>
         {!releases && <Button icon={<IconPlus aria-hidden="true"/>} theme="solid" onClick={() => setCreating(true)}>新建{ruleNames[pageId]}</Button>}
       </AdminPageHeading>
       {releases ? <Releases state={state} dispatch={dispatch}/> : <>

@@ -10,9 +10,8 @@ test('tenant management is shared and resource management requires the system ad
   const internal = deploymentLicense({ MOMA_LICENSE_EDITION: 'internal' });
   const commercial = deploymentLicense({ MOMA_LICENSE_EDITION: 'commercial' });
   const commercialGroup = adminSections.find(row=>row.id==='commerce');
-  const access = adminSections.find(row=>row.id==='customers');
-  assert.deepEqual(commercialGroup.items.map(row=>row.label), ['模型销售','套餐管理']);
-  assert.deepEqual(access.items.map(row=>row.label), ['租户管理','项目管理']);
+  const licensedItems = commercialGroup.items.filter(item=>commercialPage(item.children[0][0]));
+  assert.deepEqual(licensedItems.map(row=>row.label), ['模型售卖','套餐管理','套餐数据']);
   assert(!adminSections.some(row=>row.id==='organization'));
   assert(canAccessPage('平台管理员','projects',commercial));
   assert(canAccessPage('平台管理员','organization-members',internal));
@@ -27,7 +26,7 @@ test('tenant management is shared and resource management requires the system ad
   assert.equal(canAccessPage('运营人员', 'customer-analysis', internal), false);
   assert(canAccessPage('运营人员', 'model-market', internal));
   assert(canAccessPage('运营人员', 'tenants', internal));
-  for (const id of ['model-prices', 'orders', 'bills', 'metering', 'package-production', 'business-analysis']) {
+  for (const id of ['model-prices', 'orders', 'bills', 'metering', 'package-production', 'package-data', 'business-analysis']) {
     assert(commercialPage(id));
     assert.equal(canAccessPage('平台管理员', id, internal), false);
     assert.equal(canAccessPage('运营人员', id, commercial), true);

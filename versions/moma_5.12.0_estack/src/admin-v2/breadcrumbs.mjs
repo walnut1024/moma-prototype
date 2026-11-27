@@ -26,9 +26,6 @@ export function adminBreadcrumbs(active, params, names = {}) {
     const label = Object.hasOwn(labels, view) ? labels[view] : null;
     add(page.label, label ? href(active, {}, ['view', 'package']) : null);
     if (label) add(label);
-  } else if (active === 'package-data' && params.get('package')) {
-    add(page.label, href(active, {}, ['package']));
-    add('套餐详情');
   } else if (active === 'providers-reference' || active === 'providers-health') {
     const listRoute = '#/admin-2/' + channelManagementListRoute('providers-reference', params);
     const detail = active === 'providers-reference' && Boolean(params.get('connection'));
@@ -53,7 +50,7 @@ export function adminBreadcrumbs(active, params, names = {}) {
     else if (view === 'templateImport') add('批量导入模型资料');
   } else if (active === 'model-prices' && params.has('service')) {
     add(page.label,href(active,{},['association','provider','service','edit','tab','add']));
-    add('模型售卖');
+    add('售卖详情');
   } else if (active === 'tariff-dictionary') {
     const tab = params.get('tab');
     add('基础资料', '#/admin-2/model-templates');

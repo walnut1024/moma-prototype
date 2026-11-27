@@ -68,7 +68,7 @@ export function CustomerSessionGate({auth,market}) {
   </section>;
 }
 
-export function AuthBanner({ auth, market, onSwitchSpace, admin = false }) {
+export function AuthBanner({ auth, market, onSwitchSpace, demoHref, admin = false }) {
   const [open,setOpen]=useState(false), [switching,setSwitching]=useState(false);
   const translateLabel = useChannelText();
   if(admin)return auth.adminAccount ? <Popover trigger="click" position="bottomRight" showArrow={false}
@@ -93,10 +93,12 @@ export function AuthBanner({ auth, market, onSwitchSpace, admin = false }) {
     finally { setSwitching(false); }
   }
   const navigate=route=>{setOpen(false);auth.navigate(route);};
+  const spaceRole = market?.spaces?.find(space=>space.id===market.tenant?.id)?.role;
   if(market?.tenant)return <div className="auth-banner-actions">
+    {demoHref && <a className="role-demo-entry" href={demoHref}>角色演示</a>}
     <Popover trigger="click" position="bottomRight" visible={open} onVisibleChange={setOpen} showArrow={false}
       content={({initialFocusRef})=><div className="auth-account-menu" tabIndex={-1} ref={initialFocusRef}>
-      <div className="auth-menu-profile"><b>{market.account?.username}</b><span>{market.tenant.name}</span></div>
+      <div className="auth-menu-profile"><b>{market.account?.username}</b><span>{[market.tenant.name,spaceRole].filter(Boolean).join(' · ')}</span></div>
       {market.spaces?.length > 1 && <div className="auth-space-menu" role="group" aria-label="切换使用空间">
         <p>切换使用空间</p>
         {market.spaces.map(space=><Button key={space.id} type="tertiary" theme="borderless" aria-current={space.id===market.tenant.id || undefined}

@@ -88,7 +88,7 @@ export default function LicensePage({ license }) {
   };
 
   return <div className="admin-page-stack license-page">
-    <AdminPageHeading title={translateLabel("License 管理")}>
+    <AdminPageHeading title={translateLabel("授权管理")}>
       <Button id="edit-deployment-license" theme="solid" onClick={() => setOpen(true)}>{action}</Button>
     </AdminPageHeading>
     <Card className="license-card" bodyStyle={{ padding:0 }}>

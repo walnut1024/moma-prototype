@@ -223,7 +223,7 @@ function readFilter(value, label) {
   return value;
 }
 
-export function readCatalogueRecipe(value, label) {
+function readRecipe(value, label) {
   const source = readModelSource(value,label);
   const backend = readText(value.backend,label + '的推理后端');
   const imageName = readText(value.image_name,label + '的容器镜像');
@@ -270,7 +270,7 @@ export function readCatalogueDocument(document, previous) {
     if (!name || seen.has(key) || !Array.isArray(entry.specs)) throw Error('模型名称必须唯一，specs 须为列表。');
     seen.add(key);
     const previousRow = existing.get(key);
-    const specs = entry.specs.map((recipe,index)=>readCatalogueRecipe(recipe,`${name} 的规格 ${index+1}`));
+    const specs = entry.specs.map((recipe,index)=>readRecipe(recipe,`${name} 的规格 ${index+1}`));
     const spec = specs[0];
     const lists = Object.fromEntries(['capabilities','categories','licenses'].map(key=>[key,readList(entry[key],name + ' 的 ' + key)]));
     const icon = readText(entry.icon, name + ' 的图标');

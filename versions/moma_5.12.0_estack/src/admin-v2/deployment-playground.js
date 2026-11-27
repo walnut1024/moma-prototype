@@ -1,4 +1,4 @@
-import { deployableModels } from './deployments.js';
+import { deployableModels, deploymentCanServe } from './deployments.js';
 
 export const playgroundModes = {
   text: 'chat', multimodal: 'chat', embedding: 'embedding', rerank: 'rerank',
@@ -17,12 +17,6 @@ export const playgroundReasoningLevels = ['none', 'minimal', 'low', 'medium', 'h
 export const playgroundImageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
 export const playgroundCodeLanguages = ['cURL', 'Python', 'Node.js'];
 const chatNumberDefaults = { temperature: 1, top_p: 1, frequency_penalty: 0, presence_penalty: 0 };
-
-function deploymentCanServe({ status, readyReplicas, replicas, roles, rebuildingInstance }) {
-  if (status !== '运行中' || !Number.isInteger(readyReplicas) || readyReplicas < 1) return false;
-  // This workspace records total ready replicas, without readiness for each PD role.
-  return !roles || readyReplicas === replicas && !rebuildingInstance;
-}
 
 export function deploymentPlaygroundTargets(state, deploymentId) {
   if (!['平台管理员', '运维人员'].includes(state.currentRole) || state.storageError) return [];
