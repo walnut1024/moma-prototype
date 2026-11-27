@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
 import { classificationHref } from '../src/admin-v2/model-classification.js';
-import { adminSections, canAccessPage, isInfrastructurePage, pageFromHash, pageWorkspace, sections } from '../src/admin-v2/navigation.mjs';
+import { adminSections, canAccessPage, commercialPage, isInfrastructurePage, pageFromHash, pageWorkspace, sections } from '../src/admin-v2/navigation.mjs';
 const build = (page, query = '', names = {}) => adminBreadcrumbs(page, new URLSearchParams(query), names);
 const labels = crumbs => crumbs.map(c => c.label);
 const params = crumb => new URLSearchParams(crumb.href.split('?')[1]);
@@ -14,7 +14,7 @@ test('sidebar follows the operations and maintenance groups in order', () => {
     '首页',
     ['运营分析', '用量数据', '租户数据', '用户数据'],
     ['模型运营', '模型接入', '模型服务', '模型链路', '模型广场', '基础资料'],
-    ['商业运营', '模型售卖', '套餐管理', '套餐数据'],
+    ['商业运营', '模型售卖', '套餐管理', '套餐数据', '协议管理'],
     ['流量运营', '限流配置'],
     ['访问控制', '租户管理', '项目管理'],
     ['平台管理', '站点配置', '授权管理', '后台账号', '审计日志'],
@@ -44,6 +44,14 @@ test('platform account and audit entries use their existing administrator-only r
       assert.equal(canAccessPage('运维人员', route, { commercial }), false);
     }
   }
+});
+
+test('site agreements have a standalone route and are independent of commercial licensing', () => {
+  const page = 'site-agreements';
+  assert.equal(pageFromHash('#/admin-2/' + page, '平台管理员'), page);
+  assert.deepEqual(labels(build(page)), ['商业运营', '协议管理']);
+  assert.equal(commercialPage(page), false);
+  assert.equal(canAccessPage('平台管理员', page, { commercial: true }), false);
 });
 
 test('removed JSON views use the source page breadcrumbs', () => {

@@ -362,6 +362,7 @@ const englishText = new Map(Object.entries({
   '后台账号': 'Admin Accounts',
   '审计日志': 'Audit Logs',
   '站点配置': 'Site Settings',
+  '协议管理': 'Agreement Management',
   'License 管理': 'License Management',
   '授权管理': 'License Management',
   '研发须知': 'Engineering Notes',

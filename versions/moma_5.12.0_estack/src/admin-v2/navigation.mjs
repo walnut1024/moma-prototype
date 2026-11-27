@@ -21,6 +21,7 @@ export const sections = [
     { id: "commerce-orders", label: "订购与账单", sidebar: false, children: [["orders", "订购记录"], ["bills", "账单"], ["metering", "消费明细"]] },
     { id: "package-production", label: "套餐管理", children: [["package-production", "套餐管理"]] },
     { id: "package-data", label: "套餐数据", children: [["package-data", "套餐数据"]] },
+    { id: "site-agreements", label: "协议管理", children: [["site-agreements", "协议管理"]] },
     { id: "business-analysis", label: "经营分析", sidebar: false, children: [["business-analysis", "经营分析"]] },
   ]},
   { id: "traffic", workspace: "operations", title: "流量运营", items: [
@@ -82,7 +83,7 @@ export function isInfrastructurePage(id) {
   return pages[id]?.groupId === 'ops-model-service' && !['clusters', 'deployments'].includes(id);
 }
 
-export const commercialPage = id => pages[id]?.groupId === 'commerce';
+export const commercialPage = id => pages[id]?.groupId === 'commerce' && id !== 'site-agreements';
 
 export const adminSections = sections.filter(group => group.sidebar !== false).map(group => ({
   ...group,
@@ -100,7 +101,8 @@ export function canAccessPage(role, id, license, params) {
   )) return false;
   if (id === 'organization-members' && role !== '平台管理员') return false;
   if (id === 'projects' && role !== '平台管理员' && !(role === '运营人员' && params?.get('tenant'))) return false;
-  if (!Object.hasOwn(pages, id) || (id === 'site-configuration' && !PRIVATE_SITE)) return false;
+  if (!Object.hasOwn(pages, id)) return false;
+  if (id === 'site-configuration' || id === 'site-agreements') return PRIVATE_SITE && role === '平台管理员';
   if (pages[id].groupId === 'platform' || id === 'global-routing') return role === '平台管理员';
   return availableWorkspaces(role).includes(pageWorkspace(id));
 }

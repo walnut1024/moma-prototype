@@ -2,12 +2,15 @@ import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, Tabs, TextArea, Toast } from '@douyinfe/semi-ui';
 import { AdminModal } from './AdminOverlay';
+import AdminPageHeading from './AdminPageHeading';
 import { openLogin } from '../login-navigation.mjs';
+import { useSiteConfigSnapshot } from '../useSiteConfig';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { AgreementContent } from '../components/SiteAgreementLinks';
 import { agreementHref } from '../agreement-route.mjs';
 import { agreementWithDefault, defaultAgreement } from '../default-site-terms.mjs';
-import { AGREEMENTS, MAX_AGREEMENT_TEXT, MAX_SITE_URL, siteUrl } from '../site-config.mjs';
+import { AGREEMENTS, MAX_AGREEMENT_TEXT, MAX_SITE_URL, readSiteConfig, siteUrl } from '../site-config.mjs';
+import './site-configuration.css';
 
 function agreementMode(agreement) {
   return agreement.mode || (agreement.url ? 'url' : 'text');
@@ -17,8 +20,9 @@ function activeAgreement(agreement) {
   return agreementMode(agreement) === 'url' ? { text: '', url: agreement.url } : { text: agreement.text, url: '' };
 }
 
-export default function SiteAgreementsEditor({ legacy, onDirtyChange }) {
+export default function SiteAgreementsEditor({ dirtyRef }) {
   const translateLabel = useChannelText();
+  const legacy = readSiteConfig(useSiteConfigSnapshot());
   const [selected, setSelected] = useState('terms');
   const [published, setPublished] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -43,9 +47,9 @@ export default function SiteAgreementsEditor({ legacy, onDirtyChange }) {
     return () => controller.abort();
   }, [attempt]);
   useEffect(() => {
-    onDirtyChange(Boolean(draft || busy));
-    return () => onDirtyChange(false);
-  }, [draft, busy, onDirtyChange]);
+    dirtyRef.current = Boolean(draft || busy);
+    return () => { dirtyRef.current = false; };
+  }, [draft, busy, dirtyRef]);
   useEffect(() => () => operation.current?.abort(), []);
 
   function reload() {
@@ -93,7 +97,8 @@ export default function SiteAgreementsEditor({ legacy, onDirtyChange }) {
     }
   }
 
-  return <div className="site-agreements-editor">
+  return <section className="site-agreements-editor">
+    <AdminPageHeading title={translateLabel("协议管理")} />
     {error && <Banner type="warning" closeIcon={null} description={<>
       <span role="alert">{error.message}</span>
       {error.status === 401 && <Button onClick={() => openLogin()}>重新登录</Button>}
@@ -151,5 +156,5 @@ export default function SiteAgreementsEditor({ legacy, onDirtyChange }) {
       footer={<Button onClick={() => setPreview(null)}>{translateLabel("关闭")}</Button>} onCancel={() => setPreview(null)}>
       <div className="site-config-preview" tabIndex={0}><AgreementContent agreement={preview} /></div>
     </AdminModal>}
-  </div>;
+  </section>;
 }

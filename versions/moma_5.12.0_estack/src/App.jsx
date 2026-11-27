@@ -316,6 +316,7 @@ function PrototypeApp({ version }) {
   const [projectScope, setProjectScope] = useState(readProjectScope);
   const [projectAction, setProjectAction] = useState(null);
   const routingDirty = useRef(false);
+  const adminDraftDirty = useRef(false);
   const routingLocation = useRef(location.href);
   const setRoutingDirty = useCallback(dirty => {
     routingDirty.current = dirty;
@@ -499,7 +500,9 @@ function PrototypeApp({ version }) {
   const navigateAdmin = (mode) => {
     if (routingDirty.current && !window.confirm('放弃未保存的修改？')) return;
     routingDirty.current = false;
-    if (mode === "front" && location.hash.split("?")[0] === "#/admin-2/site-configuration") {
+    if (mode === "front" && /^#\/admin-2\/(?:site-configuration|site-agreements)(?:[/?]|$)/.test(location.hash)) {
+      if (adminDraftDirty.current && !window.confirm('放弃未保存的修改？')) return;
+      adminDraftDirty.current = false;
       location.hash = "";
       return;
     }
@@ -718,7 +721,8 @@ function PrototypeApp({ version }) {
         ) : admin === "v2" && auth.checkingAdmin ? (
           <p className="route-loading" role="status">正在检查登录状态…</p>
         ) : admin === "v2" ? (
-          <AdminConsoleV2 license={license} english={english} changeLanguage={changeLanguage} bannerTarget={adminBannerTarget} workbenchName={workbenchName} adminAccount={auth.adminAccount} />
+          <AdminConsoleV2 license={license} english={english} changeLanguage={changeLanguage} bannerTarget={adminBannerTarget}
+            workbenchName={workbenchName} adminAccount={auth.adminAccount} draftDirty={adminDraftDirty} />
         ) : internal && ['model-order','billing'].includes(activeRoute) ? (
           <div className="project-panel project-experience-empty"><h2>企业内用</h2><p>模型使用权限由项目管理员分配。</p>
             <SemiButton theme="solid" onClick={()=>openProjectPage(undefined,'model-market')}>返回模型广场</SemiButton></div>

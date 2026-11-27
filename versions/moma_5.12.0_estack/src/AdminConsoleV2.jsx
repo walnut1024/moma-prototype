@@ -1,7 +1,7 @@
 import { channelEnglish } from './admin-v2/channel-language';
 import AdminPageLoading from './admin-v2/AdminPageLoading';
 import {
-  IconActivity, IconApartment, IconAppCenter, IconBarChartVStroked, IconBellStroked,
+  IconActivity, IconApartment, IconAppCenter, IconArticle, IconBarChartVStroked, IconBellStroked,
   IconBookOpenStroked, IconBookStroked, IconBox, IconChainStroked, IconChecklistStroked,
   IconComponentStroked, IconFlowChartStroked, IconGridStroked, IconLayers,
   IconDoubleChevronLeft, IconDoubleChevronRight, IconLanguage,
@@ -61,6 +61,7 @@ const GatewayPage = lazy(() => import('./admin-v2/GatewayPages'));
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
 const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
+const SiteAgreementsEditor = lazy(() => import('./admin-v2/SiteAgreementsEditor'));
 const ModelMaterials = lazy(() => import('./admin-v2/ModelMaterials'));
 const loadModelServices = () => import('./admin-v2/ModelServicesNew');
 const ModelServicesNew = lazy(loadModelServices);
@@ -81,6 +82,7 @@ const NAVIGATION_ICONS = {
   materials: IconBookStroked,
   'package-production': IconBox,
   'package-data': IconBarChartVStroked,
+  'site-agreements': IconArticle,
   'traffic-limits': IconActivity,
   enterprise: IconApartment,
   projects: IconLayers,
@@ -125,7 +127,7 @@ export default function AdminConsoleV2(props) {
   if (!license) return <AdminPageLoading label="部署授权"/>;
   return <ConfigProvider locale={english ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}/>}</CloudModelOperations></ConfigProvider>;
 }
-function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage}) {
+function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage,draftDirty}) {
   const { state: workspaceState, dispatch: persist, transact, transactModel, transactIndividual, transactAdminAccount, reload, refreshRead, conflict } = store;
   const internalSite = !deploymentLicense.commercial || (!deploymentLicense.managed && workspaceState.spacePolicy?.operatingMode==='internal');
   const license = internalSite ? { ...deploymentLicense, commercial:false, commerceWritable:false } : deploymentLicense;
@@ -146,7 +148,6 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const [navOpen, setNavOpen] = useState(false);
   const [leave, setLeave] = useState(null);
   const [logSimulation, setLogSimulation] = useState(null);
-  const draftDirty = useRef(false);
   useEffect(() => {
     let accepted = location.hash;
     const sync = () => {
@@ -166,8 +167,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     const unload = event => { if (draftDirty.current) { event.preventDefault(); event.returnValue = ''; } };
     addEventListener('hashchange', sync, true);
     addEventListener('beforeunload', unload);
-    return () => { removeEventListener('hashchange', sync, true); removeEventListener('beforeunload', unload); };
-  }, []);
+    return () => {
+      removeEventListener('hashchange', sync, true);
+      removeEventListener('beforeunload', unload);
+      draftDirty.current = false;
+    };
+  }, [draftDirty]);
   const [active, setActive] = useState(initialPage);
   const [workspace, setWorkspace] = useState(pageWorkspace(initialPage) || availableWorkspaces(state.currentRole)[0] || 'operations');
   const [detailParams, setDetailParams] = useState(() => new URLSearchParams(location.hash.split('?')[1] || ''));
@@ -253,18 +258,23 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       dispatch={save} conflict={conflict} inferenceDemo={demo}/>;
   };
   const renderMenu = collapsed => <nav aria-label="后台导航">{adminSections.filter(group => group.workspace === currentWorkspace).map(group => {
-      const reason = group.id === 'commerce' && !license.commercial ? '未授权' : '';
-      const items = group.items.filter(item => reason || canAccessPage(state.currentRole, item.children[0][0], license));
+      const locked = group.id === 'commerce' && !license.commercial;
+      const items = group.items.filter(item => {
+        const target = item.children[0][0];
+        return (locked && commercialPage(target)) || canAccessPage(state.currentRole, target, license);
+      });
       if (!items.length) return null;
+      const groupStatus = locked ? (items.every(item => commercialPage(item.children[0][0])) ? '（未授权）' : '（部分未授权）') : '';
       return <section key={group.id} aria-label={english ? channelEnglish(group.title) : group.title}>
-        {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{reason && `（${reason}）`}</Typography.Text>}
+        {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{groupStatus}</Typography.Text>}
         {items.map(item => {
           const Icon = NAVIGATION_ICONS[item.id];
           const selected = activeGroup === group.id && activeArea === item.id;
           const target = item.children[0][0];
+          const disabled = locked && commercialPage(target);
           const label = english ? channelEnglish(item.label) : item.label;
-          const collapsedLabel = label + (reason ? `（${reason}）` : '');
-          const button = <Button key={item.id} disabled={Boolean(reason)} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
+          const collapsedLabel = label + (disabled ? '（未授权）' : '');
+          const button = <Button key={item.id} disabled={disabled} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
             aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => navigate(target)}>{collapsed ? null : label}</Button>;
           return collapsed ? <Tooltip key={item.id} content={collapsedLabel} position="right" clickToHide closeOnEsc>{button}</Tooltip> : button;
         })}
@@ -337,6 +347,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === 'audit-logs' ? <AuditLogsPage key={state.adminSession.accountId + ':' + detailParams.toString()}
               accountId={state.adminSession.accountId} params={detailParams} tenants={state.tenants} projects={state.projects}/>
             : active === 'site-configuration' ? <SiteConfiguration key={state.adminSession.accountId} dirtyRef={draftDirty}/>
+            : active === 'site-agreements' ? <SiteAgreementsEditor key={state.adminSession.accountId} dirtyRef={draftDirty}/>
             : active === 'global-routing' ? <GlobalRouting saved={state.globalRoutingParameters} revision={state.revision} transact={transact} conflict={conflict} dirtyRef={draftDirty}/>
             : active === 'license' ? <LicensePage license={license}/>
             : active === 'business-analysis' ? <CommerceAnalysis state={state}/>
