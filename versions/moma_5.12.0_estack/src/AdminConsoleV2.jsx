@@ -13,7 +13,7 @@ import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Dropdown, Tabs, Tool
 import { AdminModal as Modal } from './admin-v2/AdminOverlay';
 import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
-import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, pageFromHash, channelManagementListRoute } from './admin-v2/navigation.mjs';
+import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, isInfrastructurePage, pageFromHash, channelManagementListRoute } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
 import { modelMaterial } from './admin-v2/model-library';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -31,6 +31,7 @@ const loadOverview = () => import('./admin-v2/OperationsOverview');
 const OperationsOverview = lazy(loadOverview);
 const AnalyticsPages = lazy(() => import('./admin-v2/AnalyticsPages'));
 const ModelPerformancePage = lazy(() => import('./admin-v2/ModelPerformancePage'));
+const InfrastructurePage = lazy(() => import('./admin-v2/InfrastructurePage'));
 const CustomerPage = lazy(() => import('./admin-v2/CustomerPages'));
 const CustomerUsageDetail = lazy(() => import('./admin-v2/CustomerUsageDetail'));
 const ModelMarket = lazy(() => import('./admin-v2/ModelMarket'));
@@ -38,7 +39,6 @@ const GlobalRouting = lazy(() => import('./admin-v2/GlobalRouting.jsx'));
 const LicensePage = lazy(() => import('./admin-v2/LicensePage'));
 const CommerceAnalysis = lazy(() => import('./admin-v2/CommerceAnalysis'));
 const ObservabilityPage = lazy(() => import('./admin-v2/ObservabilityPages'));
-const ArtifactManagement = lazy(() => import('./admin-v2/ArtifactManagement'));
 const BusinessOperationsPage = lazy(() => import('./admin-v2/BusinessOperationsPages'));
 const PackageProduction = lazy(() => import('./admin-v2/PackageProduction'));
 const PackageData = lazy(() => import('./admin-v2/PackageData'));
@@ -50,7 +50,6 @@ const ModelOperationsGuide = lazy(() => import('./admin-v2/GettingStarted').then
 const ModelOperationsRequirements = lazy(() => import('./admin-v2/ModelOperationsRequirements'));
 const ClusterManagement = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ClusterManagement })));
 const ModelDeployments = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelDeployments })));
-const ModelObservability = lazy(() => import('./admin-v2/InferencePages').then(module => ({ default: module.ModelObservability })));
 const loadModelConnections = () => import('./admin-v2/ChannelDirectory');
 const ChannelManagementNew = lazy(() => loadModelConnections().then(module => ({ default: module.ChannelManagementNew })));
 const ModelPrices = lazy(() => import('./admin-v2/ModelPrices'));
@@ -90,8 +89,11 @@ const NAVIGATION_ICONS = {
   monitoring: IconMonitorStroked,
   clusters: IconServerStroked,
   deployments: IconPlayCircle,
-  artifacts: IconComponentStroked,
-  'production-observation': IconMonitorStroked,
+  'ops-model-library': IconLayers,
+  'ops-benchmarks': IconBarChartVStroked,
+  'ops-inference-backends': IconComponentStroked,
+  'ops-cache-acceleration': IconPulse,
+  'ops-model-files': IconBox,
   accounts: IconUserSetting,
   'audit-logs': IconChecklistStroked,
   'commerce-orders': IconChecklistStroked,
@@ -343,10 +345,12 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : ["providers-health", "monitoring", "logs", "alerts", "incidents", "sla"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
               state={factState} dispatch={dispatch} navigate={navigate} simulation={logSimulation} setSimulation={setLogSimulation} refreshRead={refreshRead}
               canViewFullLog={state.currentRole === '平台管理员'}/>
-            : active === "clusters" ? <ClusterManagement state={state} dispatch={dispatch}/>
-            : active === "deployments" ? <ModelDeployments state={state} dispatch={dispatch} conflict={conflict}/>
-            : active === "artifacts" ? <ArtifactManagement state={state} dispatch={dispatch}/>
-            : active === "model-observability" ? <ModelObservability state={state}/> : <BusinessOperationsPage key={active} pageId={active} state={state} params={detailParams} dispatch={dispatch}/>}
+            : active === "clusters" ? <ClusterManagement state={state} params={detailParams} dispatch={dispatch} refreshShared={refreshRead}
+              onNavigate={navigate} dirtyRef={draftDirty}/>
+            : active === "deployments" ? <ModelDeployments state={state} dispatch={dispatch} conflict={conflict} onNavigate={navigate} refreshRead={refreshRead}/>
+            : isInfrastructurePage(active) ? <InfrastructurePage key={active + ':' + detailParams.toString()}
+              pageId={active} state={state} params={detailParams} navigate={navigate} dirtyRef={draftDirty} dispatch={dispatch} conflict={conflict}/>
+            : <BusinessOperationsPage key={active} pageId={active} state={state} params={detailParams} dispatch={dispatch}/>}
           </Suspense>}
         </AdminPageBoundary>
       </main>

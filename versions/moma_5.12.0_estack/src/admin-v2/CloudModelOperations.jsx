@@ -58,10 +58,13 @@ export default function CloudModelOperations({children, packageWorkspace=false, 
   const refreshRead = async signal => {
     const previous = current.current;
     const next = await api(workspacePath, { signal });
-    if (signal?.aborted || !alive.current || previous !== current.current) return;
-    accept(next);
-    setConflict(false);
-    setError('');
+    if (signal?.aborted || !alive.current) return;
+    if (previous === current.current) {
+      accept(next);
+      setConflict(false);
+      setError('');
+    }
+    return current.current;
   };
   useEffect(()=>{
     alive.current=true;

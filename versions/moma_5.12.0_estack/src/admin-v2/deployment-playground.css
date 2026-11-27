@@ -1,0 +1,29 @@
+.admin-deployment-page .deployment-playground-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+  gap: 16px;
+  align-items: start;
+}
+.admin-deployment-page .deployment-playground-grid.deployment-playground-wide { grid-template-columns: minmax(0, 1fr); }
+.admin-deployment-page :is(.deployment-playground-main, .deployment-playground-fields, .deployment-playground-field, .deployment-playground-conversation) {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.admin-deployment-page .deployment-playground-main { gap: 16px; }
+.admin-deployment-page .deployment-playground-field { gap: 6px; }
+.admin-deployment-page .deployment-playground-field label { font-weight: 600; }
+.admin-deployment-page .deployment-playground-field :is(.semi-select, .semi-input-number) { width: 100%; }
+.admin-deployment-page .deployment-playground-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.admin-deployment-page .deployment-playground-query { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.admin-deployment-page .deployment-playground-rank { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.admin-deployment-page .deployment-playground-height { display: grid; grid-template-columns: auto minmax(90px, 220px); gap: 16px; align-items: center; margin-top: 12px; }
+.admin-deployment-page .deployment-playground-output details { overflow-wrap: anywhere; }
+.admin-deployment-page .deployment-playground-message { background: var(--semi-color-fill-0); border-radius: 6px; padding: 12px; }
+.admin-deployment-page .deployment-playground-message p { white-space: pre-wrap; overflow-wrap: anywhere; margin-block: 6px 0; }
+.admin-deployment-page .deployment-playground-message img { display: block; max-width: min(240px, 100%); max-height: 180px; margin-top: 8px; object-fit: contain; }
+.admin-deployment-page .deployment-playground-grid pre { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.deployment-playground-code { max-height: min(60vh, 440px); overflow: auto; padding: 12px; background: var(--semi-color-fill-0); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .admin-deployment-page .deployment-playground-grid { grid-template-columns: minmax(0, 1fr); }
+}

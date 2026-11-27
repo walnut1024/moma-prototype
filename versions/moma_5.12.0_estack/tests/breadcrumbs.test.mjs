@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { adminBreadcrumbs } from '../src/admin-v2/breadcrumbs.mjs';
 import { classificationHref } from '../src/admin-v2/model-classification.js';
-import { canAccessPage, pageFromHash } from '../src/admin-v2/navigation.mjs';
+import { canAccessPage, isInfrastructurePage, pageFromHash } from '../src/admin-v2/navigation.mjs';
 const build = (page, query = '', names = {}) => adminBreadcrumbs(page, new URLSearchParams(query), names);
 const labels = crumbs => crumbs.map(c => c.label);
 const params = crumb => new URLSearchParams(crumb.href.split('?')[1]);
@@ -71,12 +71,33 @@ test('model library editor shows the current model name and keeps identity out o
 
 test('deployment list, detail and editor have explicit hierarchy and preserve filters', () => {
   const rows = build('deployments', 'deployment=d1&view=edit&tab=events&cluster=gpu&page=2', { deployment: '生产服务' });
-  assert.deepEqual(labels(rows), ['Token 生产', '模型部署', '生产服务', '更新部署配置']);
+  assert.deepEqual(labels(rows), ['模型推理', '部署', '生产服务', '更新部署配置']);
   assert.equal(params(rows[1]).get('cluster'), 'gpu');
   assert.equal(params(rows[1]).has('deployment'), false);
   assert.equal(params(rows[2]).get('deployment'), 'd1');
   assert.equal(params(rows[2]).has('view'), false);
-  assert.deepEqual(labels(build('deployments', 'view=create')), ['Token 生产', '模型部署', '部署模型']);
+  assert.deepEqual(labels(build('deployments', 'view=create')), ['模型推理', '部署', '部署模型']);
+  const playground = build('deployments', 'view=playground&deployment=d1&playgroundRoute=r1&cluster=gpu&page=2', { deployment: '生产服务' });
+  assert.deepEqual(labels(playground), ['模型推理', '部署', '生产服务', 'Playground']);
+  for (const crumb of playground.slice(1, 3)) {
+    assert.equal(params(crumb).has('playgroundRoute'), false);
+    assert.equal(params(crumb).get('cluster'), 'gpu');
+    assert.equal(params(crumb).get('page'), '2');
+  }
+});
+
+test('model inference routes retain their maintenance access and cluster tabs', () => {
+  for (const [route, label] of [['clusters', '集群'], ['ops-nodes', '节点'], ['ops-gpus', 'GPU']]) {
+    const crumbs = build(route);
+    assert.deepEqual(labels(crumbs), ['模型推理', '集群管理', label]);
+    assert.equal(crumbs[1].href, route === 'clusters' ? undefined : '#/admin-2/clusters');
+  }
+  for (const route of ['ops-nodes', 'ops-gpus', 'ops-model-library', 'ops-benchmarks', 'ops-inference-backends', 'ops-cache-acceleration', 'ops-model-files']) {
+    assert.equal(isInfrastructurePage(route), true);
+    assert.equal(pageFromHash('#/admin-2/' + route, '运维人员'), route);
+    assert.equal(canAccessPage('运维人员', route), true);
+    assert.equal(canAccessPage('运营人员', route), false);
+  }
 });
 
 test('user and analytics detail breadcrumbs preserve their original list scope', () => {

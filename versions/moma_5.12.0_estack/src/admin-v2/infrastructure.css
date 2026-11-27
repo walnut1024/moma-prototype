@@ -1,0 +1,18 @@
+.infra-page .infra-filter { width: min(100%, 168px); }
+.infra-page .infra-table-scroll { overflow-x: auto; min-width: 0; }
+.infra-page .infra-table-scroll:focus-visible { outline: 2px solid var(--semi-color-primary); outline-offset: -2px; }
+.infra-page .infra-table-scroll .semi-table-cell { overflow-wrap: anywhere; }
+.infra-page .infra-table-scroll th > .semi-button { min-height: 26px; }
+.infra-page .admin-pagination { margin-top: 12px; }
+.infra-page .infra-batch-actions { margin-bottom: 12px; }
+.infra-page .infra-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 268px), 1fr)); gap: 12px; }
+.infra-page .infra-load-more { display: flex; margin: 12px auto 0; }
+.infra-sheet .infra-form, .infra-sheet .infra-fields { display: grid; gap: 16px; }
+.infra-sheet .infra-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.infra-sheet .infra-fields h3, .infra-sheet .infra-field-wide { grid-column: 1 / -1; }
+.infra-sheet .infra-field { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.infra-sheet .infra-field > label { color: var(--semi-color-text-0); font-weight: 600; }
+.infra-sheet .infra-required { color: var(--semi-color-danger); }
+.infra-sheet .infra-field > .semi-switch { justify-self: start; }
+.infra-sheet .infra-field :is(.semi-select, .semi-input-number) { width: 100%; }
+.infra-sheet .infra-detail-value { overflow-wrap: anywhere; white-space: pre-wrap; }

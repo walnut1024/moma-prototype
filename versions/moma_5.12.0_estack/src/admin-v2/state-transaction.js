@@ -13,13 +13,17 @@ import { individualTransaction } from "./individual-users.js";
 import { modelTransaction } from "./model-management.js";
 import { providerTransaction } from "./provider-management.js";
 import { adminAccountTransaction } from './admin-accounts.js';
-import { deploymentTransaction, deploymentUsesArtifact } from './deployments.js';
+import { deploymentTransaction } from './deployments.js';
 import { operationsTransaction } from './model-operations.js';
 import { lifecycleSignature, assertOrderAccess } from '../service-access.mjs';
 import { channelIdentity } from '../model-identities.mjs';
+import { clusterRemovalIssue } from './ops-cluster-domain.js';
 const now='2026-09-15T10:30:00+08:00';
 const record=(id,value)=>({id,createdAt:now,updatedAt:now,...value});
+
 export function canMutate(role, action) {
+  if (action.collection === 'artifacts' ||
+      action.type === 'batch' && action.changes?.some(change => change.collection === 'artifacts')) return false;
   if (action.type === 'deploymentOperation') return ['平台管理员', '运维人员'].includes(role);
   if (action.type === 'modelOperations') return ['installModelCatalogue', 'cleanModelCatalogue', 'prepareServiceShowcase'].includes(action.operation) ? role === '平台管理员' : ['平台管理员', '运营人员'].includes(role);
   if (action.type === 'adminAccount') return role === '平台管理员';
@@ -32,7 +36,7 @@ export function canMutate(role, action) {
   const collection = action.collection || action.changes?.[0]?.collection || (action.type === "setSettings" ? "settings" : "");
   const allowed = {
     运营人员: ["providers","endpoints","supplyPrices","models","modelVersions","validations","tenants","projects","memberships","users","organizations","apiKeys","grants","products","prices","orders","announcements"],
-    运维人员: ["clusters","artifacts","deployments","routes","limits","fallbacks","releases","caches","alerts","incidents","integrations"],
+    运维人员: ["clusters","deployments","routes","limits","fallbacks","releases","caches","alerts","incidents","integrations"],
     财务人员: ["prices","orders","ledger","bills","settlements","adjustments"],
     安全管理员: ["apiKeys"],
   };
@@ -80,7 +84,6 @@ export function commitAdminState(state, action, actor = state.currentRole) {
   for (const change of action.type === 'batch' ? action.changes : [action]) {
     if (change.type === 'update' && Object.hasOwn(change.changes || {}, 'id') && change.changes.id !== change.id) throw Error('永久 ID 创建后不可修改');
   }
-  if (action.type === 'update' && action.collection === 'artifacts' && action.changes.status === '已删除' && state.deployments.some(item => deploymentUsesArtifact(item, action.id))) throw new Error('该制品被部署或回滚配置引用，不能删除');
   if ((action.type === 'batch' ? action.changes : [action]).some(change => change.type === 'remove' && change.collection === 'providers' && change.id === MOMA_PROVIDER.id)) throw new Error('内置平台服务商不可删除');
   const next = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData',...(preparingDataset?['tenants']:[])].map(key=>[key,structuredClone(state[key])])),audits:[...state.audits]} : structuredClone(state), timestamp = new Date().toISOString();
   const identityChanges = action.type === 'batch' ? action.changes : [action];
@@ -112,7 +115,11 @@ export function commitAdminState(state, action, actor = state.currentRole) {
         const index = next[change.collection].findIndex(item => item.id === change.id);
         if (index < 0) throw new Error("记录不存在");
         if (change.type === 'remove') {
-          if (change.collection !== 'tariffDictionary') throw new Error('不支持删除此集合');
+          if (change.collection === 'clusters') {
+            if (!canMutate(actor, change)) throw new Error(`${actor}无权删除集群`);
+            const issue = clusterRemovalIssue(state, state.clusters.find(row => row.id === change.id));
+            if (issue) throw new Error(issue);
+          } else if (change.collection !== 'tariffDictionary') throw new Error('不支持删除此集合');
           next[change.collection].splice(index, 1);
         } else next[change.collection][index] = { ...next[change.collection][index], ...change.changes, updatedAt: timestamp };
       }

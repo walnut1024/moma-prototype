@@ -40,11 +40,14 @@ export const sections = [
     { id: "logs", label: "调用日志", children: [["logs", "调用日志"]] },
     { id: "monitoring", label: "服务监控", children: [["monitoring", "服务监控"]] },
   ]},
-  { id: "production", workspace: "maintenance", title: "Token 生产", items: [
-    { id: "clusters", label: "集群纳管", children: [["clusters", "集群纳管"]] },
-    { id: "deployments", label: "模型部署", children: [["deployments", "模型部署"]] },
-    { id: "artifacts", label: "制品镜像", children: [["artifacts", "制品镜像"]] },
-    { id: "production-observation", label: "生产观测", children: [["model-observability", "生产观测"]] },
+  { id: "ops-model-service", workspace: "maintenance", title: "模型推理", items: [
+    { id: "clusters", label: "集群管理", children: [["clusters", "集群"], ["ops-nodes", "节点"], ["ops-gpus", "GPU"]] },
+    { id: "ops-model-library", label: "模型库", children: [["ops-model-library", "模型库"]] },
+    { id: "deployments", label: "部署", children: [["deployments", "部署"]] },
+    { id: "ops-benchmarks", label: "基准测试", children: [["ops-benchmarks", "基准测试"]] },
+    { id: "ops-inference-backends", label: "推理后端", children: [["ops-inference-backends", "推理后端"]] },
+    { id: "ops-cache-acceleration", label: "缓存加速", children: [["ops-cache-acceleration", "缓存加速"]] },
+    { id: "ops-model-files", label: "模型文件", children: [["ops-model-files", "模型文件"]] },
   ]},
   { id: "platform", title: "平台管理", items: [
     { id: "accounts", label: "后台账号", children: [["admins", "后台账号"]] },
@@ -77,6 +80,10 @@ export function availableWorkspaces(role) {
 
 export function pageWorkspace(id) {
   return sections.find(group => group.id === pages[id]?.groupId)?.workspace;
+}
+
+export function isInfrastructurePage(id) {
+  return pages[id]?.groupId === 'ops-model-service' && !['clusters', 'deployments'].includes(id);
 }
 
 export const commercialPage = id => pages[id]?.groupId === 'commerce';

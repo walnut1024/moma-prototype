@@ -1,0 +1,155 @@
+.inference-backend-card-heading,
+.inference-backend-inline-toolbar,
+.inference-backend-card-name,
+.inference-backend-frameworks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inference-backend-card-heading,
+.inference-backend-inline-toolbar { justify-content: space-between; }
+.inference-backend-card-name { margin-block: 8px; }
+.inference-backend-card-name > .semi-button { padding-inline: 0; }
+.inference-backend-icon { color: var(--semi-color-primary); }
+
+.inference-backend-copy { overflow-wrap: anywhere; }
+.inference-runner-options { margin-block-start: 12px; }
+.inference-runner-image-list,
+.inference-runner-image { display: grid; gap: 6px; min-inline-size: 0; }
+.inference-runner-image + .inference-runner-image {
+  border-block-start: 1px solid var(--semi-color-border);
+  padding-block-start: 6px;
+}
+
+.inference-backend-version-list,
+.inference-backend-editor .inference-backend-editor-body,
+.inference-backend-editor .inference-backend-fields,
+.inference-backend-editor .inference-backend-field,
+.inference-backend-editor .inference-backend-editor-versions {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.inference-backend-editor .inference-backend-editor-body { margin-block-start: 16px; }
+.inference-backend-editor .inference-backend-field { gap: 6px; }
+.inference-backend-editor .inference-backend-field > .semi-select { width: 100%; }
+.inference-backend-editor .inference-backend-required { color: var(--semi-color-danger); }
+.inference-backend-editor .inference-backend-list-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.inference-backend-editor .inference-backend-list-editor > .semi-button { justify-self: start; }
+.inference-backend-editor .inference-backend-list-editor legend { padding-block-end: 6px; }
+.inference-backend-editor .inference-backend-list-row { display: flex; align-items: center; gap: 8px; }
+.inference-backend-editor .inference-backend-yaml textarea { font-family: var(--admin-font-mono, monospace); }
+
+.inference-backend-edit-version { position: relative; }
+.inference-backend-edit-version-removable .semi-collapse-header { padding-inline-end: 44px; }
+.inference-backend-edit-version > .semi-button {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 8px;
+}
+
+.inference-backend-yaml .semi-input-textarea-lineNumber-item {
+  /* YAML uses unwrapped lines. Semi measures the gutter with wrapped heights. */
+  min-height: 0 !important;
+}
+
+.inference-yaml-input {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.inference-yaml-input-colored .inference-backend-yaml textarea {
+  color: transparent;
+  caret-color: var(--semi-color-text-0);
+}
+.inference-yaml-input-colored .inference-backend-yaml textarea::selection {
+  color: transparent;
+  background: var(--semi-color-primary-light-active);
+}
+.inference-yaml-syntax {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--semi-color-text-0);
+}
+.inference-yaml-syntax pre {
+  box-sizing: border-box;
+  margin: 0;
+  white-space: pre;
+}
+.inference-yaml-syntax [data-yaml-tone='key'] { color: var(--semi-color-primary); }
+.inference-yaml-syntax [data-yaml-tone='comment'] { color: var(--semi-color-text-2); }
+.inference-yaml-syntax [data-yaml-tone='string'] { color: var(--semi-color-success); }
+.inference-yaml-syntax [data-yaml-tone='number'],
+.inference-yaml-syntax [data-yaml-tone='keyword'] { color: var(--semi-color-warning); }
+.inference-yaml-syntax [data-yaml-tone='marker'] { color: var(--semi-color-info); }
+@media (forced-colors: active) {
+  .inference-yaml-syntax { display: none; }
+  .inference-yaml-input-colored .inference-backend-yaml textarea { color: CanvasText; caret-color: CanvasText; }
+  .inference-yaml-input-colored .inference-backend-yaml textarea::selection { color: HighlightText; background: Highlight; }
+}
+
+.inference-yaml-suggestions {
+  position: absolute;
+  z-index: 1;
+  inline-size: min(320px, 100%);
+  max-block-size: 180px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--semi-color-border);
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-bg-3);
+  box-shadow: var(--semi-shadow-elevated);
+  list-style: none;
+}
+
+.inference-yaml-suggestions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--semi-border-radius-small);
+  cursor: pointer;
+}
+
+.inference-yaml-suggestions [aria-selected='true'] { background: var(--semi-color-primary-light-default); }
+
+.inference-yaml-field-list {
+  display: grid;
+  gap: 8px;
+  margin-block: 8px 16px;
+}
+
+.inference-yaml-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.inference-yaml-field dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.inference-backend-editor .inference-backend-field label,
+.inference-backend-editor .inference-backend-list-editor legend { font-weight: 600; }

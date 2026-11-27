@@ -34,7 +34,7 @@ const collections = [
   'routes', 'limits', 'fallbacks', 'releases', 'caches', 'requests', 'alerts', 'incidents', 'integrations',
   'clusters', 'artifacts', 'deployments', 'admins', 'tenantRoutes', 'projectRoutes', 'identityEvents', 'customerApplications', 'audits',
 ];
-const directCollections = new Set(['products','prices','orders','bills','settlements','adjustments','announcements','routes','limits','fallbacks','releases','caches','alerts','incidents','integrations','clusters','artifacts']);
+const directCollections = new Set(['products','prices','orders','bills','settlements','adjustments','announcements','routes','limits','fallbacks','releases','caches','alerts','incidents','integrations','clusters']);
 const usageFields = usage => usage ? {input:usage.input_tokens,output:usage.output_tokens,cached:usage.cached_tokens,seconds:usage.seconds,characters:usage.characters,images:usage.images} : null;
 const week = 7 * 86400000;
 const encoder = new TextEncoder();
@@ -391,8 +391,10 @@ function adminAction(state, actor, action) {
   if (action.type === 'activateOrder' && canMutate(actor.role, { type: 'update', collection: 'orders' })) return orderActivationCommand(state, action.id);
   const rows = action.type === 'batch' ? action.changes : [action];
   if (!Array.isArray(rows) || !rows.length || rows.length > 200 ||
-      rows.some(row => !row || !['add','update'].includes(row.type) || !directCollections.has(row.collection) || !canMutate(actor.role,row)
-        || (row.type==='add' ? !validId(row.record?.id) : !validId(row.id) || !row.changes || Array.isArray(row.changes) || Object.hasOwn(row.changes,'id')))) {
+      rows.some(row => !row || (!['add','update'].includes(row.type) && !(action.type === 'batch' && row.type === 'remove' && row.collection === 'clusters'))
+        || !directCollections.has(row.collection) || !canMutate(actor.role,row)
+        || (row.type==='add' ? !validId(row.record?.id) : !validId(row.id)
+          || row.type==='update' && (!row.changes || Array.isArray(row.changes) || Object.hasOwn(row.changes,'id'))))) {
     issue(403, 'FORBIDDEN', '当前账号无权执行该操作');
   }
   return action;

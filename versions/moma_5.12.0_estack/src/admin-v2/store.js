@@ -197,7 +197,7 @@ export function useAdminStore(notify) {
       const next = persistAdminAction(currentState.current, action, localStorage);
       currentState.current = next; setState(next);
       if (action.type !== 'setRole' && action.feedback !== false) {
-        const names = { clusters: '集群', deployments: '模型部署', artifacts: '制品', routes: '路由策略', limits: '限流规则', fallbacks: '回退策略', caches: '缓存策略', releases: '配置版本', alerts: '告警', incidents: '事件', products: '商品', orders: '订单', announcements: '公告', settlements: '结算单', adjustments: '调账', bills: '账单', prices: '价格' };
+        const names = { clusters: '集群', deployments: '模型部署', routes: '路由策略', limits: '限流规则', fallbacks: '回退策略', caches: '缓存策略', releases: '配置版本', alerts: '告警', incidents: '事件', products: '商品', orders: '订单', announcements: '公告', settlements: '结算单', adjustments: '调账', bills: '账单', prices: '价格' };
         const collection = action.collection || action.changes?.[0]?.collection;
         const status = action.changes?.status;
         notify.success(action.feedback || `${names[collection] || '配置'}${status?.startsWith('已') ? status : action.type === 'add' ? '已新建' : '已更新'}`);

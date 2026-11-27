@@ -2,7 +2,7 @@ import { withAdminSession } from './admin-session-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAdminSeed as baseCreateAdminSeed, commitAdminState, persistAdminAction, STORAGE_KEY } from '../src/admin-v2/store.js';
-import { deploymentPreflight, deploymentGpu, deploymentUsesArtifact } from '../src/admin-v2/deployments.js';
+import { deploymentPreflight, deploymentGpu } from '../src/admin-v2/deployments.js';
 const values = { name:'知识问答服务', deploymentId:'qwen-test-prod', modelId:'model-1', runtimeId:'artifact-vllm', weightId:'', weightPath:'/models/deepseek', clusterId:'cluster-nj-a', namespace:'inference', replicas:2, gpuPerReplica:2, tensorParallel:2, pipelineParallel:1, maxModelLen:'', gpuMemoryUtilization:0.9, startupTimeout:600 };
 const act = (state, operation, data={}, deploymentId) => commitAdminState(state,{type:'deploymentOperation',operation,data,deploymentId});
 function created(){let state=act(createAdminSeed(),'create',values);return {state,id:state.deployments[0].id};}
@@ -46,9 +46,23 @@ test('old records remain unchanged, require full configuration for startup, and 
  const seed=createAdminSeed(),id='deployment-bge';let state=act(seed,'check',{},id);assert.equal(state.deployments.find(item=>item.id===id).status,'失败');assert.equal(clusterGpu(state),32);assert.equal(seed.deployments.find(item=>item.id===id).status,'部署中');assert.throws(()=>act(state,'start',{},id),/运行时/);
  state=act(seed,'update',{...values,modelId:'model-1',clusterId:'cluster-nj-a',replicas:4,gpuPerReplica:4,tensorParallel:4},'deployment-ds');assert.equal(state.deployments.find(item=>item.id==='deployment-ds').previousConfig,null);
 });
-test('runtime, weight and rollback artifact references prevent deletion',()=>{
- let {state,id}=running();state.artifacts.push({...state.artifacts.find(item=>item.id==='artifact-ds'),id:'artifact-new-weight'});state=act(state,'update',{weightId:'artifact-new-weight',weightPath:''},id);assert.equal(deploymentUsesArtifact(state.deployments[0],'artifact-new-weight'),true);assert.throws(()=>commitAdminState(state,{type:'update',collection:'artifacts',id:'artifact-new-weight',changes:{status:'已删除'}}),/引用/);
- state=act(state,'check',{},id);state=act(state,'update',{weightId:'',weightPath:'/models/new'},id);assert.equal(deploymentUsesArtifact(state.deployments[0],'artifact-new-weight'),true);assert.throws(()=>commitAdminState(state,{type:'update',collection:'artifacts',id:'artifact-new-weight',changes:{status:'已删除'}}),/引用/);
+test('deployments retain access to registered weights and runtime images for rollback', () => {
+  let {state, id} = running();
+  const artifacts = structuredClone(state.artifacts);
+  state = act(state, 'update', {weightId:'artifact-ds', weightPath:''}, id);
+  state = act(state, 'check', {}, id);
+  state = act(state, 'update', {weightId:'', weightPath:'/models/new'}, id);
+  state = act(state, 'check', {}, id);
+  state = act(state, 'rollback', {}, id);
+  state = act(state, 'check', {}, id);
+  const deployment = state.deployments.find(row => row.id === id);
+  assert.equal(deployment.status, '运行中');
+  assert.equal(deployment.runtimeId, values.runtimeId);
+  assert.equal(deployment.weightId, 'artifact-ds');
+  assert.deepEqual(state.artifacts, artifacts);
+  const update = {type:'update', collection:'artifacts', id:values.runtimeId, changes:{status:'不可运行'}};
+  assert.throws(() => commitAdminState(state, update, '平台管理员'), /无权/);
+  assert.throws(() => commitAdminState(state, {type:'batch', changes:[update]}, '运维人员'), /无权/);
 });
 test('role restrictions, revision conflicts and failed storage preserve all data',()=>{
  const seed=createAdminSeed();for(const role of ['运营人员','财务人员','只读观察员'])assert.throws(()=>commitAdminState(seed,{type:'deploymentOperation',operation:'create',data:values},role),/无权/);assert.equal(commitAdminState(seed,{type:'deploymentOperation',operation:'create',data:values},'运维人员').deployments[0].status,'部署中');

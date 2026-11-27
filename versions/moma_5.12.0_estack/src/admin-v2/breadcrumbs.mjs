@@ -59,9 +59,12 @@ export function adminBreadcrumbs(active, params, names = {}) {
     add('基础资料', '#/admin-2/model-templates');
     add(TARIFF_KINDS[Object.hasOwn(TARIFF_KINDS, tab) ? tab : 'scenario']);
   } else if (active === 'deployments') {
-    add('模型部署', params.has('deployment') || view === 'create' ? href(active, {}, ['deployment', 'view', 'tab']) : null);
-    if (params.has('deployment')) add(names.deployment || '部署不存在', view === 'edit' ? href(active, { view: null, tab: 'overview' }) : null);
-    if (view === 'create' || view === 'edit') add(view === 'edit' ? '更新部署配置' : '部署模型');
+    add(page.label, params.has('deployment') || view === 'create'
+      ? href(active, {}, ['deployment', 'view', 'tab', 'catalogModel', 'catalogSpec', 'repositorySource', 'repository', 'from', 'catalogQuery', 'clone', 'source', 'playgroundRoute']) : null);
+    if (params.has('deployment')) add(names.deployment || '部署不存在', ['edit', 'playground'].includes(view)
+      ? href(active, { view: null, tab: 'overview' }, ['playgroundRoute']) : null);
+    if (view === 'playground') add('Playground');
+    if (view === 'create' || view === 'edit') add(view === 'edit' ? '更新部署配置' : params.has('clone') ? '克隆部署' : '部署模型');
   } else if (active === 'customer-analysis-detail') {
     add('租户数据', href('customer-analysis', {}, ['customer', 'source']));
     add('租户详情');
