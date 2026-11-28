@@ -51,6 +51,18 @@ test('deletes one unreferenced gateway route with an authorized session and pres
   await db.prepare("UPDATE model_workspace SET reference_json=json_insert(reference_json,'$.requests[#]',json(?)) WHERE id=1")
     .bind(JSON.stringify(historical)).run();
   const before = await read();
+  const retiredCollections = ['limits', 'fallbacks', 'caches', 'releases'];
+  for (const collection of retiredCollections) {
+    const [record] = before[collection];
+    for (const action of [
+      { type: 'add', collection, record: { ...record, id: `retired-${collection}` } },
+      { type: 'update', collection, id: record.id, changes: { status: '已停用' } },
+    ]) {
+      const result = await command(admin, before.revision, action);
+      assert.equal(result.status, 403, `${action.type} ${collection}`);
+      assert.equal(result.data.error.code, 'FORBIDDEN');
+    }
+  }
   const deletes = batch(remove(sample.id));
   assert.equal((await command(operations, before.revision, deletes)).status, 403);
   assert.equal((await command(admin, before.revision, remove(sample.id))).status, 403);
@@ -62,7 +74,7 @@ test('deletes one unreferenced gateway route with an authorized session and pres
 
   const referenced = await command(admin, before.revision, batch(remove(fallback.routeId)));
   assert.equal(referenced.status, 422);
-  assert.match(referenced.data.error.message, /熔断与回退规则引用/);
+  assert.match(referenced.data.error.message, /仍有回退规则引用/);
   const inUse = await command(admin, before.revision, batch(remove(deploymentRoute.id)));
   assert.equal(inUse.status, 422);
   assert.match(inUse.data.error.message, /运行中的模型部署使用/);
@@ -76,8 +88,7 @@ test('deletes one unreferenced gateway route with an authorized session and pres
   const after = await read();
   assert.equal(after.revision, before.revision + 1);
   assert.deepEqual(after.routes, before.routes.filter(route => route.id !== sample.id));
-  assert.deepEqual(after.fallbacks, before.fallbacks);
-  assert.deepEqual(after.releases, before.releases);
+  for (const collection of retiredCollections) assert.deepEqual(after[collection], before[collection]);
   const reference = JSON.parse(await db.prepare('SELECT reference_json FROM model_workspace WHERE id=1').first('reference_json'));
   assert.deepEqual(reference.requests.find(row => row.id === historical.id), historical);
 

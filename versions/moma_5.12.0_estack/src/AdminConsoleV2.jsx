@@ -58,7 +58,7 @@ const inferenceDemoPages = new Set([
 const loadModelConnections = () => import('./admin-v2/ChannelDirectory');
 const ChannelManagementNew = lazy(() => loadModelConnections().then(module => ({ default: module.ChannelManagementNew })));
 const ModelPrices = lazy(() => import('./admin-v2/ModelPrices'));
-const GatewayPage = lazy(() => import('./admin-v2/GatewayPages'));
+const GatewayRouteSettings = lazy(() => import('./admin-v2/GatewayRouteSettings.jsx'));
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
 const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
@@ -258,7 +258,6 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const breadcrumbLabel = label => english && !resourceNames.has(label) ? channelEnglish(label) : label;
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
-  const gatewaySettings = activeArea === 'gateway';
   const inferenceDemo = inferenceDemoPages.has(active) && (demoMode === 'inference' || interactiveDemo);
   const renderInferencePage = (inferenceState, demo = false, {
     refresh = refreshRead, interactive = false, infrastructure, dispatch: demoDispatch, changeInfrastructure,
@@ -283,11 +282,8 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const renderMenu = collapsed => <nav aria-label={menuLabel}>{adminSections.filter(group => group.workspace === currentWorkspace).map(group => {
       const locked = group.id === 'commerce' && !menuLicense.commercial;
       const visibilityLicense = locked ? { ...menuLicense, commercial: true } : menuLicense;
-      const menuItems = group.id === 'gateway'
-        ? group.items.flatMap(item => item.children.map(([target, label]) => ({ ...item, target, label })))
-        : group.items;
-      const items = menuItems.filter(item => {
-        const target = item.target ?? item.children[0][0];
+      const items = group.items.filter(item => {
+        const target = item.children[0][0];
         if (interactiveDemo && !inferenceDemoPages.has(target)) return false;
         return canAccessPage(state.currentRole, target, visibilityLicense);
       });
@@ -297,8 +293,8 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{groupStatus}</Typography.Text>}
         {items.map(item => {
           const Icon = NAVIGATION_ICONS[item.id];
-          const target = item.target ?? item.children[0][0];
-          const selected = activeGroup === group.id && (item.target ? active === target : activeArea === item.id);
+          const target = item.children[0][0];
+          const selected = activeGroup === group.id && activeArea === item.id;
           const disabled = locked;
           const label = english ? channelEnglish(item.label) : item.label;
           const collapsedLabel = label + (disabled ? '（未授权）' : '');
@@ -364,7 +360,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       {!interactiveDemo && state.storageError && <Banner type="danger" closeIcon={null} description={<>本地数据异常：{state.storageError.toLowerCase().includes('quota') ? '浏览器本地存储空间不足，原数据未更改。' : state.storageError} <Button onClick={reload}>重新加载</Button></>}/>}
       {!interactiveDemo && conflict && <Banner type="warning" closeIcon={null} description={<>检测到其他页面的新版本数据。 <Button onClick={reload}>载入新版本</Button></>}/>}
       {showPage && !organizationView && commercialPage(active) && active !== 'tenants' && commerceReadOnly && <Banner type="warning" closeIcon={null} description={license.status === 'expired' ? '商业运营授权已到期，可查阅已保存的记录。' : '商业运营授权不可用，可查阅已保存的记录。'}/>}
-      {showPage && active !== 'routes' && activeModule?.children.length > 1 && activeModule.id !== 'materials' &&
+      {showPage && activeModule?.children.length > 1 && activeModule.id !== 'materials' &&
         !(active === 'providers-reference' && detailParams.get('connection')) && (
         <Tabs className={activeArea === 'channels-reference' ? 'v2-module-tabs channel-management-tabs' : 'v2-module-tabs'}
           activeKey={active} onChange={activeArea === 'channels-reference' ? id => navigate(channelManagementListRoute(id, new URLSearchParams(location.hash.split('?')[1]))) : navigate}>
@@ -414,7 +410,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
               tenantId={resourceTenant?.id} tenantName={resourceTenant?.name} tab={detailParams.get('tab')}
               returnHref={resourceTenant && tenantHref(resourceTenant,{tab:'organization'})}
               onTabChange={tab=>navigate(active + '?' + new URLSearchParams({tenant:resourceTenant.id,tab}))}/>
-            : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch} refreshRead={refreshRead}/>
+            : active === 'routes' ? <GatewayRouteSettings state={state} dispatch={dispatch} refreshRead={refreshRead}/>
             : ["providers-health", "logs"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
               state={factState} dispatch={dispatch} navigate={navigate} simulation={logSimulation} setSimulation={setLogSimulation} refreshRead={refreshRead}
               canViewFullLog={state.currentRole === '平台管理员'}/>

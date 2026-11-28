@@ -31,7 +31,7 @@ export function isGatewayRouteRemoval(action) {
 
 export function gatewayRouteRemovalIssue(state, route) {
   if (state.fallbacks?.some(rule => rule.routeId === route.id && !rule.deletedAt)) {
-    return '该路由仍被熔断与回退规则引用，请先解除关联';
+    return '该路由仍有回退规则引用，无法删除';
   }
   // Playground and benchmark route selection resolve active routes through running deployment endpoints.
   if (route.status === '已启用' && route.targets?.some(target => target.weight > 0 &&
@@ -57,7 +57,7 @@ export function canMutate(role, action) {
   const collection = action.collection || action.changes?.[0]?.collection || (action.type === "setSettings" ? "settings" : "");
   const allowed = {
     运营人员: ["providers","endpoints","supplyPrices","models","modelVersions","validations","tenants","projects","memberships","users","organizations","apiKeys","grants","products","prices","orders"],
-    运维人员: ["clusters","deployments","routes","limits","fallbacks","releases","caches","alerts","incidents","integrations"],
+    运维人员: ["clusters","deployments","routes","alerts","incidents","integrations"],
     财务人员: ["prices","orders","ledger","bills","settlements","adjustments"],
     安全管理员: ["apiKeys"],
   };

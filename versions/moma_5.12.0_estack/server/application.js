@@ -20,7 +20,6 @@ import { invokeModelService, marketModelService } from './model-service-market.j
 import { addPackageOrders } from './market-packages.js';
 import { receipt, save } from './model-commands.js';
 import { addPrototypeAccounts } from './prototype-presets.js';
-import { routingServices } from '../src/admin-v2/service-routing.js';
 import { submitEnterpriseCertification, submitRealNameCertification } from '../src/auth-state.mjs';
 import { activeCustomer } from '../src/service-access.mjs';
 import { customerCredential, customerIdentity, customerSecretHash, dualDemoUserId, dualDemoAdminLogin, dualDemoTenantId } from './customer-identity.js';
@@ -36,7 +35,7 @@ const collections = [
   'routes', 'limits', 'fallbacks', 'releases', 'caches', 'requests', 'alerts', 'incidents', 'integrations',
   'clusters', 'artifacts', 'deployments', 'admins', 'tenantRoutes', 'projectRoutes', 'identityEvents', 'customerApplications', 'audits',
 ];
-const directCollections = new Set(['products','prices','orders','bills','settlements','adjustments','routes','limits','fallbacks','releases','caches','alerts','incidents','integrations','clusters']);
+const directCollections = new Set(['products','prices','orders','bills','settlements','adjustments','routes','alerts','incidents','integrations','clusters']);
 const usageFields = usage => usage ? {input:usage.input_tokens,output:usage.output_tokens,cached:usage.cached_tokens,seconds:usage.seconds,characters:usage.characters,images:usage.images} : null;
 const week = 7 * 86400000;
 const encoder = new TextEncoder();
@@ -192,8 +191,6 @@ function maintenanceView(state, modelRevision, requests, audits) {
     providers:state.providers.map(({id,name})=>({id,name})),
     endpoints:state.endpoints.map(({id,endpointId,name,providerId,modelIds,status})=>({id,endpointId,name,providerId,modelIds,status})),
     gatewayKeyOptions:state.apiKeys.filter(row=>row.kind!=='experience' && row.status!=='已删除').map(({id,keyId,status,tenantId,projectId})=>({id,keyId,status,tenantId,projectId})),
-    gatewayModelOptions:routingServices(state).map(({callId})=>callId).filter(Boolean),
-    gatewayProjectRoutes:state.projectRoutes.map(({code,tenantId,projectId})=>({model:'project@'+code,tenantId,projectId})),
     audits:audits.filter(row=>deploymentIds.has(row.objectId)).map(({id,action,actor,objectId,createdAt,result})=>({id,action,actor,objectId,createdAt,result})),
     requests:requests.map(operationalRequest),
   };
@@ -251,7 +248,6 @@ export async function applicationBootstrap(db, actor, configured = []) {
   return { ...view,apiKeys:state.apiKeys.map(safeKey),identityEvents:[...logins,...state.identityEvents],
     adminLoginIds:activeAdmins.map(admin=>admin.id),
     accountUserIds:state.users.filter(user=>user.status==='正常' && accountIds.has(user.id) && activeUsers.has(user.id)).map(user=>user.id),
-    gatewayProjectRoutes:state.projectRoutes.map(({code,tenantId,projectId})=>({model:'project@'+code,tenantId,projectId})),
     spacePolicy, customerOrderScope:'space',
     users:state.users.map(user=>({...user,lastLoginAt:lastLoginByUser.get(user.id)})),
     modelRevision:row.model_revision, audits:events, orders:[...facts.orders,...state.orders], requests };

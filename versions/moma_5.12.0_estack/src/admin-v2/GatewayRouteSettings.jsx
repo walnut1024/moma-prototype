@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { CircleHelp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { resourceId } from '../resource-id.mjs';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
+import { Button, Input, Select, Switch } from '@douyinfe/semi-ui';
 import GatewayRouteList from './GatewayRouteList.jsx';
 import {
   gatewayRouteDraft, gatewayRouteEndpoints, gatewayRouteNameHint, gatewayRouteRecord, gatewayRouteRows,
@@ -15,7 +16,7 @@ const prefix = [{ value: 'prefix', label: '前缀匹配' }];
 const responseCodes = ['4xx', '5xx'].map(code => ({ value: code, label: code }));
 const missing = '该路由已变化，请关闭抽屉后重新打开。';
 
-function RouteMapping({ value, modelOptions, setMapping, close, Button, Select, Input }) {
+function RouteMapping({ value, modelOptions, setMapping, close }) {
   const id = useId();
   const [source, setSource] = useState(value.split('=')[0] || '');
   const [target, setTarget] = useState(value.split('=')[1] || '');
@@ -44,7 +45,7 @@ function RouteMapping({ value, modelOptions, setMapping, close, Button, Select, 
   </AdminModal>;
 }
 
-function Editor({ state, route, dispatch, close, Button, Input, Select, Switch }) {
+function Editor({ state, route, dispatch, close }) {
   const initial = useRef(gatewayRouteDraft(state, route));
   const [draft, setDraft] = useState(initial.current);
   const [mapping, setMapping] = useState(null);
@@ -185,7 +186,7 @@ function Editor({ state, route, dispatch, close, Button, Input, Select, Switch }
       </form>
     </AdminSideSheet>
     {mapping !== null && <RouteMapping value={mapping === 'degrade' ? draft.degradeMapping : draft.targets[mapping].mapping}
-      modelOptions={modelOptions} close={() => setMapping(null)} Button={Button} Select={Select} Input={Input}
+      modelOptions={modelOptions} close={() => setMapping(null)}
       setMapping={value => {
         if (mapping === 'degrade') patch({ degradeMapping: value });
         else updateTarget(mapping, { mapping: value });
@@ -196,7 +197,7 @@ function Editor({ state, route, dispatch, close, Button, Input, Select, Switch }
   </>;
 }
 
-export default function GatewayRouteSettings({ state, dispatch, refreshRead, Button, Input, Select, Switch }) {
+export default function GatewayRouteSettings({ state, dispatch, refreshRead }) {
   const [editor, setEditor] = useState(null);
   const [removing, setRemoving] = useState(null);
   const [pending, setPending] = useState(false);
@@ -219,12 +220,11 @@ export default function GatewayRouteSettings({ state, dispatch, refreshRead, But
     try { await refreshRead(); } finally { setRefreshing(false); }
   };
   return <>
-    <GatewayRouteList rows={rows} Button={Button} Input={Input} refreshing={refreshing}
+    <GatewayRouteList rows={rows} refreshing={refreshing}
       onRefresh={refreshRead ? refresh : undefined} onCreate={writable ? () => setEditor({}) : undefined}
       onEdit={writable ? ({ id }) => setEditor({ route: state.routes.find(row => row.id === id) }) : undefined}
       onRemove={writable ? setRemoving : undefined}/>
-    {editor && <Editor route={editor.route} state={state} dispatch={dispatch} close={() => setEditor(null)}
-      Button={Button} Input={Input} Select={Select} Switch={Switch}/>}
+    {editor && <Editor route={editor.route} state={state} dispatch={dispatch} close={() => setEditor(null)}/>}
     {removing && <AdminModal visible title="删除" onCancel={() => !pending && setRemoving(null)} onOk={remove}
       okButtonProps={{ disabled: !removal || Boolean(issue) }} confirmLoading={pending}>
       <p>确定删除 {removing.name} 吗？</p>

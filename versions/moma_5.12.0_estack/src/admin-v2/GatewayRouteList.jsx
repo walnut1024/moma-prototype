@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, RefreshCw, Search } from 'lucide-react';
 import AdminTable from './AdminTable';
 import { useChannelText } from './channel-language';
+import { Button, Input } from '@douyinfe/semi-ui';
 import './gateway-route-list.css';
 
 const matchModes = { exact: '精确匹配', prefix: '前缀匹配', regex: '正则匹配' };
@@ -9,7 +10,7 @@ const normalize = value => String(value ?? '').normalize('NFKC').trim().replace(
 const art = import.meta.env.BASE_URL + 'assets/xa-model-route-entry.png';
 const tableWidth = 'max(100%, 1016px)';
 
-export default function GatewayRouteList({ rows, onCreate, onEdit, onRemove, onRefresh, refreshing, Button, Input }) {
+export default function GatewayRouteList({ rows, onCreate, onEdit, onRemove, onRefresh, refreshing }) {
   const t = useChannelText();
   const [query, setQuery] = useState('');
   const keyword = normalize(query);
