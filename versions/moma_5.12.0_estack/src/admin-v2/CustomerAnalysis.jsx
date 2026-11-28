@@ -25,13 +25,14 @@ const weekStart = '2026-11-13';
 const titleHome = '租户数据';
 const titleInfo = '租户信息总览';
 const titleFlow = '租户流量拓扑';
-const names = [...new Set([
-  ...sample.liveCustomers.map(row => row[1]),
-  ...[...sample.usageRanks, ...sample.gains, ...sample.drops].map(row => row[0]),
-])];
-const customers = names.map((name, index) => ({ id: 'demo-' + (index + 1), name }));
+const customers = sample.demoTenants;
 const customerOptions = customers.map(({ id, name }) => ({ value: id, label: name }));
 const detailCustomer = customers.find(row => row.name === sample.beijing);
+const lookupFields = [
+  { value: 'tenantId', label: '租户 ID', example: detailCustomer.id },
+  { value: 'userId', label: '用户 ID', example: sample.demoCallUser.id },
+  { value: 'tenantName', label: '租户名称' },
+];
 const modelOptions = sample.models.filter(row => row[0] !== '未知').map(([model]) => ({ label: model, value: model }));
 const dailyCounts = [
   3370, 2530, 2530, 3410, 3430, 1530, 1450, 3450, 3510, 3420, 3480, 3530,
@@ -58,8 +59,8 @@ function exportCsv(filename, headings, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function CopyTitle({ children, note }) {
-  return <div className="ca-title"><Title heading={5} component="h2" className="xa24-card-title">{children}</Title>
+function CopyTitle({ children, note, id }) {
+  return <div className="ca-title"><Title id={id} heading={5} component="h2" className="xa24-card-title">{children}</Title>
     {note && <Text type="tertiary" size="small">{note}</Text>}</div>;
 }
 function Section({ title, note, children, className = '' }) {
@@ -109,12 +110,51 @@ function Rankings({ title, range, rows, direction, onOpen }) {
   </Section>;
 }
 
+function TenantLookup({ lookup, onChange, range, onOpen }) {
+  const { field, keyword, submitted } = lookup;
+  const { label, example } = lookupFields.find(option => option.value === field);
+  const missing = submitted === '';
+  const matches = submitted ? sample.lookupDemoTenants(field, submitted) : [];
+  const prompt = `请输入${label}`;
+  return <Section className="ca-filter ca-tenant-lookup">
+    <CopyTitle id="ca-lookup-title">租户实时数据查询</CopyTitle>
+    <search>
+      <form aria-labelledby="ca-lookup-title" noValidate onSubmit={event => {
+        event.preventDefault();
+        const next = keyword.trim();
+        onChange({ ...lookup, submitted: next });
+        if (!next) event.currentTarget.querySelector('#ca-lookup-keyword')?.focus();
+      }}>
+        <Select aria-label="查询条件" optionList={lookupFields} value={field} showClear={false}
+          onChange={value => onChange({ field: value, keyword: '', submitted: null })}/>
+        <label className="sr-only" htmlFor="ca-lookup-keyword">{label}</label>
+        <Input id="ca-lookup-keyword" className="ca-lookup-input" name="keyword" value={keyword} required autoComplete="off" spellCheck={false}
+          placeholder={example ? `${prompt}（如 ${example}）` : prompt}
+          aria-invalid={missing || undefined} aria-describedby={missing ? 'ca-lookup-status' : undefined}
+          onChange={value => onChange({ ...lookup, keyword: value, submitted: null })}/>
+        <Button theme="solid" htmlType="submit">查询</Button>
+      </form>
+      <div id="ca-lookup-status" role="status" className="ca-lookup-status" data-invalid={missing}>
+        {missing ? prompt : submitted ? (matches.length ? `找到 ${matches.length} 个租户` : '未找到匹配的租户') : null}
+      </div>
+      {matches.length > 0 && <ul aria-label="匹配租户" className="ca-lookup-results">
+        {matches.map(tenant => <li key={tenant.id}>
+          <a href={detailHref(tenant.name, range, 'live')} onClick={onOpen}>{tenant.name}</a>
+          <span>租户 ID {tenant.displayId}</span>
+          <span>{tenant.liveTokens == null ? '暂无实时用量样本' : `今日调用量 ${tenant.liveTokens} 亿 Token`}</span>
+        </li>)}
+      </ul>}
+    </search>
+  </Section>;
+}
+
 function Overview({ params }) {
   const end = date(params.get('end'), historicalDay);
   const start = date(params.get('start'), end);
   const range = { start: start <= end ? start : end, end, mode: params.get('mode') === 'range' ? 'range' : 'day' };
   const [savedList] = useState(() => history.state?.customerAnalysisList);
   const [draft, setDraft] = useState(savedList?.draft ?? range);
+  const [lookup, setLookup] = useState(savedList?.lookup ?? { field: 'tenantId', keyword: '', submitted: null });
   useLayoutEffect(() => {
     if (savedList) window.scrollTo({ top: savedList.scrollY, behavior: 'instant' });
   }, [savedList]);
@@ -140,7 +180,7 @@ function Overview({ params }) {
   function openCustomer(event) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    history.replaceState({ ...history.state, customerAnalysisList: { draft, scrollY: window.scrollY } }, '');
+    history.replaceState({ ...history.state, customerAnalysisList: { draft, lookup, scrollY: window.scrollY } }, '');
     location.hash = event.currentTarget.hash;
     history.replaceState({ ...history.state, fromCustomerAnalysisList: true }, '');
   }
@@ -158,6 +198,7 @@ function Overview({ params }) {
           <strong>{value} <small>亿</small></strong></div><small title={name}>{name}</small></div>
       </a>)}</div>
     </Section>
+    <TenantLookup lookup={lookup} onChange={setLookup} range={range} onOpen={openCustomer}/>
     <Section className="ca-filter"><form onSubmit={query}>
       <div className="ca-segment" aria-label="统计方式" role="group">
         <Button theme={dayMode ? 'borderless' : 'light'} aria-pressed={dayMode} onClick={() => setDraft({ ...draft, start: draft.end, mode: 'day' })}>按日</Button>
@@ -298,7 +339,7 @@ function CustomerInfo({ customer, initial }) {
     ? sample.detailRows.filter(row => row[1].toLowerCase().includes(keyword)) : [], [ownsSample, query, keyword]);
   const limits = ownsSample ? limitRows.filter(row => matchesModel(row.model)) : [];
   const identity = [
-    ['租户名称', customer.name], ['租户 ID', ownsSample ? 'CIDC-A-e99586…22556' : '—'],
+    ['租户名称', customer.name], ['租户 ID', customer.displayId],
     ['租户类型', ownsSample ? sample.enterpriseCustomer : '—'],
     ['省份 / 城市 / 区县', ownsSample ? '江苏　苏州　相城区分公司' : '—'],
     ['活跃天数', hasSummary ? '7 天' : '—'], ['专业公司名称', '—'],

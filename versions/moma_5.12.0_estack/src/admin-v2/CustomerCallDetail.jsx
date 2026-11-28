@@ -4,7 +4,7 @@ import { Button, Empty, Progress, Select, Table, Tag, Typography } from './xa24/
 import { DataZoomComponent } from 'echarts/components';
 import { use as useChartComponents } from 'echarts/core';
 import { Chart } from '../components/AnalyticsCharts';
-import { indicators, idb, flash, glm } from './customer-analysis-demo';
+import { indicators, idb, flash, glm, demoCallUser } from './customer-analysis-demo';
 
 useChartComponents([DataZoomComponent]);
 const models = [idb, flash, glm];
@@ -15,7 +15,7 @@ const format = (value, digits = 0) => Number.isFinite(value)
   ? value.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits }) : '—';
 
 export const limitRows = models.map((model, index) => ({
-  model, user: 'CIDC-U-e5993c8b…', tpm: format(limits[index]), rpm: '—',
+  model, user: demoCallUser.label, tpm: format(limits[index]), rpm: '—',
 }));
 const col = (title, dataIndex, width, render) => ({ title, dataIndex, width, ...(render && { render }) });
 const modelTag = value => <Tag className="ca-model" size="small" color="blue">{value}</Tag>;

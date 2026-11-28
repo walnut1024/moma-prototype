@@ -108,6 +108,28 @@ const liveStates = [
 ];
 const growthRanks = swings(gains);
 const declineRanks = swings(drops);
+const liveUsageByTenant = new Map(liveCustomers.map(([, name, value]) => [name, value]));
+const tenantNames = [...new Set([
+  ...liveUsageByTenant.keys(),
+  ...[...usageRanks, ...growthRanks, ...declineRanks].map(([name]) => name),
+])];
+export const demoTenants = tenantNames.map((name, index) => {
+  const id = 'demo-' + (index + 1);
+  return { id, name, displayId: name === beijing ? 'CIDC-A-e99586…22556' : id, liveTokens: liveUsageByTenant.get(name) };
+});
+export const demoCallUser = { id: 'demo-user-7', label: 'CIDC-U-e5993c8b…' };
+
+export function lookupDemoTenants(field, input) {
+  const keyword = input.trim().toLowerCase();
+  if (!keyword) return [];
+  if (field === 'tenantId') return demoTenants.filter(({ id, displayId }) => id === keyword || displayId.toLowerCase() === keyword);
+  if (field === 'tenantName') return demoTenants.filter(({ name }) => name.toLowerCase().includes(keyword));
+  if (field === 'userId' && [demoCallUser.id, demoCallUser.label.toLowerCase()].includes(keyword)) {
+    return demoTenants.filter(({ name }) => name === beijing);
+  }
+  return [];
+}
+
 export {
   liveCustomers, usageRanks, growthRanks as gains, declineRanks as drops,
   metrics, categories, requestStates, tokenParts, clientMix, models, detailRows, indicators,

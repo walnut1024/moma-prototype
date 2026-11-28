@@ -78,6 +78,16 @@
 .ca-page .ca-filter label { gap: 8px; }
 .ca-page .ca-filter .haloe-input-wrapper { width: 170px; max-width: 100%; }
 .ca-page .ca-filter .haloe-select { width: 230px; max-width: 100%; }
+.ca-page .ca-tenant-lookup .haloe-select { width: 132px; }
+.ca-page .ca-lookup-input { width: min(280px, 100%); min-width: 0; }
+.ca-page .ca-lookup-input .haloe-input-wrapper { width: 100%; }
+.ca-page .ca-lookup-status:not(:empty) { margin-block-start: 12px; color: var(--ca-muted); font-size: 13px; }
+.ca-page .ca-lookup-status[data-invalid="true"] { color: var(--xa24-danger, #c3323c); }
+.ca-page .ca-lookup-results { list-style: none; margin: 8px 0 0; padding: 0; }
+.ca-page .ca-lookup-results li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 8px 0; border-top: 1px solid var(--ca-line); overflow-wrap: anywhere; }
+.ca-page .ca-lookup-results a { color: var(--ca-blue); font-weight: 600; }
+.ca-page .ca-lookup-results a:hover { text-decoration: underline; }
+.ca-page .ca-lookup-results span { color: var(--ca-muted); font-size: 13px; }
 .ca-page .ca-query-right { margin-inline-start: auto; }
 .ca-page .ca-segment { display: inline-flex; padding: 3px; gap: 2px; background: #f2f5fa; border-radius: 5px; }
 .ca-page .ca-segment button { height: 28px; border-radius: 4px; }
