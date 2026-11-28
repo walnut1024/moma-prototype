@@ -19,9 +19,9 @@ export const sections = [
   { id: "commerce", workspace: "operations", title: "商业运营", items: [
     { id: "prices", label: "模型售卖", children: [["model-prices", "模型售卖"]] },
     { id: "commerce-orders", label: "订购与账单", sidebar: false, children: [["orders", "订购记录"], ["bills", "账单"], ["metering", "消费明细"]] },
-    { id: "package-production", label: "套餐管理", children: [["package-production", "套餐管理"]] },
+    { id: "package-production", label: "套餐管理", sidebar: false, children: [["package-production", "套餐管理"]] },
     { id: "package-data", label: "套餐数据", children: [["package-data", "套餐数据"]] },
-    { id: "site-agreements", label: "协议管理", children: [["site-agreements", "协议管理"]] },
+    { id: "site-agreements", label: "协议管理", sidebar: false, children: [["site-agreements", "协议管理"]] },
     { id: "business-analysis", label: "经营分析", sidebar: false, children: [["business-analysis", "经营分析"]] },
   ]},
   { id: "traffic", workspace: "operations", title: "流量运营", items: [
@@ -36,7 +36,7 @@ export const sections = [
     { id: "announcements", label: "公告管理", children: [["announcements", "公告管理"]] },
     { id: "license", label: "授权管理", children: [["license", "授权管理"]] },
     { id: "accounts", label: "后台账号", children: [["admins", "后台账号"]] },
-    { id: "audit-logs", label: "审计日志", children: [["audit-logs", "审计日志"]] },
+    { id: "audit-logs", label: "审计日志", sidebar: false, children: [["audit-logs", "审计日志"]] },
   ]},
   { id: "runtime", workspace: "maintenance", title: "运行分析", items: [
     { id: "model-performance", label: "模型性能", children: [["model-performance", "模型性能"]] },

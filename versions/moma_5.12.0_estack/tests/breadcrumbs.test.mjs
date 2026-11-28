@@ -14,10 +14,10 @@ test('sidebar follows the operations and maintenance groups in order', () => {
     '首页',
     ['运营分析', '用量数据', '租户数据', '用户数据'],
     ['模型运营', '模型接入', '模型服务', '模型广场', '基础资料'],
-    ['商业运营', '模型售卖', '套餐管理', '套餐数据', '协议管理'],
+    ['商业运营', '模型售卖', '套餐数据'],
     ['流量运营', '限流配置'],
     ['访问控制', '租户管理', '项目管理'],
-    ['平台管理', '站点配置', '公告管理', '授权管理', '后台账号', '审计日志'],
+    ['平台管理', '站点配置', '公告管理', '授权管理', '后台账号'],
     ['研发须知', '平台术语', '需求文档'],
   ]);
   assert.deepEqual(menu('maintenance'), [
@@ -32,8 +32,8 @@ test('sidebar follows the operations and maintenance groups in order', () => {
   assert.equal(canAccessPage('运维人员', 'global-routing'), false);
 });
 
-test('platform announcement, account and audit entries use their existing administrator-only routes', () => {
-  const platform = adminSections.find(group => group.id === 'platform');
+test('platform announcement, account and audit pages keep their administrator-only routes', () => {
+  const platform = sections.find(group => group.id === 'platform');
   for (const [itemId, route, label] of [
     ['announcements', 'announcements', '公告管理'], ['accounts', 'admins', '后台账号'], ['audit-logs', 'audit-logs', '审计日志'],
   ]) {
