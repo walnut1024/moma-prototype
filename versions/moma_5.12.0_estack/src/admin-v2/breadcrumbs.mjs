@@ -1,5 +1,5 @@
 import { channelManagementListRoute, pages, sections } from './navigation.mjs';
-import { TARIFF_KINDS } from './tariff-dictionary.js';
+import { TARIFF_KINDS } from './tariff-kinds.mjs';
 import { CLASSIFICATION_KINDS, classificationKind } from './model-classification.js';
 import { adminProjectListHref } from './access-control.mjs';
 

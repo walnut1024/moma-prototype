@@ -1,5 +1,6 @@
 import { API_PREFIX } from './api-path.js';
 import { PLANNING_BASE, UI_MODIFIED_BASE } from './src/prototype-ui.mjs';
+import { PORTAL_HOME_ENDPOINT } from './src/portal-home.mjs';
 import {validateApplicationConfig} from './src/mock/application-data.js';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -11,6 +12,27 @@ import { copyFileSync, mkdirSync } from 'node:fs';
 
 const buildDirectory = mode => path.resolve(import.meta.dirname,
   mode === 'ui-modified' ? '../../dist/ui-modified' : '../../public/moma_5.12.0_estack');
+
+function portalStartup() {
+  let config;
+  return {
+    name: 'portal-startup',
+    configResolved(resolved) { config = resolved; },
+    transformIndexHtml() {
+      if (config.env.VITE_MOMA_PRIVATE_SITE !== '1') return;
+      return [{ tag: 'script', injectTo: 'head-prepend', children: `{
+        const base = ${JSON.stringify(config.base)};
+        const { pathname, search, hash, href } = location;
+        if (!search && !hash && [base, base.slice(0, -1), base + 'index.html'].includes(pathname)) {
+          const response = fetch(${JSON.stringify(API_PREFIX + PORTAL_HOME_ENDPOINT)}, {
+            credentials: 'omit', signal: AbortSignal.timeout(2500),
+          }).catch(() => null);
+          window.momaPortalStartup = { entry: href, response };
+        }
+      }` }];
+    },
+  };
+}
 const semiPackage = createRequire(import.meta.url).resolve('@douyinfe/semi-ui');
 const semiDate = (source, importer) => importer?.includes('/date-fns-tz/') && source.startsWith('date-fns/') ? createRequire(semiPackage).resolve(source) : null;
 
@@ -68,10 +90,10 @@ export default defineConfig(({ mode }) => ({
     resolveId(source, importer) {
       return semiDate(source, importer);
     },
-  }, react(), tailwindcss(), {
+  }, react(), tailwindcss(), portalStartup(), {
     name: 'standalone-order-entry',
     buildStart() { validateModelDataset(); validateSystemModelData(); validateApplicationConfig(); },
-    closeBundle() {
+    writeBundle() {
       const outDir = buildDirectory(mode);
       const orderDir = path.join(outDir, 'order/serviceOrder');
       mkdirSync(orderDir, { recursive: true });

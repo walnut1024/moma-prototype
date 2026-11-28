@@ -8,7 +8,7 @@ import { consoleActiveItem } from './console-navigation.mjs';
 import { projectServiceEnabled, tenantProjectAdmin } from './project-access.mjs';
 import { MarketAction, marketRequest, useCloudMarket } from './CloudMarket';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
-import { Button as SemiButton, ConfigProvider, Modal, Input as SemiInput, Select as SemiSelect, Slider, Tabs as SemiTabs, Tag, Toast } from '@douyinfe/semi-ui';
+import { Button as SemiButton, ConfigProvider, Modal, Input as SemiInput, Select as SemiSelect, Tabs as SemiTabs, Tag, Toast } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
 import { AdminSideSheet as SideSheet } from './admin-v2/AdminOverlay';
@@ -82,6 +82,7 @@ const TextExperience = lazy(() => import('./TextExperience'));
 const ModelComparison = lazy(() => import('./ModelComparison'));
 const AdminConsoleV2 = lazy(() => import('./AdminConsoleV2'));
 const AdminReturnButton = lazy(() => import('./admin-v2/xa24/HaloComponents.jsx').then(module => ({ default: module.XaButton })));
+const CatalogueSlider = lazy(() => import('@douyinfe/semi-ui/lib/es/slider/index.js'));
 const loadProjectConfiguration = () => import('./components/ProjectConfiguration');
 const ProjectModels = lazy(() => loadProjectConfiguration().then(module => ({ default: module.ProjectModels })));
 const ProjectSettings = lazy(() => loadProjectConfiguration().then(module => ({ default: module.ProjectSettings })));
@@ -611,14 +612,16 @@ function PrototypeApp({ version }) {
                     <span>4K</span>
                     <span>1M</span>
                   </div>
-                  <Slider
-                    className="filter-range"
-                    min={4}
-                    max={1024}
-                    value={filters.context || 1024}
-                    onChange={context => setFilters(current => ({...current, context}))}
-                    aria-label="上下文长度上限"
-                  />
+                  <Suspense fallback={null}>
+                    <CatalogueSlider
+                      className="filter-range"
+                      min={4}
+                      max={1024}
+                      value={filters.context || 1024}
+                      onChange={context => setFilters(current => ({...current, context}))}
+                      aria-label="上下文长度上限"
+                    />
+                  </Suspense>
                 </FilterSection>
                 <FilterSection title="模型作者" count={filters.author ? 1 : 0}>
                   {[...marketAuthors].map(([id, name]) => option("author", id, name))}
@@ -700,7 +703,7 @@ function PrototypeApp({ version }) {
             demoHref={!auth.route && market.tenant ? '?' + new URLSearchParams({demo:'roles',role:demoRole,view:demoView}) : undefined}
             onSwitchSpace={()=>openProjectPage(undefined,'home',{},true)}/> : null}
         </div>
-        {admin === "v2" && (
+        {admin === "v2" && !auth.checkingAdmin && (
           <Suspense fallback={null}><AdminReturnButton className="admin-banner-return" type="tertiary"
             icon={<CornerUpLeft size={16} aria-hidden="true"/>} onClick={() => navigateAdmin("front")}>{english ? 'Return to Console' : '返回前台'}</AdminReturnButton></Suspense>
         )}

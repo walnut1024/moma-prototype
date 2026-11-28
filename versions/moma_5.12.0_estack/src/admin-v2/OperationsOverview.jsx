@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { Box, CalendarDays, ChartNoAxesColumnIncreasing, CircleDollarSign, TrendingUp, UserCheck, UserRound, UsersRound } from 'lucide-react';
 import { IconActivity, IconArrowLeft, IconChevronRight, IconLayers, IconTick } from './xa24/HaloIcons.jsx';
 import Table from './xa24/HaloTable.jsx';
 import { XaButton as Button, XaCard as Card, XaHelp as AnalysisHelp, XaModal as Modal,
   XaSelect as Select, XaSpace as Space, XaTabs as Tabs, XaTypography as Typography } from './xa24/HaloComponents.jsx';
-import { DonutChart, TimeSeriesChart } from '../components/AnalyticsCharts';
 import { dayOf } from './analytics';
 import { compactCount, overviewChange, overviewCustomers, overviewDateTime, overviewMetrics, overviewRange, overviewRanks, overviewSummary, overviewTimeline } from './overview';
 import './overview.css';
@@ -17,6 +16,15 @@ const overviewIllustration = import.meta.env.BASE_URL + 'assets/xa-overview.png'
 const overviewPeriods = [['today', '今日'], ['yesterday', '昨日'], ['7d', '近 7 日'], ['30d', '近 30 日']];
 const windows = ['近一周工作日日均', '近一月工作日日均'];
 const metricIcons = { Token: IconLayers, 次: IconActivity, '%': IconTick };
+const loadCharts = () => import('../components/AnalyticsCharts');
+const TrendChart = lazy(() => loadCharts().then(({ TimeSeriesChart }) => ({ default: TimeSeriesChart })));
+const ActivityChart = lazy(() => loadCharts().then(({ DonutChart }) => ({ default: DonutChart })));
+
+function OverviewChart({ component: Chart, height, ...props }) {
+  return <Suspense fallback={<div aria-hidden="true" style={{ height }}/> }>
+    <Chart height={height} {...props}/>
+  </Suspense>;
+}
 
 export default function OperationsOverview({ state, workbenchName, shortcuts, onNavigate }) {
   const [now] = useState(() => Date.now());
@@ -77,11 +85,11 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
       <OverviewMetrics metrics={secondary} label="经营指标"/>
       <section className="ov-summary-pair" aria-label="调用趋势">
         <OverviewPlot title="Token 用量趋势" note={interval}>
-          <TimeSeriesChart label="Token 用量趋势" labels={labels} unit="Token" type="area" height={260}
+          <OverviewChart component={TrendChart} label="Token 用量趋势" labels={labels} unit="Token" type="area" height={260}
             compact showData={false} series={[{ label: 'Token 用量', color: '#2468f2', values: summary.trend.map(item => item.tokens) }]}/>
         </OverviewPlot>
         <OverviewPlot title="模型请求趋势" note={interval}>
-          <TimeSeriesChart label="模型请求趋势" labels={labels} unit="次" type="area" height={260}
+          <OverviewChart component={TrendChart} label="模型请求趋势" labels={labels} unit="次" type="area" height={260}
             compact showData={false} series={[{ label: '模型请求次数', color: '#18a69a', values: summary.trend.map(item => item.calls) }]}/>
         </OverviewPlot>
       </section>
@@ -213,7 +221,7 @@ function OverviewDetails({ state, now, workbenchName, shortcuts, onNavigate }) {
           </Card>)}
         </div>
         <OverviewPlot title="月度工作日 Token 用量" note={'工作日按周一至周五 · 截至 ' + data.daily.at(-1).date}>
-          <TimeSeriesChart label="月度工作日 Token 用量" labels={data.months.map(row => row.label)}
+          <OverviewChart component={TrendChart} label="月度工作日 Token 用量" labels={data.months.map(row => row.label)}
             compact legendAtTop showData={false} type="bar" stacked unit="Token" height={213}
             series={[
               ...data.supplyTypes.flatMap(([, label, color], index) =>
@@ -224,14 +232,14 @@ function OverviewDetails({ state, now, workbenchName, shortcuts, onNavigate }) {
         </OverviewPlot>
       </div>
       <OverviewPlot title="月度活跃租户数" note={'按自然月去重 · 最后统计日 ' + data.daily.at(-1).date}>
-        <TimeSeriesChart label="月度活跃租户数" labels={data.months.map(row => row.label)}
+        <OverviewChart component={TrendChart} label="月度活跃租户数" labels={data.months.map(row => row.label)}
           compact legendAtTop showData={false} type="bar" stacked unit="个" height={224}
           series={data.customerTypes.flatMap(({ label, color }, index) =>
             index !== 2 || data.months.some(row => row.customers[index] > 0)
               ? [{ label, color, values: data.months.map(row => row.customers[index]) }] : [])}/>
       </OverviewPlot>
       <OverviewPlot title="每日 Token 用量（TPD）" note="近 30 个完整自然日 · 已计量 Token">
-        <TimeSeriesChart label="每日 Token 用量" labels={data.daily.map(row => row.date.slice(5))}
+        <OverviewChart component={TrendChart} label="每日 Token 用量" labels={data.daily.map(row => row.date.slice(5))}
           compact legendAtTop showData={false} type="area" unit="Token" height={262}
           series={[
             { label: '每日 Token', color: '#256be3', values: data.daily.map(row => row.total), showPoints: true },
@@ -340,7 +348,7 @@ function CustomerActivity({ activity }) {
 }
 
 function CustomerDonut({ rows, count, label }) {
-  return count > 0 ? <DonutChart rows={rows.filter(row => row.value > 0)} unit="个" label={label} height={142}
+  return count > 0 ? <OverviewChart component={ActivityChart} rows={rows.filter(row => row.value > 0)} unit="个" label={label} height={142}
     centerValue={number(count)} centerLabel="活跃租户" showData={false}/>
     : <div className="ov-donut-empty"><Text type="secondary" size="small">暂无活跃租户</Text></div>;
 }

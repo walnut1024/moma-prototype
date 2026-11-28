@@ -1,6 +1,6 @@
 import { diagnosticRequest, requestIdentity } from '../request-identity.mjs';
 import { usageFacts, usageWindow, usageMeter, usageValue } from './usage-analysis.js';
-import { priceItems } from './model-management.js';
+import { priceItems } from './model-price-items.js';
 
 export const analysisFilters = () => ({ types: null, tenant: null, model: null, providers: [], channels: null, user: null });
 export function operationFacts(state, range, filters, now = Date.now(), upstream = false) {

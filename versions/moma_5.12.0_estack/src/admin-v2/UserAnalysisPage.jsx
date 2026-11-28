@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { CalendarDays, LogIn, UserPlus, UserRound, UsersRound } from 'lucide-react';
-import { userBusinessData } from '../business-facts.mjs';
+import { userBusinessData } from '../user-business-data.mjs';
 import SavedFilterViews from '../components/SavedFilterViews';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { useChannelText } from './channel-language';

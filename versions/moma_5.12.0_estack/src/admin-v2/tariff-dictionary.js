@@ -1,8 +1,9 @@
 import { isResourceId } from '../resource-id.mjs';
 import { initialTariffDictionary } from '../mock/application-data.js';
+import { TARIFF_KINDS } from './tariff-kinds.mjs';
 import { tariffUnitBase } from './tariff-metering.js';
 
-export const TARIFF_KINDS = { scenario: '计费项', unit: '计费单位', currency: '货币' };
+export { TARIFF_KINDS };
 export async function tariffDictionaryId(id) {
   if (['billing-item', 'billing-unit', 'currency'].some(type => isResourceId(id, type))) return id;
   // Keep stored references intact; derive a stable UUIDv5 for the compact list identifier.

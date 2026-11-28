@@ -13,10 +13,12 @@ import { providerCataloguePrice } from './moma-catalogue-prices.js';
 import { cataloguePurchasePrice, billingItemKey, parseSaleAmount } from './provider-catalogue-pricing.js';
 import { activeChannelProcurement } from './channel-change-management.js';
 import { requireModelSlug, modelMaterial, MODEL_CATALOGUE_TYPES } from './model-library.js';
+import { priceItems } from './model-price-items.js';
 import { platformPublicationCheck, platformPublicationFingerprint } from './platform-publication-state.js';
 import { MODEL_TASK_LABELS as MODEL_TYPES, MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 
 export { MODEL_TYPES };
+export { hasOutputPrice, priceItems, priceUnits } from './model-price-items.js';
 export const SERVICE_MODEL_TYPES = MODEL_CATALOGUE_TYPES;
 export const MODEL_CATEGORIES = MODEL_TYPE_LABELS;
 export const MODEL_CATEGORY_DESCRIPTIONS = {
@@ -61,14 +63,6 @@ const add = (collection, record) => ({ type: 'add', collection, record });
 const update = (collection, id, changes) => ({ type: 'update', collection, id, changes });
 const timestamp = () => new Date().toISOString();
 
-export function priceUnits(model) {
-  if (model.type === 'image') return ['元/张'];
-  if (model.type === 'video') return ['元/秒', '元/百万 Token'];
-  if (model.type === 'audio') return model.profile?.tasks?.includes('语音合成') || model.usageUnit === '字符' ? ['元/万字符', '元/分钟', '元/秒', '元/百万 Token'] : ['元/分钟', '元/秒', '元/百万 Token', '元/万字符'];
-  if (model.type === 'rerank') return ['元/千次', '元/百万 Token'];
-  return ['元/百万 Token'];
-}
-export const hasOutputPrice = (model, unit = priceUnits(model)[0]) => ['text', 'multimodal'].includes(model.type) || (['video', 'audio'].includes(model.type) && unit === '元/百万 Token');
 export const moneyDisplay = value => value == null ? '—' : (value / 1000000).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 export const displayTime = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—';
 
@@ -94,12 +88,6 @@ export function activeSupplyPrice(state, supplyId, at = Date.now()) {
   return state.supplyPrices.filter(price => price.supplyId === supplyId && price.status === '生效中' && Date.parse(price.effectiveAt) <= at).sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))[0];
 }
 
-export function priceItems(price, model) {
-  if (!price) return [];
-  if (Array.isArray(price.items)) return price.items;
-  // Historical snapshots keep their original fields and IDs; only their presentation is expanded.
-  return [['inputPrice', hasOutputPrice(model, price.unit) ? '输入' : '单价'], ...(hasOutputPrice(model, price.unit) ? [['outputPrice', '输出']] : []), ...['cachedPrice', 'cacheWritePrice'].filter(key => price[key] != null).map(key => [key, key === 'cachedPrice' ? '缓存读取' : '缓存写入'])].map(([key, name]) => ({ name, unit: price.unit, currency: 'CNY', amount: price[key] ?? null }));
-}
 export const procurementVersion = price => price?.sourceVersion || price?.id || '';
 export const latestSaleRevision = (state, supplyId) => state.modelSalePrices.filter(price => price.supplyId === supplyId).sort((a, b) => b.version - a.version)[0]?.id || '';
 export const procurementLabel = price => price?.sourceLabel || (price ? `历史采购快照 ${price.priceId || price.id} · ${displayTime(price.effectiveAt)}` : '服务商成本价待配置');
