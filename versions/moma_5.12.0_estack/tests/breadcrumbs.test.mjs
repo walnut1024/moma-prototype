@@ -13,7 +13,7 @@ test('sidebar follows the operations and maintenance groups in order', () => {
   assert.deepEqual(menu('operations'), [
     '首页',
     ['运营分析', '用量数据', '租户数据', '用户数据'],
-    ['模型运营', '模型接入', '模型服务', '模型链路', '模型广场', '基础资料'],
+    ['模型运营', '模型接入', '模型服务', '模型广场', '基础资料'],
     ['商业运营', '模型售卖', '套餐管理', '套餐数据', '协议管理'],
     ['流量运营', '限流配置'],
     ['访问控制', '租户管理', '项目管理'],
@@ -154,6 +154,10 @@ test('section breadcrumbs open a real landing page and current pages remain plai
   assert.deepEqual(build('dashboard'), [{ label: '首页' }]);
   assert.deepEqual(build('listing-new'), [{ label: '模型运营' }, { label: '模型服务' }]);
   assert.deepEqual(build('model-links'), [{ label: '模型运营' }, { label: '模型链路' }]);
+  assert.equal(pageFromHash('#/admin-2/model-links', '运营人员'), 'model-links');
+  assert.equal(canAccessPage('平台管理员', 'model-links'), true);
+  assert.equal(canAccessPage('运营人员', 'model-links'), true);
+  assert.equal(canAccessPage('运维人员', 'model-links'), false);
   assert.deepEqual(labels(build('logs')), ['运行分析', '调用日志']);
   assert.equal(build('logs')[0].href, '#/admin-2/model-performance');
   assert.deepEqual(labels(build('global-routing')), ['网关管理', '路由设置（全局）']);
