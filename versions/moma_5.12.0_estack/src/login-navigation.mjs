@@ -1,6 +1,7 @@
 import { availableWorkspaces, canAccessPage, WORKSPACE_HOME } from './admin-v2/navigation.mjs';
+import { appBase } from './prototype-ui.mjs';
 
-export const LOGIN_BASE = '/moma_5.12.0_estack/';
+export const LOGIN_BASE = appBase;
 
 export function loginReturn(value) {
   if (typeof value !== 'string' || !value.startsWith(LOGIN_BASE) || /[\\\r\n]/.test(value)) return '';

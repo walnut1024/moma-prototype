@@ -1,4 +1,5 @@
 import { useChannelText } from './channel-language';
+import { appBase } from '../prototype-ui.mjs';
 import { resourceId } from '../resource-id.mjs';
 import { useId, useEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
@@ -65,7 +66,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
     if (!countryCode || countryCode === 'CN' || addAdmin) return;
     let cancelled = false;
     setRegionState({ country: countryCode, regions: [], loading: true, error: '' });
-    fetch(`/moma_5.12.0_estack/enterprise-regions/${countryCode}.json`).then(response => { if (!response.ok) throw new Error(); return response.json(); }).then(regions => {
+    fetch(`${appBase}enterprise-regions/${countryCode}.json`).then(response => { if (!response.ok) throw new Error(); return response.json(); }).then(regions => {
       if (!cancelled) setRegionState({ country: countryCode, regions, loading: false, error: '' });
     }).catch(() => { if (!cancelled) setRegionState({ country: countryCode, regions: [], loading: false, error: '地域选项加载失败，请重试。' }); });
     return () => { cancelled = true; };
@@ -216,7 +217,7 @@ function EnterpriseEditor({ state, tenant, kind, deploymentMode, apply, close, c
           </div>
           {regionState.country === countryCode && regionState.error && <Banner type="danger" closeIcon={null}
             description={<Space wrap>{regionState.error}<Button size="small" theme="borderless" onClick={() => setRegionRetry(value => value + 1)}>重试</Button></Space>}/>}
-          <Paragraph type="secondary">行业采用 GB/T 4754—2017。<Text link={{ href: '/moma_5.12.0_estack/enterprise-regions/README.txt', target: '_blank', rel: 'noreferrer' }}>地域数据来源</Text>，未覆盖的地址可填入详细地址。</Paragraph>
+          <Paragraph type="secondary">行业采用 GB/T 4754—2017。<Text link={{ href: appBase + 'enterprise-regions/README.txt', target: '_blank', rel: 'noreferrer' }}>地域数据来源</Text>，未覆盖的地址可填入详细地址。</Paragraph>
         </section>
         <section className="admin-enterprise-form-section">
           <Title heading={5} component="h3">业务联系</Title>

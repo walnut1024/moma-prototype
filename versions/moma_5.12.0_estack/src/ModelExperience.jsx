@@ -1,4 +1,5 @@
 import { useServiceDirectory, useExperienceSettings, beginExperience, finishExperience } from './useServiceDirectory';
+import { appBase } from './prototype-ui.mjs';
 import { readExperienceDraft, saveExperienceDraft } from './experience-drafts.mjs';
 import FrontPageHeader from "./components/FrontPageHeader";
 import { displayBusinessCopy } from './display-copy.mjs';
@@ -1099,7 +1100,7 @@ export default function ModelExperience({
                   aria-pressed={voice === item.id}
                   onClick={() => previewVoice(item)}
                 >
-                  <img src={`/moma_5.12.0_estack/assets/model-${item.icon}.jpg`} alt="" />
+                  <img src={`${appBase}assets/model-${item.icon}.jpg`} alt="" />
                   <span>
                     <strong>{item.name}</strong>
                     <small>{item.desc}</small>

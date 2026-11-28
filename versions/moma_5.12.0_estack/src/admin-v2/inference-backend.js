@@ -1,4 +1,5 @@
 import { dump, JSON_SCHEMA, load } from 'js-yaml';
+import { INFRASTRUCTURE_STORAGE } from './infrastructure-source-settings.js';
 import { resourceId } from '../resource-id.mjs';
 import { communityBackendCatalogue } from './inference-backend-catalogue.js';
 import { communityBackendDescriptions } from './inference-backend-community-descriptions.js';
@@ -38,7 +39,7 @@ export const backendSourceSlots = [
   { key: 'built-in-backend', label: '内置后端', url: backendSourceBase + 'runner.py.json' },
   { key: 'community-backend', label: '社区后端', url: backendSourceBase + 'community-inference-backends.yaml' },
 ];
-export const backendSourceStorageKey = 'moma-5.12.0-estack:infrastructure:model-sources';
+export const backendSourceStorageKey = INFRASTRUCTURE_STORAGE + ':model-sources';
 const noSourceSnapshot = '此 URL 没有可用的本地快照。';
 
 export function backendSourceDraft(slot, previous) {

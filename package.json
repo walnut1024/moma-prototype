@@ -10,6 +10,7 @@
     "test:backend:5120": "node --test versions/moma_5.12.0_estack/tests/d1-*.test.mjs",
     "build": "npm run build:5.12.0 && node scripts/prepare-sites-build.mjs",
     "build:5.12.0": "vite build --config versions/moma_5.12.0_estack/vite.config.mjs",
+    "build:ui-modified": "npm run build:5.12.0 -- --mode ui-modified",
     "lint": "oxlint worker scripts tests/*.test.mjs",
     "test": "npm run test:sites && node --test tests/tenant-user-type-5120.test.mjs tests/version-copy.test.mjs tests/version-retirement.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs"

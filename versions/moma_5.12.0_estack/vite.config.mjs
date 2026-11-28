@@ -1,4 +1,5 @@
 import { API_PREFIX } from './api-path.js';
+import { PLANNING_BASE, UI_MODIFIED_BASE } from './src/prototype-ui.mjs';
 import {validateApplicationConfig} from './src/mock/application-data.js';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -8,7 +9,8 @@ import { createRequire } from 'node:module';
 import { validateModelDataset, validateSystemModelData } from './src/mock/model-data.js';
 import { copyFileSync, mkdirSync } from 'node:fs';
 
-const outDir = path.resolve(import.meta.dirname, '../../public/moma_5.12.0_estack');
+const buildDirectory = mode => path.resolve(import.meta.dirname,
+  mode === 'ui-modified' ? '../../dist/ui-modified' : '../../public/moma_5.12.0_estack');
 const semiPackage = createRequire(import.meta.url).resolve('@douyinfe/semi-ui');
 const semiDate = (source, importer) => importer?.includes('/date-fns-tz/') && source.startsWith('date-fns/') ? createRequire(semiPackage).resolve(source) : null;
 
@@ -43,9 +45,9 @@ const scopeHaloeStyles = {
   },
 };
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: import.meta.dirname,
-  base: '/moma_5.12.0_estack/',
+  base: mode === 'ui-modified' ? UI_MODIFIED_BASE : PLANNING_BASE,
   resolve: { alias: { '@': path.join(import.meta.dirname, 'src') } },
   css: { postcss: { plugins: [scopeHaloeStyles] } },
   optimizeDeps: { esbuildOptions: { plugins: [{ name: 'semi-date-fns', setup(build) {
@@ -55,7 +57,7 @@ export default defineConfig({
   } }] } },
   server: { host: '127.0.0.1', proxy: { [API_PREFIX]: { target:'http://127.0.0.1:'+Number(process.env.MOMA_5120_BACKEND_PORT || 15120), changeOrigin: false } } },
   build: {
-    outDir,
+    outDir: buildDirectory(mode),
     assetsDir: "assets/compiled",
     emptyOutDir: true,
   },
@@ -70,9 +72,10 @@ export default defineConfig({
     name: 'standalone-order-entry',
     buildStart() { validateModelDataset(); validateSystemModelData(); validateApplicationConfig(); },
     closeBundle() {
+      const outDir = buildDirectory(mode);
       const orderDir = path.join(outDir, 'order/serviceOrder');
       mkdirSync(orderDir, { recursive: true });
       copyFileSync(path.join(outDir, 'index.html'), path.join(orderDir, 'index.html'));
     },
   }],
-});
+}));

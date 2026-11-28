@@ -1,12 +1,13 @@
 import { workspaceStoragePrefix } from './workspace-storage.mjs';
+import { appBase } from './prototype-ui.mjs';
 export const PRIVATE_SITE = import.meta.env?.VITE_MOMA_PRIVATE_SITE === '1';
 export const SITE_CONFIG_KEY = workspaceStoragePrefix + 'site-config';
 export const SITE_CONFIG_EVENT = 'moma:5120-site-config';
 export const DEFAULT_SITE_TITLE = '模型市场';
 export const DEFAULT_USER_CONSOLE_NAME = '模型服务平台 MoMA 政企版';
 export const DEFAULT_WORKBENCH_NAME = 'Token 管理工作台';
-export const DEFAULT_SITE_LOGO = '/moma_5.12.0_estack/assets/jiangSuZhengWu.png';
-export const DEFAULT_LOGIN_IMAGE = '/moma_5.12.0_estack/assets/auth/ai-scenarios-light.webp';
+export const DEFAULT_SITE_LOGO = appBase + 'assets/jiangSuZhengWu.png';
+export const DEFAULT_LOGIN_IMAGE = appBase + 'assets/auth/ai-scenarios-light.webp';
 export const MAX_IMAGE_BYTES = 512 * 1024;
 export const MAX_SITE_TEXT = 64;
 export const MAX_AGREEMENT_TEXT = 20000;

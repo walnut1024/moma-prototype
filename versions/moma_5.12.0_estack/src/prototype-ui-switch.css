@@ -1,0 +1,13 @@
+.app-shell > header .prototype-ui-switch {
+  display: inline-flex; flex: none; align-items: center; gap: 2px;
+  padding: 2px; border-radius: 5px; background: #eef1f7;
+  white-space: nowrap; font-size: 12px; line-height: 22px;
+}
+.app-shell > header .prototype-ui-switch > :is(a, span) { padding: 0 7px; border-radius: 3px; }
+.app-shell > header .prototype-ui-switch > span { color: #172544; background: #fff; font-weight: 600; }
+.app-shell > header .prototype-ui-switch > a { color: #145bd7; text-decoration: none; }
+.app-shell > header .prototype-ui-switch > a:hover { text-decoration: underline; }
+.app-shell > header .prototype-ui-switch > a:focus-visible { outline: 2px solid #155de6; outline-offset: 1px; }
+@media (max-width: 680px) {
+  .app-shell > header .prototype-ui-switch > :is(a, span) { padding-inline: 5px; }
+}

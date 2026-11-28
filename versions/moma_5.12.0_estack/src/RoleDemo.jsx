@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { appBase } from './prototype-ui.mjs';
 import { Button, ConfigProvider, Modal, Select } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
@@ -93,7 +94,7 @@ export default function RoleDemo({icons}) {
     <div className="app-shell tenant-semi role-demo">
       <header className="tenant-banner role-demo-banner">
         <div className="brand-mark">
-          <img src="/moma_5.12.0_estack/assets/xa-demo-logo.jpg" alt="" />
+          <img src={appBase + 'assets/xa-demo-logo.jpg'} alt="" />
           <span>雄安国际TOKEN服务平台</span>
         </div>
         <div className="role-demo-mobile-language">{languageButton}</div>

@@ -1,3 +1,5 @@
+import PrototypeUiSwitch from './PrototypeUiSwitch.jsx';
+import { appBase, appVersionId, uiModified } from './prototype-ui.mjs';
 import { ChannelLanguageContext } from './admin-v2/channel-language';
 import {useTenantData} from './useTenantData';
 import { marketModels } from './service-directory.mjs';
@@ -59,7 +61,8 @@ import "./frontend-pages.css";
 import "./model-catalogue.css";
 import "./role-demo.css";
 
-const A = "/moma_5.12.0_estack/assets/";
+const A = appBase + 'assets/';
+const languageKey = uiModified ? 'moma-ui-modified-admin-guide-language' : 'moma-5120-admin-guide-language';
 const modalityIcons = { 文本: FileText, 图像: Image, 图片: Image, 视频: Video, 音频: AudioLines };
 
 const ModelOrderList = lazy(() => import('./ModelOrderList'));
@@ -243,7 +246,7 @@ function VersionIndex() {
                     </span>
                   </td>
                   <td>
-                    <a className="version-entry" href={`/${version.id}/`}>
+                    <a className="version-entry" href={appBase}>
                       进入平台 <ArrowRight aria-hidden="true" />
                     </a>
                   </td>
@@ -281,12 +284,12 @@ function frontDestination(label) {
 function PrototypeApp({ version }) {
   const site = useSiteConfig();
   const [english, setEnglish] = useState(() => {
-    try { return localStorage.getItem('moma-5120-admin-guide-language') === 'en'; }
+    try { return localStorage.getItem(languageKey) === 'en'; }
     catch { return false; }
   });
   const changeLanguage = value => {
     setEnglish(value);
-    try { localStorage.setItem('moma-5120-admin-guide-language', value ? 'en' : 'zh-CN'); }
+    try { localStorage.setItem(languageKey, value ? 'en' : 'zh-CN'); }
     catch { /* The current selection still applies when storage is unavailable. */ }
   };
   const configuredWorkbenchName = site.workbenchName || DEFAULT_WORKBENCH_NAME;
@@ -687,6 +690,7 @@ function PrototypeApp({ version }) {
             <div className="admin-banner-controls" ref={setAdminBannerTarget}/>
           )}
           <div className="banner-version-tools">
+            {uiModified && <PrototypeUiSwitch admin={admin === "v2"}/>}
             <DevelopmentNotes admin={admin === "v2"}/>
           </div>
           {admin === "front" && !waitingForSession && auth.route !== 'login' ? (
@@ -921,10 +925,8 @@ function activeAgreementRoute() {
 
 export function App() {
   const documentKey = useSyncExternalStore(subscribeAgreementRoute, activeAgreementRoute);
-  const version = prototypeVersions.find((item) =>
-    location.pathname.startsWith(`/${item.id}/`),
-  );
-  if (version && location.pathname === '/' + version.id + '/' && !location.hash && new URLSearchParams(location.search).get('demo') === 'roles') {
+  const version = location.pathname.startsWith(appBase) ? { ...prototypeVersions[0], id: appVersionId } : null;
+  if (version && location.pathname === appBase && !location.hash && new URLSearchParams(location.search).get('demo') === 'roles') {
     return <Suspense fallback={<p role="status">正在加载角色演示…</p>}><RoleDemo icons={navIcons} /></Suspense>;
   }
   return version ? (documentKey ? <Suspense fallback={null}><PublicAgreement documentKey={documentKey} /></Suspense> : <PrototypeApp version={version} />) : <VersionIndex />;

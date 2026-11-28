@@ -1,4 +1,6 @@
-export const INFRASTRUCTURE_STORAGE = 'moma-5.12.0-estack:infrastructure';
+import { infrastructureStoragePrefix } from '../workspace-storage.mjs';
+
+export const INFRASTRUCTURE_STORAGE = infrastructureStoragePrefix + 'infrastructure';
 export const MODEL_SOURCE_SLOTS = {
   'ops-model-library': 'catalog',
   'ops-cache-acceleration': 'cache-provider',

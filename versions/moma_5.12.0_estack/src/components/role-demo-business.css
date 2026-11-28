@@ -206,7 +206,7 @@
   flex: none;
   inline-size: 28px;
   block-size: 28px;
-  background-image: url('/moma_5.12.0_estack/assets/xa-demo-model-logos.png');
+  background-image: url(/assets/xa-demo-model-logos.png);
   background-size: 800% 800%;
   background-repeat: no-repeat;
 }

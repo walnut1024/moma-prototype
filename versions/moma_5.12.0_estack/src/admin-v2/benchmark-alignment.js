@@ -1,4 +1,5 @@
 import { resourceId } from '../resource-id.mjs';
+import { INFRASTRUCTURE_STORAGE } from './infrastructure-source-settings.js';
 import { deploymentCanServe, deploymentInstances } from './deployments.js';
 import { gzipSync, strToU8 } from 'fflate';
 
@@ -425,7 +426,7 @@ export function alignedBenchmarkExportFields(row) {
 }
 
 const gib = 1024 ** 3;
-export const benchmarkArchiveStorageKey = 'moma-5.12.0-estack:infrastructure:model-sources';
+export const benchmarkArchiveStorageKey = INFRASTRUCTURE_STORAGE + ':model-sources';
 
 export function benchmarkArchiveUsage(rows) {
   return rows.reduce((bytes, row) => bytes + (row.stageResults?.length && row.status === '已完成'

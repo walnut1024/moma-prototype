@@ -1,11 +1,12 @@
 import { Button, Card } from '@douyinfe/semi-ui';
+import { appBase } from '../prototype-ui.mjs';
 import { AudioLines, FileText, Image, Video } from 'lucide-react';
 import { DemoBusinessPage } from './RoleDemoBusiness';
 import FrontPageHeader from './FrontPageHeader';
 import { roleDemoLabels } from '../role-demo-navigation.mjs';
 import './role-demo-pages.css';
 
-const ASSETS = '/moma_5.12.0_estack/assets/';
+const ASSETS = appBase + 'assets/';
 const EXPERIENCES = {
   text: {
     title: '文本生成', model: 'Qwen3.8 Max', icon: FileText, tags: '文本 → 文本',

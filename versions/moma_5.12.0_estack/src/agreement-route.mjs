@@ -1,9 +1,11 @@
 import { AGREEMENTS } from './site-config.mjs';
 
+import { appBase } from './prototype-ui.mjs';
+
 const route = '#/agreements/';
 
 export function agreementHref(key) {
-  return '/moma_5.12.0_estack/' + route + key;
+  return appBase + route + key;
 }
 
 export function agreementFromHash(hash) {

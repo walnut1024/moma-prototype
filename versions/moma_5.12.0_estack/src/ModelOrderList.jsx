@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { appVersionId } from './prototype-ui.mjs';
 import { Banner, Button as SemiButton, Checkbox, ConfigProvider, Input as SemiInput, Modal, RadioGroup, Select as SemiSelect, Table, Tabs as SemiTabs, Tag, Toast } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { RefreshCw, Search, ShoppingCart } from 'lucide-react';
@@ -14,7 +15,7 @@ import './model-order.css';
 
 export default function ModelOrderList({
   standalone = false,
-  versionId = "moma_5.12.0_estack",
+  versionId = appVersionId,
   auth,
   initialCheckout,
 }) {

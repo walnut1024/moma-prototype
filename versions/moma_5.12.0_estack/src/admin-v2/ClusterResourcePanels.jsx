@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { infrastructureStoragePrefix } from '../workspace-storage.mjs';
 import { Banner, Button, Checkbox, Input, Popover, Select, Space, Switch, Table, Tabs, Tag, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
 import { Descriptions, Steps, Tree } from './xa24/HaloUI.jsx';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
@@ -241,7 +242,7 @@ export function ClusterTopology({ cluster, nodes, onClose, onRowsChange, onSaveL
   const [selected, setSelected] = useState([]);
   const [mapping, setMapping] = useState(null);
   const [discard, setDiscard] = useState(false);
-  const prefsKey = `moma-5.12.0-estack:cluster-topology-columns:${cluster.id}`;
+  const prefsKey = `${infrastructureStoragePrefix}cluster-topology-columns:${cluster.id}`;
   const [columnPrefs, setColumnPrefs] = useState(() => persistColumnPrefs ? topologyColumnPrefs(prefsKey) : {});
   const [preview, setPreview] = useState(false);
   const [settling, setSettling] = useState(false);
