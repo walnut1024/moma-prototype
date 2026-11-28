@@ -35,7 +35,6 @@ import {
   AudioLines,
   Calculator,
   ChartNoAxesCombined,
-  CornerUpLeft,
   FileText,
   Flame,
   Image,
@@ -704,8 +703,8 @@ function PrototypeApp({ version }) {
             onSwitchSpace={()=>openProjectPage(undefined,'home',{},true)}/> : null}
         </div>
         {admin === "v2" && !auth.checkingAdmin && (
-          <Suspense fallback={null}><AdminReturnButton className="admin-banner-return" type="tertiary"
-            icon={<CornerUpLeft size={16} aria-hidden="true"/>} onClick={() => navigateAdmin("front")}>{english ? 'Return to Console' : '返回前台'}</AdminReturnButton></Suspense>
+          <Suspense fallback={null}><AdminReturnButton className="admin-banner-return"
+            onClick={() => navigateAdmin("front")}>{english ? 'Return to Console' : '返回前台'}</AdminReturnButton></Suspense>
         )}
       </header>
       {admin === "front" && !auth.route && !waitingForSession && (

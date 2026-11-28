@@ -1,11 +1,11 @@
 import { channelEnglish } from './admin-v2/channel-language';
 import AdminPageLoading from './admin-v2/AdminPageLoading';
 import {
-  Activity as IconActivity, Network as IconApartment, PanelsTopLeft as IconAppCenter, FileText as IconArticle,
+  Activity as IconActivity, ArrowLeft, Network as IconApartment, PanelsTopLeft as IconAppCenter, FileText as IconArticle,
   ChartNoAxesColumn as IconBarChartVStroked, Bell as IconBellStroked, BookOpen as IconBookOpenStroked,
   Book as IconBookStroked, Box as IconBox, Link as IconChainStroked, ListChecks as IconChecklistStroked,
   Component as IconComponentStroked, Workflow as IconFlowChartStroked, LayoutGrid as IconGridStroked, List as IconList,
-  Layers as IconLayers, ChevronsLeft as IconDoubleChevronLeft, ChevronsRight as IconDoubleChevronRight, ChevronRight,
+  Layers as IconLayers, ChevronRight,
   Menu as IconMenu, CirclePlay as IconPlayCircle, Tag as IconPriceTag, HeartPulse as IconPulse,
   Server as IconServerStroked, Settings as IconSetting, Shield as IconShield, Users as IconUserGroup,
   UserCog as IconUserSetting, UserRound as IconUserStroked,
@@ -16,11 +16,12 @@ import { XaBanner as Banner, XaButton as Button, XaModal as Modal, XaSelect as S
 import { XaToastRegion } from './admin-v2/xa24/HaloFeedback.jsx';
 import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, isInfrastructurePage, pageFromHash, channelManagementListRoute } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
+import AdminNavigationIcon from './admin-v2/AdminNavigationIcon.jsx';
 import { modelMaterial } from './admin-v2/model-library';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from 'react-dom';
-import "./admin-v2/admin-shell.css";
 import './admin-v2/xa24/xa24-overrides.css';
+import "./admin-v2/admin-shell.css";
 import { managedIndividualAccounts } from "./admin-v2/individual-users";
 import { managedEnterpriseTenants } from "./admin-v2/enterprise";
 import { LICENSE_NAMES, LICENSE_UNAVAILABLE } from './deployment-license.mjs';
@@ -267,6 +268,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     personalTenant?.name, detailTenant?.name, detailModel?.name, detailModel?.serviceName, projectName,
     state.deployments.find(item => item.id === detailParams.get('deployment'))?.name]);
   const breadcrumbLabel = label => english && !resourceNames.has(label) ? channelEnglish(label) : label;
+  const backBreadcrumb = breadcrumbs.findLast(({ href }) => href);
   const detailView = active === 'model-templates'
     ? ['template', 'templateImport'].includes(detailParams.get('view'))
     : ['customer-analysis-detail', 'customer-usage-detail', 'organization-members'].includes(active)
@@ -322,16 +324,14 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       });
       if (!items.length) return null;
       const label = english ? channelEnglish(group.title) : group.title;
-      const expanded = sidebarGroups[group.id] ?? (activeGroup === group.id || group.id === 'models' || group.id === 'commerce');
+      const expanded = sidebarGroups[group.id] ?? true;
       const grouped = !collapsed && !group.direct;
-      const GroupIcon = NAVIGATION_ICONS[items[0].id];
       const sectionId = 'admin-sidebar-group-' + group.id;
       return <section key={group.id} aria-label={label}>
-        {grouped && <Button className="v2-sidebar-item v2-sidebar-group" theme="borderless" block
-          icon={<GroupIcon size={16} aria-hidden="true"/>} aria-expanded={expanded} aria-controls={sectionId}
+        {grouped && <button type="button" className="v2-sidebar-group" aria-expanded={expanded} aria-controls={sectionId}
           onClick={() => setSidebarGroups(current => ({ ...current, [group.id]: !expanded }))}>
           <span>{label}{locked && '（未授权）'}</span><ChevronRight size={13} className="v2-sidebar-chevron" aria-hidden="true"/>
-        </Button>}
+        </button>}
         <div className="v2-sidebar-children" id={grouped ? sectionId : undefined} hidden={grouped && !expanded}>
           {items.map(item => {
             const Icon = NAVIGATION_ICONS[item.id];
@@ -339,16 +339,14 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             const selected = activeGroup === group.id && activeArea === item.id;
             const text = english ? channelEnglish(item.label) : item.label;
             const collapsedLabel = text + (locked ? '（未授权）' : '');
-            return <Button key={target} className={group.direct ? 'v2-sidebar-item' : 'v2-sidebar-item v2-sidebar-item-child'}
-              disabled={locked} block icon={grouped ? undefined : <Icon size={16} aria-hidden="true"/>}
-              type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
+            return <button type="button" key={target} className="v2-sidebar-item" disabled={locked}
               aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} title={collapsed ? collapsedLabel : undefined} onClick={() => {
                 if (previewingMenu && !canAccessPage(state.currentRole, target, license)) {
                   setNotice({ type: 'info', text: english ? 'Preview only. This page requires commercial authorization.' : '仅供预览，该入口需要商业运营授权。' });
                   return;
                 }
                 navigate(target);
-              }}>{collapsed ? null : text}</Button>;
+              }}><AdminNavigationIcon name={item.id} fallback={Icon}/>{!collapsed && <span>{text}</span>}</button>;
           })}
         </div>
       </section>;
@@ -358,11 +356,10 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     <div className="v2-sidebar-workspaces" role="group" aria-label={english ? 'Workbench mode' : '工作台模式'}>
       {allowedWorkspaces.filter(id => !interactiveDemo || id === currentWorkspace).map(id => {
         const label = english ? channelEnglish(WORKSPACES[id]) : WORKSPACES[id];
-        const Icon = id === 'operations' ? IconBarChartVStroked : IconSetting;
-        return <Button key={id} className="v2-sidebar-workspace" theme="borderless" size="small" block
+        return <button type="button" key={id} className="v2-sidebar-workspace"
           aria-pressed={id === currentWorkspace} aria-label={collapsed ? label : undefined}
-          title={collapsed ? label : undefined} icon={collapsed ? <Icon size={16} aria-hidden="true"/> : undefined}
-          onClick={() => switchWorkspace(id)}>{collapsed ? null : label}</Button>;
+          title={collapsed ? label : undefined}
+          onClick={() => switchWorkspace(id)}>{collapsed ? <AdminNavigationIcon name={id}/> : label}</button>;
       })}
     </div>
     {renderMenu(collapsed)}
@@ -370,7 +367,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   useEffect(() => { const media = matchMedia('(min-width: 901px)'); const close = () => { if (media.matches) setNavOpen(false); }; media.addEventListener('change', close); return () => media.removeEventListener('change', close); }, []);
   const alertCount = state.alerts.filter(item => !["已恢复", "已转事件"].includes(item.status)).length;
   const sidebarToggleLabel = sidebarCollapsed ? '展开侧边栏' : '收起侧边栏';
-  const renderLanguage = collapsed => <Select className={collapsed ? 'xa24-language-collapsed' : 'xa24-language'}
+  const renderLanguage = () => <Select className="v2-sidebar-language" size="small"
     placement="top-start" aria-label={english ? 'Language: English' : '语言：简体中文'}
     value={english ? 'en' : 'zh'} onChange={locale => changeLanguage(locale === 'en')}
     optionList={[{ value: 'zh', label: '简体中文' }, { value: 'en', label: 'English' }]}/>;
@@ -393,17 +390,21 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     {!navOpen && <aside className="v2-sidebar-desktop xa24-sidebar" data-collapsed={sidebarCollapsed}>
       <div id="admin-desktop-navigation" className="v2-sidebar">{renderNavigation(sidebarCollapsed)}</div>
       <div className="v2-sidebar-footer">
-        {renderLanguage(sidebarCollapsed)}
-        <Button className="v2-sidebar-toggle" type="tertiary" theme="borderless"
-          icon={sidebarCollapsed ? <IconDoubleChevronRight size={16} aria-hidden="true"/> : <IconDoubleChevronLeft size={16} aria-hidden="true"/>}
+        {!sidebarCollapsed && renderLanguage()}
+        <button type="button" className="v2-sidebar-toggle"
           title={sidebarToggleLabel}
           aria-label={sidebarToggleLabel} aria-controls="admin-desktop-navigation" aria-expanded={!sidebarCollapsed}
-          onClick={() => setSidebarCollapsed(collapsed => !collapsed)}/>
+          onClick={() => setSidebarCollapsed(collapsed => !collapsed)}>
+          <AdminNavigationIcon name={sidebarCollapsed ? 'expand' : 'collapse'}/>
+        </button>
+        {sidebarCollapsed && renderLanguage()}
       </div>
     </aside>}
     <div className="v2-content xa24-main" data-admin-layout={detailView ? 'detail' : 'entry'}>
       {detailView && <header className="admin-context-bar">
         <div className="admin-breadcrumb">
+          {backBreadcrumb && <a className="admin-breadcrumb-back" href={backBreadcrumb.href}
+            aria-label={english ? 'Back' : '返回'}><ArrowLeft size={16} aria-hidden="true"/></a>}
           <nav aria-label="面包屑"><ol className="xa24-breadcrumbs">{breadcrumbs.map(({ label, href }, index) => (
             <li key={index}>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{breadcrumbLabel(label)}</a> : <span title={breadcrumbLabel(label)} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{breadcrumbLabel(label)}</span>}</li>
           ))}</ol></nav>
@@ -477,7 +478,7 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
       setLeave(null);
       leave();
     } })}
-    <Modal title="后台导航" visible={navOpen} footer={navOpen ? <div className="v2-sidebar-footer">{renderLanguage(false)}</div> : null} width="min(320px, calc(100vw - 32px))" closeOnEsc onCancel={() => setNavOpen(false)} bodyStyle={{ maxHeight: '65dvh', overflow: 'auto' }}>
+    <Modal title="后台导航" visible={navOpen} footer={navOpen ? <div className="v2-sidebar-footer">{renderLanguage()}</div> : null} width="min(320px, calc(100vw - 32px))" closeOnEsc onCancel={() => setNavOpen(false)} bodyStyle={{ maxHeight: '65dvh', overflow: 'auto' }}>
       {navOpen && <div className="v2-sidebar">{renderNavigation()}</div>}
     </Modal>
   </div></AdminUIContext.Provider>;

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Activity, ChartNoAxesCombined, ChartNoAxesColumn, CircleDot, Clock, Layers } from 'lucide-react';
 import { IconMaximize } from './xa24/HaloIcons.jsx';
 import { Button } from './xa24/HaloUI.jsx';
 import { LegendScrollComponent } from 'echarts/components';
@@ -10,6 +11,11 @@ import { formatMetric } from './model-performance-charts';
 use(LegendScrollComponent);
 
 const summaryLabels = ['平均', '最高', '最低'];
+const chartIcons = {
+  calls: ChartNoAxesCombined, tokenVolume: Layers, rpm: Activity, tpm: Layers,
+  outcomes: CircleDot, tokenSplit: CircleDot, histogram: ChartNoAxesColumn,
+  ttft: Clock, tpot: Clock, e2e: Clock, cacheHit: ChartNoAxesCombined, otps: Activity, timeout: Clock,
+};
 
 export default function ModelPerformanceChart({ chart, children }) {
   const [expanded, setExpanded] = useState(false);
@@ -20,11 +26,12 @@ export default function ModelPerformanceChart({ chart, children }) {
     legend: { ...chart.options.legend, show: false },
   } : chart.options, [chart.options, histogram]);
   const title = `${chart.title}（${chart.unit}）`;
+  const ChartIcon = chartIcons[chart.key];
   const close = () => setExpanded(false);
 
   return <section className={`performance-chart-card${histogram ? ' chart-wide' : ''}`}>
     <div className="performance-chart-heading">
-      <h3>{chart.title} <span className="chart-unit">（{chart.unit}）</span></h3>
+      <h3>{ChartIcon && <ChartIcon size={16} aria-hidden="true"/>}{chart.title} <span className="chart-unit">（{chart.unit}）</span></h3>
       <div className="performance-chart-actions">
         {children}
         {chart.hasData && <Button className="performance-expand-button" size="small" theme="borderless" type="tertiary"

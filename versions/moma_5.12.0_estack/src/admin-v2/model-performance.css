@@ -16,7 +16,7 @@
   --performance-hover: var(--xa24-secondary);
 }
 
-.model-performance {
+.xa24-admin .model-performance {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
@@ -65,10 +65,26 @@
   min-width: 0;
 }
 
+.model-performance .performance-range-picker .xa24-control { width: 100%; }
 .model-performance .performance-range-picker .haloe-btn {
+  position: relative;
+  width: 100%;
+  padding-inline: 7px 28px;
+  border: 1px solid var(--performance-border);
+  background: var(--performance-card);
   white-space: normal;
   text-align: start;
 }
+.model-performance .performance-range-picker .xa24-button-content {
+  display: inline;
+}
+.model-performance .performance-range-picker .xa24-button-content > svg {
+  position: absolute;
+  inset-inline-end: 8px;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+}
+.model-performance .performance-range-picker .haloe-btn:hover { border-color: var(--performance-accent); }
 
 .model-performance .filter-actions {
   display: flex;
@@ -95,8 +111,9 @@
 .model-performance .overview-heading h2 {
   margin: 0;
   color: var(--performance-title);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 24px;
 }
 
 .model-performance .performance-mode {
@@ -110,6 +127,8 @@
   color: var(--performance-muted);
   font-size: 12px;
 }
+.model-performance .performance-mode .xa24-control { display: inline-flex; }
+.model-performance .performance-mode .haloe-btn { height: 24px; min-height: 24px; }
 
 .model-performance .performance-metrics {
   display: grid;
@@ -138,9 +157,9 @@
 
 .model-performance .metric-value strong {
   color: var(--performance-text);
-  font-size: 21px;
+  font-size: 24px;
   font-weight: 600;
-  line-height: 29px;
+  line-height: 32px;
 }
 
 .model-performance .metric-caption {
@@ -197,6 +216,12 @@
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
+}
+.model-performance .performance-chart-heading h3 > svg {
+  display: inline-block;
+  margin-inline-end: 8px;
+  color: var(--xa24-icon-muted);
+  vertical-align: -3px;
 }
 
 .model-performance .chart-unit {

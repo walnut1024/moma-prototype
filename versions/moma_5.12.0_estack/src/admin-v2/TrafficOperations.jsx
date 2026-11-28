@@ -2,6 +2,7 @@ import { useChannelText } from './channel-language';
 import TableFieldHelp from '../components/TableFieldHelp';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
+import trafficArtwork from './xa27-artwork/xaTraffic.png';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Banner, Button, Card, Form, Input, Select, Space, Tabs, Toast, Typography } from './xa24/HaloUI.jsx';
 import { IconPlus } from './xa24/HaloIcons.jsx';
@@ -450,8 +451,8 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ? '编辑模型限流 · ' + modelById.get(draft.id)?.name : '编辑账号限流 · ' + account?.name;
 
   return <section className="traffic-page admin-page-stack">
-    <AdminPageHeading title={translateLabel("限流配置")} className="xa24-entry-header"
-      description={translateLabel('配置账号和模型的调用速率及 Token 额度', 'Configure account and model request rates and token limits')}/>
+    <AdminPageHeading title={translateLabel("限流配置")} className="xa24-entry-header" artwork={trafficArtwork}
+      description={translateLabel('配置账号和模型的调用速率及 Token 额度。', 'Set request rate and token limits for accounts and models.')}/>
     <Card padding={16} className="traffic-list xa24-page-card">
       <Tabs type="line" activeKey={tab} onChange={value => {
         if (value !== tab) discard(() => { finish(false); clearSelection(); setTab(value); });

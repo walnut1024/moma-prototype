@@ -1,9 +1,9 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
-import { Box, CalendarDays, ChartNoAxesColumnIncreasing, CircleDollarSign, TrendingUp, UserCheck, UserRound, UsersRound } from 'lucide-react';
 import { IconActivity, IconArrowLeft, IconChevronRight, IconLayers, IconTick } from './xa24/HaloIcons.jsx';
 import Table from './xa24/HaloTable.jsx';
 import { XaButton as Button, XaCard as Card, XaHelp as AnalysisHelp, XaModal as Modal,
   XaSelect as Select, XaSpace as Space, XaTabs as Tabs, XaTypography as Typography } from './xa24/HaloComponents.jsx';
+import { XaRadioGroup as RadioGroup } from './xa24/HaloInputs.jsx';
 import { dayOf } from './analytics';
 import { compactCount, overviewChange, overviewCustomers, overviewDateTime, overviewMetrics, overviewRange, overviewRanks, overviewSummary, overviewTimeline } from './overview';
 import './overview.css';
@@ -13,15 +13,33 @@ const countFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
 const number = value => value == null ? '—' : countFormat.format(value);
 const percent = (value, total) => value != null && total > 0 ? number(value / total * 100) + '%' : '—';
 const overviewIllustration = import.meta.env.BASE_URL + 'assets/xa-overview.png';
-const overviewPeriods = [['today', '今日'], ['yesterday', '昨日'], ['7d', '近 7 日'], ['30d', '近 30 日']];
+const overviewPeriods = [
+  { value: 'today', label: '今日' }, { value: 'yesterday', label: '昨日' },
+  { value: '7d', label: '近 7 日' }, { value: '30d', label: '近 30 日' },
+];
 const windows = ['近一周工作日日均', '近一月工作日日均'];
 const metricIcons = { Token: IconLayers, 次: IconActivity, '%': IconTick };
+const overviewIcons = {
+  registered: <><circle cx="10" cy="6" r="3"/><path d="M3 18v-2q0-5 7-5t7 5v2"/></>,
+  certified: <><circle cx="8" cy="5" r="3"/><path d="M1 17v-2q0-5 7-5 2 0 3 .6 M12 14l2 2 4-5"/></>,
+  listed: <path d="m2 5 8-4 8 4v9l-8 4-8-4Z M2 5l8 4 8-4 M10 9v9"/>,
+  daily: <path d="M2 18h16 M4 14V9 M10 14V3 M16 14V6"/>,
+  peak: <path d="M2 18h16 M4 14v-3 M10 14V5 M16 14V9 M3 7l5-5 4 3 5-3"/>,
+  monthly: <><rect x="2" y="4" width="16" height="14" rx="2"/><path d="M6 2v4 M14 2v4 M2 9h16 M6 12h3 M6 15h6"/></>,
+  spend: <><circle cx="10" cy="10" r="8"/><path d="m7 6 3 4 3-4 M6 10h8 M6 13h8 M10 10v6"/></>,
+  mau: <><circle cx="8" cy="5" r="3"/><path d="M1 17v-2q0-5 7-5 2 0 3 1 M12 14h2l1-3 2 6 1-3h1"/></>,
+};
+const rankMedals = [
+  <><path d="m2 6 4 3 4-6 4 6 4-3-2 11H4Z"/><path d="M5 18h10"/></>,
+  <><path d="m6 14-2 5 5-2 M14 14l2 5-5-2"/><circle cx="10" cy="9" r="7"/></>,
+  <path d="M3 2h14v8c0 4-3 6-7 9-4-3-7-5-7-9Z"/>,
+];
 const loadCharts = () => import('../components/AnalyticsCharts');
 const TrendChart = lazy(() => loadCharts().then(({ TimeSeriesChart }) => ({ default: TimeSeriesChart })));
 const ActivityChart = lazy(() => loadCharts().then(({ DonutChart }) => ({ default: DonutChart })));
 
 function OverviewChart({ component: Chart, height, ...props }) {
-  return <Suspense fallback={<div aria-hidden="true" style={{ height }}/> }>
+  return <Suspense fallback={<div aria-hidden="true" style={{ height: props.overview ? height + 32 : height }}/> }>
     <Chart height={height} {...props}/>
   </Suspense>;
 }
@@ -39,20 +57,20 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
     ? summary.spend.map(({ value, currency }) => new Intl.NumberFormat('zh-CN', { style: 'currency', currency }).format(value)).join(' · ')
     : '—';
   const primary = [
-    { label: '注册用户数', value: number(summary.registered), unit: '人', Icon: UserRound },
-    { label: '认证用户数', value: number(summary.certified), unit: '人', Icon: UserCheck,
+    { label: '注册用户数', value: number(summary.registered), unit: '人', icon: overviewIcons.registered },
+    { label: '认证用户数', value: number(summary.certified), unit: '人', icon: overviewIcons.certified,
       help: '仅统计已有实人认证通过记录的注册用户。' },
-    { label: '上架模型数量', value: number(summary.listed), unit: '个', Icon: Box,
+    { label: '上架模型数量', value: number(summary.listed), unit: '个', icon: overviewIcons.listed,
       badge: summary.firstListings > 0 ? '新增 ' + number(summary.firstListings) : undefined,
       badgeTitle: '本月首次上架模型数' },
-    { label: '单日 Token 消耗量', value: token(summary.daily.total), unit: 'Token', Icon: ChartNoAxesColumnIncreasing },
+    { label: '单日 Token 消耗量', value: token(summary.daily.total), unit: 'Token', icon: overviewIcons.daily },
   ];
   const secondary = [
-    { label: '单日最大小时峰值消耗 Token', value: token(summary.peak), unit: 'Token', badge: '峰值', Icon: TrendingUp },
-    { label: '本月累计消耗量', value: token(summary.monthTokens.total), unit: 'Token', Icon: CalendarDays },
-    { label: '本月消费金额', value: spend, Icon: CircleDollarSign, badge: summary.spend.length ? '消费' : undefined,
+    { label: '单日最大小时峰值消耗 Token', value: token(summary.peak), unit: 'Token', badge: '峰值', icon: overviewIcons.peak },
+    { label: '本月累计消耗量', value: token(summary.monthTokens.total), unit: 'Token', icon: overviewIcons.monthly },
+    { label: '本月消费金额', value: spend, icon: overviewIcons.spend, badge: summary.spend.length ? '消费' : undefined,
       help: '仅汇总本月调用记录中已确认的客户扣费，各币种分别展示。' },
-    { label: '月活跃用户数', value: number(summary.mau), unit: '人', Icon: UsersRound,
+    { label: '月活跃用户数', value: number(summary.mau), unit: '人', icon: overviewIcons.mau,
       help: '本月发生成功登录的去重用户数。' },
   ];
   const historyActivity = { start: summary.start, end: summary.end, rows: summary.rows, totals: summary.totals };
@@ -70,12 +88,9 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
     <div className="ov-summary">
       <Card className="ov-panel ov-time xa24-page-card">
         <div className="ov-time-controls">
-          <Text size="small">时间</Text>
-          <div className="ov-periods" role="group" aria-label="时间">
-            {overviewPeriods.map(([value, label]) => <Button key={value} aria-pressed={period === value}
-              type={period === value ? 'primary' : 'tertiary'} theme={period === value ? 'solid' : 'outline'}
-              onClick={() => setPeriod(value)}>{label}</Button>)}
-          </div>
+          <Text className="ov-time-label">时间</Text>
+          <RadioGroup className="ov-periods" aria-label="时间" type="button" options={overviewPeriods} value={period}
+            onChange={event => setPeriod(event.target.value)}/>
           <Text className="ov-range" type="secondary" size="small" aria-live="polite">
             {range.start} 00:00 — {overviewDateTime(Math.max(summary.start, summary.end - 1))}
           </Text>
@@ -85,12 +100,14 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
       <OverviewMetrics metrics={secondary} label="经营指标"/>
       <section className="ov-summary-pair" aria-label="调用趋势">
         <OverviewPlot title="Token 用量趋势" note={interval}>
-          <OverviewChart component={TrendChart} label="Token 用量趋势" labels={labels} unit="Token" type="area" height={260}
-            compact showData={false} series={[{ label: 'Token 用量', color: '#2468f2', values: summary.trend.map(item => item.tokens) }]}/>
+          <OverviewChart component={TrendChart} label="Token 用量趋势" labels={labels} unit="Token" type="area" height={240}
+            compact overview tickFormatter={compactCount} showData={false}
+            series={[{ label: 'Token 用量', color: '#1a6aff', values: summary.trend.map(item => item.tokens) }]}/>
         </OverviewPlot>
         <OverviewPlot title="模型请求趋势" note={interval}>
-          <OverviewChart component={TrendChart} label="模型请求趋势" labels={labels} unit="次" type="area" height={260}
-            compact showData={false} series={[{ label: '模型请求次数', color: '#18a69a', values: summary.trend.map(item => item.calls) }]}/>
+          <OverviewChart component={TrendChart} label="模型请求趋势" labels={labels} unit="次" type="area" height={240}
+            compact overview tickFormatter={compactCount} showData={false}
+            series={[{ label: '模型请求次数', color: '#0fc6c2', values: summary.trend.map(item => item.calls) }]}/>
         </OverviewPlot>
       </section>
       <section className="ov-summary-pair" aria-label="用量排行">
@@ -117,8 +134,12 @@ export default function OperationsOverview({ state, workbenchName, shortcuts, on
 function OverviewMetrics({ metrics, label }) {
   return <Card className="ov-panel ov-kpi-panel xa24-page-card">
     <dl className="ov-kpis ov-summary-kpis" aria-label={label}>
-      {metrics.map(({ label: title, value, unit, Icon, badge, badgeTitle, help }) => <div key={title} className="ov-kpi">
-        <dt><Icon size={15} aria-hidden="true"/><span>{title}</span>{help && <AnalysisHelp label={title}>{help}</AnalysisHelp>}</dt>
+      {metrics.map(({ label: title, value, unit, icon, badge, badgeTitle, help }) => <div key={title} className="ov-kpi">
+        <dt>
+          <svg className="ov-kpi-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icon}</svg>
+          <span>{title}</span>{help && <AnalysisHelp label={title}>{help}</AnalysisHelp>}
+        </dt>
         <dd className="ov-kpi-value xa24-metric-value">
           <strong>{value}</strong>{unit && value !== '—' && <span>{unit}</span>}
           {badge && <small className="ov-kpi-badge" data-peak={badge === '峰值'} title={badgeTitle}>{badge}</small>}
@@ -134,28 +155,33 @@ function OverviewTop({ kind, rows, total, onOpen }) {
   const title = label + '用量 Top 10';
   const top = rows.slice(0, 10);
   const columns = [
-    { title: '排名', key: 'rank', width: 66, render: (_, __, index) =>
-      <span className="ov-rank" data-medal={index < 3 ? index + 1 : undefined}>{index + 1}</span> },
-    { title: label, dataIndex: 'name', width: 155, render: (name, row) =>
+    { title: '排名', key: 'rank', width: 70, align: 'center', render: (_, __, index) =>
+      <span className="ov-rank" data-medal={index < 3 ? index + 1 : undefined}>
+        {rankMedals[index] && <svg viewBox="0 0 20 20" aria-hidden="true">{rankMedals[index]}</svg>}
+        <span>{index + 1}</span>
+      </span> },
+    { title: label, dataIndex: 'name', width: isCustomer ? 120 : 140, render: (name, row) =>
       <Button size="small" theme="borderless" className="ov-rank-name" onClick={() => onOpen(row)}>{name}</Button> },
-    { title: 'Token 用量', dataIndex: 'total', align: 'right', width: 95,
+    { title: 'Token 用量', dataIndex: 'total', width: 120,
       render: (value, row) => <span title={row.pending ? number(row.pending) + ' 次计量待确认' : undefined}>
         {value == null ? '—' : compactCount(value)}
       </span> },
     ...(isCustomer ? [
-      { title: '用量占比', key: 'share', align: 'right', width: 75, render: (_, row) => percent(row.total, total) },
-      { title: '周期变化', dataIndex: 'change', align: 'right', width: 84, render: value => <Change value={value}/> },
-    ] : [{ title: '模型请求次数', dataIndex: 'calls', align: 'right', width: 108, render: number }]),
+      { title: '用量占比', key: 'share', width: 90, render: (_, row) => percent(row.total, total) },
+      { title: '周期变化', dataIndex: 'change', width: 100, render: value => <Change value={value}/> },
+    ] : [{ title: '模型请求次数', dataIndex: 'calls', width: 120, render: number }]),
   ];
-  return <Card className="ov-panel ov-top xa24-page-card">
-    <div className="ov-plot-heading">
-      <Title heading={6} component="h2" className="xa24-card-title ov-chart-title">{title}</Title>
-      <Text type="secondary" size="small">{isCustomer
-        ? '前 ' + top.length + ' 名客户合计占平台用量 ' + percent(top.reduce((sum, row) => sum + (row.total ?? 0), 0), total)
-        : '按对外模型汇总 · 多个服务商合并统计'}</Text>
+  return <Card className="ov-panel ov-top xa24-page-card" padding={0}>
+    <div className="ov-top-content">
+      <div className="ov-plot-heading">
+        <Title heading={6} component="h2" className="xa24-card-title ov-chart-title">{title}</Title>
+        <Text type="secondary" size="small">{isCustomer
+          ? '前 ' + top.length + ' 名客户合计占平台用量 ' + percent(top.reduce((sum, row) => sum + (row.total ?? 0), 0), total)
+          : '按对外模型汇总 · 多个服务商合并统计'}</Text>
+      </div>
+      <Table aria-label={title} columns={columns} dataSource={top} scroll={{ x: isCustomer ? 500 : 450 }} empty="本期暂无排行数据"/>
+      {rows.length > 0 && <Button className="ov-top-more" size="small" theme="borderless" onClick={() => onOpen(null)}>查看全部</Button>}
     </div>
-    <Table aria-label={title} columns={columns} dataSource={top} scroll={{ x: isCustomer ? 475 : 360 }} empty="本期暂无排行数据"/>
-    {rows.length > 0 && <Button className="ov-top-more" size="small" theme="borderless" onClick={() => onOpen(null)}>查看全部</Button>}
   </Card>;
 }
 

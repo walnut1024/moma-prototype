@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { List, KeyRound, Info, Plus, Search, Coins } from 'lucide-react';
+import { List, KeyRound, Info, Plus, Coins } from 'lucide-react';
 import {
   XaButton as Button, XaCard as Card, XaCopyId as CopyId, XaEmpty as Empty, XaHelp as Help, XaInput,
   XaPagination as AdminPagination, XaSpace as Space, XaTabs as Tabs, XaTag as Tag, XaTypography as Typography,
@@ -19,10 +19,10 @@ import { connectionKeys } from './connection-state';
 import { CHANNEL_PROCUREMENT_BATCH_LIMIT } from './channel-change-management';
 import { modelTypeLabel } from '../model-types.mjs';
 import { operationsReturn } from './model-pricing-workspace';
+import connectionsArtwork from './xa27-artwork/xaConnections.png';
 
 function SearchBox({ placeholder, ...props }) {
-  return <XaInput {...props} className="xa24-channel-search" aria-label={placeholder} placeholder={placeholder}
-    prefix={<Search size={16} aria-hidden="true"/>}/>;
+  return <XaInput {...props} className="xa24-channel-search" aria-label={placeholder} placeholder={placeholder} icon="search"/>;
 }
 
 function DetailTabLabel({ icon: Icon, children }) {
@@ -263,8 +263,9 @@ export default function ChannelManagementView({ state, connections, ops, open, f
           <h1 id="xa24-connection-list-title">{t('模型接入')}</h1>
           <Help label={t('连接定义')}>{t('模型连接是平台访问上游模型服务的一套配置，由')}<strong>{t('服务商、服务地址、接口格式、接口端点和上游 API 密钥')}</strong>{t('共同决定。一个连接只对应一种接口格式和一个接口端点，可接入多个上游模型；任一配置不同时，需创建独立的连接。')}</Help>
         </Space>
-        <p>{t('管理上游连接、模型列表和连接健康', 'Manage upstream connections, model lists and connection health')}</p>
+        <p>{t('管理上游连接、模型列表和连接健康。', 'Manage upstream connections, model lists, and connection health.')}</p>
       </div>
+      <img className="xa24-entry-art" src={connectionsArtwork} width="80" height="80" alt="" draggable={false}/>
     </section>
     <Card padding={16} className="channel-management-card channel-management-list-card xa24-page-card">
       {workspaceTabs}

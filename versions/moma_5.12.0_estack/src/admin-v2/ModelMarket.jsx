@@ -3,11 +3,13 @@ import MarketCardDialogs from './MarketCardDialogs';
 import { marketCardIndex, marketCardServices, marketCardStatus, marketCardStatuses } from '../market-cards.mjs';
 import AdminStatus from './AdminStatus';
 import Table, { AdminPagination } from './AdminTable';
+import AdminActionMenu from './AdminActionMenu';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { useMemo, useRef, useState } from 'react';
 import { Button, Card, Empty, Input, InputNumber, RadioGroup, Space, Typography } from './xa24/HaloUI.jsx';
 import { Collapse } from './xa24/HaloUI.jsx';
-import { IconBox, IconChevronRight, IconHandle, IconImageStroked, IconMicrophoneStroked, IconPlus, IconSearch, IconTextStroked, IconVideoStroked } from './xa24/HaloIcons.jsx';
+import { ChevronDown } from 'lucide-react';
+import { IconBox, IconChevronRight, IconHandle, IconImageStroked, IconMicrophoneStroked, IconPlus, IconTextStroked, IconVideoStroked } from './xa24/HaloIcons.jsx';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
 import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -28,14 +30,13 @@ import './model-pricing-workspace.css';
 import './model-market.css';
 
 const filters = [
-  { key: 'type', label: '模型类型', options: [['all', '全部类型'], ...Object.entries(MODEL_CATALOGUE_TYPES)] },
-  { key: 'visibility', label: '可见性', options: [['all', '全部'], ...Object.entries(marketCardStatuses)] },
+  { key: 'visibility', label: '可见性', all: '全部可见性', englishAll: 'All visibility states', options: Object.entries(marketCardStatuses) },
+  { key: 'type', label: '模型类型', all: '全部模型类型', englishAll: 'All model types', options: Object.entries(MODEL_CATALOGUE_TYPES) },
 ];
 const visibilityColors = { preview: 'blue', gray: 'orange', formal: 'green' };
 const marketFilterKeys = ['q', 'type', 'visibility', 'page'];
 const pageSize = 20;
 const cardSupplierLimit = 3;
-const viewOptions = [{ label: '列表', value: 'list' }, { label: '卡片', value: 'cards' }];
 const emptyMessage = '没有符合条件的模型卡片';
 const saleStages = { formal: '在售', gray: '灰度在售', paused: '已停售', withdrawn: '已停售', unlisted: '未开售' };
 const cardCollision = args => args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
@@ -289,32 +290,44 @@ export default function ModelMarket(live) {
       requestAnimationFrame(() => button.focus());
     }
   };
-  const actions = (row, inList = false) => <Space wrap={!inList} spacing={inList ? 4 : 8} className={inList ? 'market-list-actions' : undefined}>
-    <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('edit', row.cardId, event.currentTarget)}>{t('编辑信息')}</Button>
+  const editAction = row => <Button size="small" theme="borderless" disabled={!ops.can || busy}
+    onClick={event => openCard('edit', row.cardId, event.currentTarget)}>{t('编辑信息')}</Button>;
+  const listActions = row => <Space spacing={12} className="market-list-actions">
+    {editAction(row)}
+    <AdminActionMenu label={`${row.name} ${t('更多', 'More')}`} disabled={!ops.can || busy} items={[
+      { key: 'link', name: t('关联模型服务'), onClick: button => openCard('link', row.cardId, button) },
+      { key: 'status', name: t('设置可见性'), onClick: button => openCard('status', row.cardId, button) },
+      { key: 'delete', name: t('删除'), type: 'danger', onClick: button => openCard('delete', row.cardId, button) },
+    ]}><span className="market-more-label">{t('更多', 'More')} <ChevronDown size={14} aria-hidden="true"/></span></AdminActionMenu>
+  </Space>;
+  const actions = row => <Space wrap>
+    {editAction(row)}
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t('关联模型服务')}</Button>
     <Button size="small" theme="borderless" disabled={!ops.can || busy} onClick={event => openCard('status', row.cardId, event.currentTarget)}>{t('设置可见性')}</Button>
     <Button size="small" theme="borderless" type="danger" disabled={!ops.can || busy}
       onClick={event => openCard('delete', row.cardId, event.currentTarget)}>{t('删除')}</Button>
   </Space>;
   return <div className="semi-services admin-page-stack">
-    <ModelModuleHeading module="market" className="market-heading xa24-entry-header">
-      <Space wrap spacing={12} className="market-heading-actions">
-        <Button theme="light" onClick={toggleDemo}>{t(demo ? '退出模拟' : '模拟数据')}</Button>
-        <Button theme="solid" icon={<IconPlus/>} disabled={!ops.can || busy}
-          onClick={event => openCard('create', null, event.currentTarget)}>{t('新建模型卡片')}</Button>
-        <RadioGroup type="button" aria-label={t("模型广场视图")} options={viewOptions.map(option => ({ ...option, label:t(option.label) }))} value={view}
-          onChange={event => go({ view: event.target.value === 'cards' ? 'cards' : null }, { replace: true, preserveScroll: true })}/>
-      </Space>
-    </ModelModuleHeading>
-    {demo && <Notice>模拟数据仅用于当前页面，退出后清除。</Notice>}
+    <ModelModuleHeading module="market" className="market-heading xa24-entry-header"/>
     <Card className="market-workspace-card xa24-page-card">
-      <div className="sp-filters">
-        <Input ref={searchInput} prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
-        {filters.map(({ key, label, options }) => <Field key={key} label={label}>
-          <Choice translateOptions label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
-            onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
-        </Field>)}
-        <Button onClick={() => changeFilters({ q: null, type: null, visibility: null })}>{t('重置筛选')}</Button>
+      {demo && <p className="market-demo-note" role="status">模拟数据仅用于当前页面，退出后清除。</p>}
+      <div className="market-toolbar xa24-toolbar">
+        <Space wrap spacing={4}>
+          <Button theme="solid" icon={<IconPlus/>} disabled={!ops.can || busy}
+            onClick={event => openCard('create', null, event.currentTarget)}>{t('新建模型卡片')}</Button>
+          <Button onClick={toggleDemo}>{t(demo ? '退出模拟' : '模拟数据')}</Button>
+        </Space>
+        <Space wrap spacing={12} className="market-filters">
+          <RadioGroup type="button" className="market-view-switch" aria-label={t("模型广场视图")}
+            options={[{ value: 'list', label: t('列表视图', 'List view') }, { value: 'cards', label: t('卡片视图', 'Card view') }]} value={view}
+            onChange={event => go({ view: event.target.value === 'cards' ? 'cards' : null }, { replace: true, preserveScroll: true })}/>
+          <Input ref={searchInput} className="market-search" icon="search" showClear aria-label={t("搜索模型展示名称、模型服务 ID 或模型 ID")}
+            placeholder={t('搜索模型展示名称、模型服务 ID 或模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
+          {filters.map(({ key, label, all, englishAll, options }) => <Choice key={key} className="market-select" translateOptions showClear
+            label={label} value={params.get(key) || ''} options={[[ '', t(all, englishAll) ], ...options]}
+            onChange={value => changeFilters({ [key]: value || null })}/>)}
+          {(query || type || visibility) && <Button onClick={() => changeFilters({ q: null, type: null, visibility: null })}>{t('重置筛选')}</Button>}
+        </Space>
       </div>
       {!orderEdit && !cardDialog && ops.error && <Notice error>{ops.error}</Notice>}
       {view === 'cards' ? rows.length ? <>
@@ -355,15 +368,26 @@ export default function ModelMarket(live) {
             void saveOrder(drag.id, positions.get(row.id), drag.revision);
           },
         })} columns={[
-        { title: '序号', width: 68, render: (_, row) => orderButton(row) },
-        { title: '模型', width: 250, render: (_, row) => <Typography.Text className="market-list-identity" strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text> },
-        { title: '类型', width: 100, render: (_, row) => t(MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type) },
-        { title: '关联服务', width: 135, render: (_, row) => row.card.linked.length
+        { title: '模型展示名称', width: 228, render: (_, row) => {
+          const { logo, author } = modelProfileDraft(row);
+          return <div className="market-list-model"><MarketLogo key={logo || ''} src={logo}/>
+            <div className="market-list-identity">
+              <Typography.Text strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text>
+              {author && <Typography.Text size="small" type="secondary">{author}</Typography.Text>}
+            </div>
+          </div>;
+        } },
+        { title: '可见性', width: 153, render: (_, row) => {
+          const status = marketCardStatus(row.card);
+          return <span className="market-list-visibility" data-status={status}>{t(marketCardStatuses[status])}</span>;
+        } },
+        { title: '模型类型', width: 145, render: (_, row) => t(MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type) },
+        { title: '序号', width: 109, render: (_, row) => orderButton(row) },
+        { title: '关联模型服务', width: 150, render: (_, row) => row.card.linked.length
           ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t(row.card.linked.length === 1 ? '1 个服务' : '{count} 个服务').replace('{count}', row.card.linked.length)}</Button>
           : t('未关联') },
-        { title: '可见范围', width: 145, render: (_, row) => scopeLabel(row.card, t) },
-        { title: '可见性', width: 110, render: (_, row) => <CardVisibility card={row.card}/> },
-        { title: '操作', width: 320, render: (_, row) => actions(row, true) },
+        { title: '可见范围', width: 173, render: (_, row) => scopeLabel(row.card, t) },
+        { title: '操作', width: 220, render: (_, row) => listActions(row) },
       ]}/>}
     </Card>
     {cardDialog && (cardDialog.kind === 'create' || cardRow) && <MarketCardDialogs

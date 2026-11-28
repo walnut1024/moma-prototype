@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { History, Tag, UserRound } from 'lucide-react';
 import { Button, Select, Space, Tabs, Typography } from './xa24/HaloUI.jsx';
 import AdminStatus from './AdminStatus';
 import Descriptions from './AdminDescriptions';
@@ -110,23 +111,25 @@ function SaleAudience({ state, row, ops, change, busy }) {
 }
 
 export function ModelServiceSaleDetail({ state, row, ops, actions, change, busy, tab }) {
+  const t = useChannelText();
+  const tabLabel = (Icon, label) => <span className="channel-workspace-tab-label"><Icon size={16} aria-hidden="true"/>{t(label)}</span>;
   return <div className="ss-body">
-    <div className="ss-section-bar"><Typography.Title heading={5}>模型售卖</Typography.Title>{actions}</div>
-    <Descriptions data={[
+    <div className="ss-section-bar sp-detail-header"><div className="sp-actions">{actions}</div><h1>{row.modelName}</h1></div>
+    <Descriptions className="sp-detail-facts" style={{gridTemplateColumns:undefined}} data={[
       { key: '模型服务 ID', value: <CopyId value={row.id} label="模型服务 ID"/> },
       { key: '模型 ID', value: <CopyId value={row.callId} label="模型 ID"/> },
       { key: '服务状态', value: <AdminStatus value={serviceStatus(row.service)}/> },
       { key: '售卖状态', value: <Space><AdminStatus value={row.status}/>{!row.price && <AdminStatus value="不可售"/>}</Space> },
       { key: '模型刊例价版本', value: row.price ? `v${row.price.version}` : '待配置' },
-    ]}/>
+    ].map(entry => ({ ...entry, style: { gridTemplateColumns: 'minmax(0, 1fr)' } }))}/>
     <Tabs activeKey={tab} keepDOM={false} onChange={item => ops.go({ tab: item, edit: null }, { preserveScroll: true })}>
-      <Tabs.TabPane itemKey="pricing" tab="模型刊例价配置">
+      <Tabs.TabPane itemKey="pricing" tab={tabLabel(Tag, '模型刊例价配置')}>
         <SaleQuote key={row.id + ':' + ops.params.get('edit')} state={state} row={row} ops={ops} change={change} busy={busy}/>
       </Tabs.TabPane>
-      <Tabs.TabPane itemKey="scope" tab="销售对象">
+      <Tabs.TabPane itemKey="scope" tab={tabLabel(UserRound, '销售对象')}>
         <SaleAudience key={row.id} state={state} row={row} ops={ops} change={change} busy={busy}/>
       </Tabs.TabPane>
-      <Tabs.TabPane itemKey="history" tab="变更记录">
+      <Tabs.TabPane itemKey="history" tab={tabLabel(History, '变更记录')}>
         <div className="ss-tab-content ss-body">
           <Typography.Title heading={5}>模型刊例价版本</Typography.Title>
           <Table size="small" rowKey="id" pagination={false} scroll={{x:760,y:420}} empty="尚无模型刊例价版本。"

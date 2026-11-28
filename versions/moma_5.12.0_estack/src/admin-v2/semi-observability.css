@@ -40,12 +40,11 @@
   color: #20283b;
   gap: var(--xa24-page-gap);
 }
-.admin-v2 .admin-log-policy-entry.haloe-btn { border-color: #bdc8d9; color: #334155; background: white; }
 .admin-call-logs-panel { min-width: 0; padding: 12px 20px 18px; border-radius: var(--xa24-page-radius); background: var(--xa24-surface); }
 .admin-call-logs-panel > .xa24-tabs > .haloe-tabs > .haloe-tabs-content { display: none; }
 .admin-call-logs-panel .haloe-tabs-tab { padding: 8px 16px; }
 .admin-call-logs-panel .haloe-tabs-bar { border-color: #e7e9ef; }
-.admin-log-filters { padding-top: 17px; }
+.admin-log-filters { padding-top: 4px; }
 .admin-log-primary { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px 16px; }
 .admin-log-filter-field { display: grid; flex: 1 1 162px; align-content: start; gap: 6px; min-width: 0; }
 .admin-log-filter-field > span:first-child { color: #1f1f21; font-size: 13px; }
@@ -53,7 +52,6 @@
 .admin-log-period, .admin-log-filter-actions { display: flex; align-items: center; gap: 8px; }
 .admin-log-period > :is(.haloe-select, .xa24-select-host) { flex: 1; min-width: 105px; }
 .admin-log-period > .admin-log-date-range { flex: 2; min-width: min(255px, 100%); }
-.admin-log-refresh.haloe-btn { width: 32px; padding: 0; }
 .admin-log-filter-field :is(.haloe-select-selection, .haloe-input),
 .admin-log-filter-field .admin-observation-supply .haloe-dropdown-rel .haloe-btn {
   border: 1px solid #d8deea; border-radius: 4px; background: white; min-height: 32px; width: 100%; max-width: 100%;
@@ -67,22 +65,25 @@
 .admin-log-active-values { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; font-size: 12px; color: #646673; }
 .admin-log-results-heading,
 .admin-log-results-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.admin-log-results-heading { justify-content: space-between; margin: 20px 0 12px; }
+.admin-log-results-heading { justify-content: space-between; margin: 20px 0; }
 .admin-log-results-title h2 {
-  margin: 0; border-left: 3px solid #1a6aff; padding-left: 9px; font-size: 16px; font-weight: 500; line-height: 18px; color: #1f1f21;
+  margin: 0; border-left: 3px solid #1a6aff; padding-left: 9px; font-size: 16px; font-weight: 600; line-height: 24px; color: #1f1f21;
 }
-.admin-log-results-title span { color: #646673; font-size: 13px; }
+.admin-log-results-title span { color: #646673; font-size: 12px; }
 .admin-log-stacked-cell { min-width: 0; }
 .admin-log-stacked-cell span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.admin-log-stacked-cell span + span { margin-top: 3px; font-size: 12px; color: #646673; }
+.admin-log-stacked-cell span + span { margin-top: 2px; font-size: 12px; line-height: 18px; color: #646673; }
 .admin-log-trend { margin-top: 18px; padding: 16px 16px 8px; background: #f6f7fb; border-radius: 4px; }
 .admin-log-trend-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .admin-log-trend-heading h2 { margin: 0; color: #1f1f21; font-size: 14px; font-weight: 600; }
 .admin-log-trend-heading span, .admin-log-trend p { color: #646673; font-size: 12px; }
 .admin-log-trend p { margin: 6px 0 10px; }
 .admin-v2 .admin-call-logs-panel thead > tr > th {
-  background: #eff1f7; color: #1f1f21; border-color: #edf0f4; font-weight: 500; white-space: nowrap;
+  background: var(--xa24-page-bg); color: #1f1f21; border-color: #edf0f4; font-weight: 500; white-space: nowrap;
 }
+.admin-log-status { display: inline-flex; padding: 1px 8px; border-radius: 2px; background: #e7ebf0; color: #3e3f43; font-size: 12px; line-height: 18px; }
+.admin-log-status[data-tone="success"] { color: #0bb231; background: #e7f6ea; }
+.admin-log-status[data-tone="failed"] { color: #e63a2e; background: #fbeae8; }
 .admin-v2 .admin-call-logs-panel td { border-color: #d8deea; }
 .admin-call-logs-panel thead .haloe-btn { max-width: 100%; padding-inline: 0; font-weight: 500; }
 .admin-call-logs-panel thead .xa24-button-content { gap: 3px; }

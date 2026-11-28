@@ -1,0 +1,13 @@
+.xa24-admin .xa24-entry-heading-content {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.xa24-admin .xa24-entry-art {
+  pointer-events: none;
+}

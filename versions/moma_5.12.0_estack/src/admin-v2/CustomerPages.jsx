@@ -4,6 +4,7 @@ import { Banner, Button, Card, Input, Space, Typography } from './xa24/HaloUI.js
 import { IconSearch } from './xa24/HaloIcons.jsx';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
+import tenantsArtwork from './xa27-artwork/xaTenants.png';
 import { Choice } from './ServiceUI';
 import { enterpriseAdmins } from './enterprise';
 import { EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
@@ -29,7 +30,8 @@ export default function CustomerPage(props) {
   const size = normalizePageSize(params.get('size')), page = Math.max(1, Math.min(Number(params.get('page')) || 1, Math.ceil(rows.length / size) || 1));
   const canWrite = !state.commerceReadOnly && !conflict && !state.storageError && ['平台管理员', '运营人员'].includes(state.currentRole);
   return <div className="admin-page-stack admin-enterprise-page">
-    <AdminPageHeading title={translateLabel("租户管理")}><Space wrap>
+    <AdminPageHeading title={translateLabel("租户管理")} className="xa24-entry-header" artwork={tenantsArtwork}
+      description={translateLabel('查看租户信息和模型服务授权。', 'Review tenant information and model service authorizations.')}><Space wrap>
       {state.spacePolicy?.personalEnabled!==false && <Button disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=personal'; }}>{translateLabel("开通个人租户")}</Button>}
       <Button theme="solid" disabled={!canWrite} onClick={() => { location.hash = '#/admin-2/tenants?create=enterprise'; }}>{translateLabel("开通政企租户")}</Button>
     </Space></AdminPageHeading>

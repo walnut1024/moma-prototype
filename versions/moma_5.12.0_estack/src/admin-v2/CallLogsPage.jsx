@@ -6,10 +6,11 @@ import { projectCallErrors } from '../project-call.mjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Banner, Button, Empty, InputNumber, Space, Switch, Tabs, Tag, Toast, Typography } from './xa24/HaloUI.jsx';
 import { CheckboxGroup } from './xa24/HaloUI.jsx';
-import { IconArrowDown, IconArrowUp, IconSetting, IconSort } from './xa24/HaloIcons.jsx';
+import { FileOutput, ExternalLink, TriangleAlert } from 'lucide-react';
+import { IconArrowDown, IconArrowUp, IconRefresh, IconSetting, IconSort } from './xa24/HaloIcons.jsx';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
-import AdminStatus from './AdminStatus';
+import logsArtwork from './xa27-artwork/modelObservationCallLogs.png';
 import { AdminModal as Modal } from './AdminOverlay';
 import RequestLogDetail from './RequestLogDetail';
 import { readRequestBody } from './call-log-detail.mjs';
@@ -25,8 +26,8 @@ import { applyLogPolicy, createCallLogSimulation, simulateLogRequest } from './c
 
 const { Text } = Typography;
 const unknown = value => value ?? '未采集';
-const statusColumn = value => <AdminStatus value={httpLabel(value)}
-  color={value == null ? 'grey' : value >= 200 && value < 300 ? 'green' : 'red'}/>;
+const statusColumn = value => <span className="admin-log-status"
+  data-tone={value == null ? undefined : value >= 200 && value < 300 ? 'success' : 'failed'}>{httpLabel(value)}</span>;
 const requestWidths = { requestId: 178, sessionId: 164, at: 172, modelName: 216, outcome: 108, status: 132, duration: 140,
   firstPacket: 140, providerName: 156, channelName: 108, provider: 156, channel: 126, total: 108, input: 108, output: 108,
   source: 112, purpose: 112, tenantName: 132, projectName: 138, project: 164, ttft: 148,
@@ -62,9 +63,9 @@ const upstreamColumns = [
   ['端点', 'endpointName'], ['所属租户', 'tenantName'], ['项目', 'projectName'],
 ];
 const logViews = {
-  requests: { label: '客户请求', title: '请求记录', columns: requestColumns },
-  upstream: { label: '上游请求', title: '请求尝试', columns: upstreamColumns },
-  preflight: { label: '前置错误', title: '留存样本', columns: preflightColumns },
+  requests: { label: '客户请求', title: '请求记录', columns: requestColumns, icon: FileOutput },
+  upstream: { label: '上游请求', title: '请求尝试', columns: upstreamColumns, icon: ExternalLink },
+  preflight: { label: '前置错误', title: '留存样本', columns: preflightColumns, icon: TriangleAlert },
 };
 const numericFields = new Set(['total', 'input', 'output', 'firstPacket', 'ttft', 'duration', 'index']);
 const sortFields = new Set(['at', 'status', ...numericFields]);
@@ -213,7 +214,8 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
     }
     if (dataIndex === 'requestId') return { ...column, render: requestIdCell, fixed: 'left' };
     if (dataIndex === 'status') return { ...column, render: statusColumn };
-    if (dataIndex === 'outcome') return { ...column, render: value => <AdminStatus value={outcomes[value]}/> };
+    if (dataIndex === 'outcome') return { ...column, render: value => outcomes[value]
+      ? <span className="admin-log-status" data-tone={value}>{outcomes[value]}</span> : '—' };
     if (numericFields.has(dataIndex)) return { ...column, render: fmt, align: 'right' };
     if (combinedFields[dataIndex]) return { ...column, render: (value, row) => <div className="admin-log-stacked-cell">
       <span title={value}>{unknown(value)}</span>
@@ -245,7 +247,7 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
     } catch { Toast.error('导出失败，请重试'); }
     finally { setExporting(false); }
   };
-  const settings = canViewFullLog && <Button className="admin-log-policy-entry" theme="outline" type="tertiary"
+  const settings = canViewFullLog && <Button className="admin-log-policy-entry" theme="borderless"
     icon={<IconSetting aria-hidden="true"/>} onClick={() => {
       const session = simulation ?? createCallLogSimulation();
       setSettingsSource(simulationPolicy ? { ...session, policy: simulationPolicy } : session);
@@ -253,16 +255,17 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   const trendSeries = trend && preflightTypes.map(([kind, name], index) => ({ label: name, color: trendColors[index],
     values: trend.map(bucket => bucket.rows.filter(row => row.preflightType === kind).length) }));
   return <div className="admin-page-stack admin-call-logs">
-    <AdminPageHeading className="xa24-entry-header" title={translateLabel('调用日志')}
-      description={translateLabel('查询模型调用记录并查看单次请求详情', 'Inspect model calls and individual request details')}>
-      <Space wrap>{simulation && <Tag color="blue">模拟数据</Tag>}{settings}</Space>
+    <AdminPageHeading className="xa24-entry-header" title={translateLabel('调用日志')} artwork={logsArtwork}
+      description={translateLabel('查询模型调用记录并查看单次请求详情。', 'Search model request logs and inspect individual requests.')}>
+      {simulation && <Tag color="blue">模拟数据</Tag>}
     </AdminPageHeading>
     <section className="admin-call-logs-panel" aria-label={translateLabel('调用日志')}>
-      <Tabs activeKey={view} onChange={chooseView} aria-label="调用日志视图">
-        {Object.entries(logViews).map(([id, item]) => <Tabs.TabPane key={id} itemKey={id} tab={item.label}/>)}
+      <Tabs activeKey={view} onChange={chooseView} aria-label="调用日志视图" tabBarExtraContent={settings}>
+        {Object.entries(logViews).map(([id, { label, icon: TabIcon }]) => <Tabs.TabPane key={id} itemKey={id}
+          tab={<span className="xa24-tab-label"><TabIcon size={16} className="xa24-outline-icon" aria-hidden="true"/>{label}</span>}/>)}
       </Tabs>
       <CallLogFilters key={view} view={view} pool={pool} filters={filters} window={window} errors={errors}
-        onChange={change} onReset={reset} onRefresh={refresh} refreshing={refreshing}/>
+        onChange={change} onReset={reset}/>
       {!window && <Banner type="danger" closeIcon={null} description="请选择有效的起止时间。"/>}
       {trend?.length > 0 && <section className="admin-log-trend" aria-label="前置错误趋势">
         <div className="admin-log-trend-heading"><h2>前置错误趋势</h2><span>共 {fmt(trendRows.length)} 次</span></div>
@@ -280,6 +283,7 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
         <div className="admin-log-results-heading">
           <div className="admin-log-results-title"><h2>{title}</h2><span role="status">共 {fmt(rows.length)} 条</span></div>
           <Space wrap>
+            <Button icon={<IconRefresh size="small" aria-hidden="true"/>} loading={refreshing} onClick={refresh}>刷新</Button>
             <Button theme="solid" onClick={exportXlsx} disabled={!rows.length} loading={exporting}>导出筛选结果</Button>
             <Button theme="outline" type="tertiary" onClick={() => setColumnDraft(visibleFields.map(([, field]) => field))}>列设置</Button>
           </Space>

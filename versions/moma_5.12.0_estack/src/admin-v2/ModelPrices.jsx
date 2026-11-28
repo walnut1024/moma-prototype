@@ -21,6 +21,7 @@ import { ModelServiceSaleDetail, ModelServiceSaleStatusDialog, modelServiceSaleA
 import { activeModelServiceSalePrice, modelServiceSaleActive, modelServiceSaleStage } from './model-service-sale.mjs';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { resourceId } from '../resource-id.mjs';
+import artwork from './xa27-artwork/xaModelSales.png';
 import './model-pricing-workspace.css';
 
 const salePath = '/model-service-sales';
@@ -133,13 +134,21 @@ export default function ModelPrices(props) {
     </Space>;
   };
   const merged=render=>(_,row)=>({children:render(row),props:{rowSpan:row.recordSpan}});
+  const detail = params.has('service');
+  const meteringButton = <Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>{translateLabel("计量配置")}</Button>;
+  const detailActions = <>
+    {!back && <Button onClick={() => go({ service: null, tab: null, edit: null }, { preserveScroll: true })}>{translateLabel('返回模型售卖')}</Button>}
+    {back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>{translateLabel("返回来源页面")}</Button>}
+    {meteringButton}
+  </>;
   return <div className="admin-page-stack semi-services">
-    <ModelModuleHeading module="prices" title={service?.name || translateLabel('模型售卖')}><div className="sp-actions">{params.has('service') && !back && <Button
-        onClick={() => go({ service: null, tab: null, edit: null }, { preserveScroll: true })}>{translateLabel('返回模型售卖')}</Button>
-      }{back && <Button onClick={()=>ops.proceed(()=>{location.hash=back;})}>{translateLabel("返回来源页面")}</Button>}<Button onClick={()=>go({returnTo:location.hash,tab:'scenario'},{base:'tariff-dictionary',reset:true})}>{translateLabel("计量配置")}</Button></div></ModelModuleHeading>
+    {(!detail || !service?.independent || service.unavailable) && <ModelModuleHeading module="prices" className={detail ? 'xa24-detail-header' : 'xa24-entry-header'}
+      artwork={detail ? undefined : artwork} title={service?.name || translateLabel('模型售卖')}>
+      {detail && <div className="sp-actions">{detailActions}</div>}
+    </ModelModuleHeading>}
     {saleWorkspace.error && <Notice error>{saleWorkspace.error}<Button theme="borderless" onClick={refreshSales}>载入最新售卖</Button></Notice>}
-    {params.has('service') ? service ? service.unavailable ? <Notice error>暂无法读取该模型服务的原售卖配置。</Notice> : service.independent ? <Card>
-      <ModelServiceSaleDetail state={state} row={service} ops={ops} actions={saleActions(service)} change={changeSale} busy={busy} tab={tab}/>
+    {detail ? service ? service.unavailable ? <Notice error>暂无法读取该模型服务的原售卖配置。</Notice> : service.independent ? <Card padding={20}>
+      <ModelServiceSaleDetail state={state} row={service} ops={ops} actions={<>{detailActions}{saleActions(service)}</>} change={changeSale} busy={busy} tab={tab}/>
     </Card> : <Card>
       <div className="ss-body">
       <div className="ss-section-bar"><Typography.Title heading={5}>{translateLabel("模型售卖")}</Typography.Title>{saleActions(service)}</div>
@@ -152,26 +161,28 @@ export default function ModelPrices(props) {
         <Tabs.TabPane itemKey="history" tab={translateLabel("变更记录")}><div className="ss-tab-content ss-body"><Typography.Title heading={5}>{translateLabel("模型刊例价版本")}</Typography.Title><Table size="small" rowKey="id" dataSource={versions} pagination={false} scroll={{x:760,y:420}} empty="尚无模型刊例价版本。" columns={[{title:'模型刊例价版本 ID',dataIndex:'id',width:280,render:value=><CopyId value={value} label="模型刊例价版本 ID"/>},{title:'版本',dataIndex:'version',width:80},{title:'生效时间',dataIndex:'effectiveAt',width:180,render:displayTime},{title:'计费项与模型刊例价',render:(_,version)=>priceItems(version,model).map((item,index)=><Typography.Paragraph key={index}>{item.name}：{moneyDisplay(item.amount)} {item.currency} / {item.unit}</Typography.Paragraph>)}]}/></div></Tabs.TabPane>
       </Tabs>
       </div>
-    </Card> : saleWorkspace.loading ? <Spin /> : <Notice error>指定售卖不存在或已归档，请返回模型售卖列表。</Notice> : <Card>
-      <PricingFilters records={services} ops={ops} kind="price"/>
-      <Table size="small" rowKey="tableKey" pagination={false} scroll={{x:1600,y:'calc(100vh - 330px)'}} dataSource={pricingTableRows(pageRows,row=>priceItems(row.price,row.model))} empty={saleWorkspace.loading ? '正在加载模型售卖' : '没有符合条件的记录'} columns={[
-        {title:'模型服务名称',width:160,render:merged(row=><Typography.Text link={{ href: detailHref(row) }}>{row.modelName}</Typography.Text>)},
-        {title:'模型服务 ID',width:190,render:merged(row=><CopyId value={row.model_service_id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>)},
-        {title:'模型 ID',width:160,render:merged(row=>row.callId ? <CopyId value={row.callId} label="模型 ID" ellipsis={{showTooltip:true}}/> : '待配置')},
-        {title:'计费项',width:130,render:(_,row)=><div>{translateLabel(row.item?.name) || '—'}{row.item?.condition && <Typography.Paragraph type="tertiary">{row.item.condition}</Typography.Paragraph>}</div>},
-        {title:'模型刊例价',width:110,align:'right',render:(_,row)=>row.item?.amount == null
+    </Card> : saleWorkspace.loading ? <Spin /> : <Notice error>指定售卖不存在或已归档，请返回模型售卖列表。</Notice> : <Card padding={20}>
+      <PricingFilters records={services} ops={ops} kind="price" action={meteringButton}/>
+      <Table className="sp-sales-table" size="small" rowKey="tableKey" pagination={false} scroll={{x:'max(100%, 1140px)',y:'calc(100vh - 330px)'}} dataSource={pricingTableRows(pageRows,row=>priceItems(row.price,row.model))} empty={saleWorkspace.loading ? '正在加载模型售卖' : '没有符合条件的记录'} columns={[
+        {title:'模型服务名称 / 模型服务 ID',width:182,render:merged(row=><div className="sp-model-service">
+          <Typography.Text link={{ href: detailHref(row) }}>{row.modelName}</Typography.Text>
+          <CopyId value={row.model_service_id} label="模型服务 ID" ellipsis={{showTooltip:true}}/>
+        </div>)},
+        {title:'模型 ID',width:116,render:merged(row=>row.callId ? <CopyId value={row.callId} label="模型 ID" ellipsis={{showTooltip:true}}/> : '待配置')},
+        {title:'计费项',width:90,render:(_,row)=><div>{translateLabel(row.item?.name) || '—'}{row.item?.condition && <Typography.Paragraph type="tertiary">{row.item.condition}</Typography.Paragraph>}</div>},
+        {title:'模型刊例价',width:82,align:'right',render:(_,row)=>row.item?.amount == null
           ? translateLabel(!row.price && !row.unavailable ? '待配置' : '—') : moneyDisplay(row.item.amount)},
-        {title:'计费单位',width:140,render:(_,row)=>translateLabel(row.item?.unit) || '—'},
-        {title:'货币',width:90,render:(_,row)=>row.item?.currency || '—'},
-        {title:'模型刊例价版本',width:100,render:merged(row=>row.unavailable ? '—' : row.price ? `v${row.price.version}` : '待配置')},
-        {title:'售卖状态',width:120,render:merged(row=><Space><AdminStatus value={row.status}/>{!row.price && !row.unavailable && <AdminStatus value="不可售"/>}</Space>)},
-        {title:'销售对象',width:140,render:merged(row=>row.unavailable ? '—' : <Button theme="borderless" size="small" onClick={() => configure(row, 'scope')}>{translateLabel(row.independent ? modelServiceSaleAudience(state, row) : salesAudienceLabel(state, offerSalesScope(row.model, offerKey(row))))}</Button>)},
-        {title:'操作',width:230,fixed:'right',render:merged(row=>row.unavailable ? '—' : <Space wrap spacing={4}>
+        {title:'计费单位',width:90,render:(_,row)=>translateLabel(row.item?.unit) || '—'},
+        {title:'货币',width:64,render:(_,row)=>row.item?.currency || '—'},
+        {title:'模型刊例价版本',width:90,render:merged(row=>row.unavailable ? '—' : row.price ? `v${row.price.version}` : '待配置')},
+        {title:'售卖状态',width:108,render:merged(row=><Space wrap><AdminStatus value={row.status} color={row.status === '灰度在售' ? 'blue' : undefined}/>{!row.price && !row.unavailable && <AdminStatus value="不可售"/>}</Space>)},
+        {title:'销售对象',width:108,render:merged(row=>row.unavailable ? '—' : <Button theme="borderless" size="small" onClick={() => configure(row, 'scope')}>{translateLabel(row.independent ? modelServiceSaleAudience(state, row) : salesAudienceLabel(state, offerSalesScope(row.model, offerKey(row))))}</Button>)},
+        {title:'操作',width:216,render:merged(row=>row.unavailable ? '—' : <Space wrap spacing={4}>
           <Button theme="borderless" size="small" onClick={() => configure(row)}>{translateLabel(readOnly ? '查看配置' : row.price ? '维护模型刊例价' : '配置模型刊例价')}</Button>
           {saleActions(row)}
         </Space>)},
       ]}/>
-      <AdminPagination total={rows.length} pageSize={salesPageSize} currentPage={page} hideOnSinglePage
+      <AdminPagination total={rows.length} pageSize={salesPageSize} currentPage={page}
         onPageChange={next => go({ page: next }, { replace: true, preserveScroll: true })}/>
     </Card>}
     {salesDialog && saleRow?.independent && !readOnly && <ModelServiceSaleStatusDialog

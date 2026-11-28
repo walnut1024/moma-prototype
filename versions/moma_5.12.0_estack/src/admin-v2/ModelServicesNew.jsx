@@ -9,6 +9,8 @@ import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { resourceId } from '../resource-id.mjs';
 import { cloudAdminRequest } from './admin-client.mjs';
 import AdminPageHeading from './AdminPageHeading';
+import ModelModuleHeading from './ModelModuleHeading';
+import serviceArtwork from './xa27-artwork/xaModelServices.png';
 import FailoverFields from './FailoverFields';
 import { failoverError, failoverValues, globalPolicyDefaults } from './global-routing-parameters.mjs';
 import AdminStatus from './AdminStatus';
@@ -616,17 +618,17 @@ export default function ModelServicesNew({ state, params, dirtyRef, sourceConfli
     {data.error && <Banner type="danger" closeIcon={null} description={<Space>{data.error}
       <Button onClick={reload}>重新加载</Button></Space>}/>}
     {data.loading ? <Card>正在读取模型服务…</Card> : !serviceId ? <>
-      <AdminPageHeading title={t(pageTitle)}/>
+      <ModelModuleHeading module="service" title={t(pageTitle)} className="xa24-entry-header" artwork={serviceArtwork}/>
       {canEdit && importable.length > 0 && <Banner type="info" closeIcon={null} description={<Space wrap>
         <Text>检测到此浏览器保存的模型服务</Text>
         {importable.map(row => <Button key={row.id} size="small" onClick={() => open('import', row)}>{t("导入")}{row.name}</Button>)}
       </Space>}/>}
       {legacy.error && <Banner type="warning" description={legacy.error} closeIcon={null}/>}
-      <Card>
-        <div className="new-service-toolbar">
-          <Input className="new-service-search" prefix={<IconSearch aria-hidden="true"/>} showClear
-            aria-label={t("搜索模型服务")} placeholder={`搜索服务名称 / 服务 ID / ${MODEL_ID_LABEL}`} value={query} onChange={setQuery}/>
+      <Card padding={20} className="xa24-page-card">
+        <div className="new-service-toolbar xa24-toolbar">
           <Button theme="solid" icon={<IconPlus/>} disabled={!canEdit} onClick={() => open('create', { ...blank, id: resourceId('model-service') })}>{t("新建模型服务")}</Button>
+          <Input className="new-service-search" icon="search" showClear
+            aria-label={t("搜索模型服务")} placeholder={`搜索服务名称 / 服务 ID / ${MODEL_ID_LABEL}`} value={query} onChange={setQuery}/>
         </div>
         <Table columns={columns} dataSource={data.rows.filter(row => searchMatches(query, row.name, row.id, row.callId))}
           rowKey="id" scroll={{ x: columns.reduce((width, column) => width + column.width, 0) }} pagination={pagination} empty={t("暂无匹配的模型服务")}/>

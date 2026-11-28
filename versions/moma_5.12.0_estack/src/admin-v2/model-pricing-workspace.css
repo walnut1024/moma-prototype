@@ -3,6 +3,26 @@
 .sp-filters > :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)) { flex: 1 1 260px; min-width: 180px; }
 .sp-filters > .xa24-form-field { flex: 1 1 150px; min-width: 0; padding: 0; }
 .sp-filters > button { flex: none; }
+.sp-filter-action { margin-inline-end: auto; }
+.sp-filters-with-action > :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)) { flex: 0 1 255px; }
+.sp-filters-with-action > .xa24-form-field { flex: 0 1 168px; }
+.sp-filters-with-action > .xa24-form-field > label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sp-filters-with-action .haloe-input-suffix { display: grid; height: 100%; place-items: center; }
+.sp-model-service { display: grid; gap: 2px; min-inline-size: 0; }
+.sp-model-service > :last-child { color: var(--xa24-muted); font-size: 12px; }
+.xa24-admin .sp-sales-table .haloe-table-cell { word-break: normal; overflow-wrap: anywhere; }
+.sp-detail-header h1 { margin: 0; color: var(--xa24-title); font-size: 16px; line-height: 24px; font-weight: 600; }
+.sp-detail-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sp-detail-facts dt { font-size: 12px; line-height: 18px; }
+@media (max-width: 1100px) { .sp-detail-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 540px) { .sp-detail-facts { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .sp-filters > :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)) { flex-basis: 100%; } }
 
 .ss-change-form { display: grid; gap: 16px; min-width: 0; }

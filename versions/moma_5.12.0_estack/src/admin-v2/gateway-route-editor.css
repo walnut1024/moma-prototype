@@ -93,24 +93,14 @@
 .gateway-route-error { margin: 0; color: #b42318; }
 .gateway-route-editor-actions { display: flex; justify-content: end; gap: 8px; }
 .gateway-route-editor-sheet, .gateway-route-editor-sheet .semi-sidesheet-inner { max-inline-size: 100vw; }
-.gateway-route-editor-sheet :is(.semi-sidesheet-inner, .haloe-drawer) {
+.gateway-route-editor-sheet .semi-sidesheet-inner {
   inset-block-start: 50px;
   block-size: calc(100dvh - 50px);
   max-block-size: calc(100dvh - 50px);
 }
-.gateway-route-editor-sheet :is(.semi-sidesheet-header, .haloe-drawer-header) { padding: 12px 16px; }
-.gateway-route-editor-sheet :is(.semi-sidesheet-body, .haloe-drawer-body) { padding: 16px; }
+.gateway-route-editor-sheet .semi-sidesheet-header { padding: 12px 16px; }
+.gateway-route-editor-sheet .semi-sidesheet-body { padding: 16px; }
 .gateway-route-editor-sheet .semi-sidesheet-footer { padding: 16px 24px; }
-.gateway-route-editor-sheet .haloe-drawer-content,
-.gateway-route-editor-sheet .haloe-drawer-body { display: flex; flex-direction: column; }
-.gateway-route-editor-sheet .haloe-drawer-body { flex: 1; min-block-size: 0; overflow: auto; padding-block-end: 0; }
-.gateway-route-editor-sheet .xa24-drawer-footer {
-  position: sticky;
-  bottom: 0;
-  margin-block-start: auto;
-  padding: 16px 8px 16px 0;
-  background: #fff;
-}
 @media (max-width: 680px) {
   .gateway-route-target-labels { display: none; }
   .gateway-route-target, .gateway-route-degrade, .gateway-route-mapping-form { grid-template-columns: 1fr; }

@@ -7,8 +7,6 @@
   --ov-ink: var(--xa24-title);
   --ov-muted: var(--xa24-muted);
   --ov-border: var(--xa24-divider);
-  max-width: 1772px;
-  margin-inline: auto;
   font-variant-numeric: tabular-nums;
 }
 .ov-page :is(.ov-grid, .ov-section) { display: grid; min-width: 0; gap: var(--xa24-page-gap); }
@@ -20,20 +18,16 @@
 }
 .ov-summary { display: grid; gap: 16px; min-inline-size: 0; container-type: inline-size; }
 .ov-summary-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; min-inline-size: 0; }
-.ov-time-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
-.ov-periods { display: flex; gap: 0; }
-.ov-periods .haloe-btn { border-radius: 0; padding-inline: 14px; white-space: nowrap; }
-.ov-periods > :first-child .haloe-btn { border-start-start-radius: 2px; border-end-start-radius: 2px; }
-.ov-periods > :last-child .haloe-btn { border-start-end-radius: 2px; border-end-end-radius: 2px; }
-.ov-periods > :not(:first-child) .haloe-btn { margin-inline-start: -1px; }
-.ov-periods .haloe-btn[aria-pressed="true"], .ov-periods .haloe-btn:focus-visible { position: relative; z-index: 1; }
-.ov-periods .haloe-btn[aria-pressed="false"] {
-  background: var(--xa24-surface);
-  color: var(--xa24-text);
-  border-color: var(--xa24-divider);
+.ov-time-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.ov-time-controls .ov-time-label { color: #515a6e; font-size: 14px; }
+.ov-page .ov-periods .haloe-radio-wrapper { block-size: 32px; line-height: 30px; }
+.ov-page .ov-periods .haloe-radio-wrapper-checked,
+.ov-page .ov-periods .haloe-radio-wrapper-checked:hover {
+  background: var(--xa24-primary);
+  color: var(--xa24-surface);
+  border-color: var(--xa24-primary);
 }
-.ov-periods .haloe-btn[aria-pressed="false"]:hover { color: var(--xa24-primary); }
-.ov-range { color: var(--ov-muted); }
+.ov-page .ov-time-controls .ov-range { margin-inline-start: 8px; color: #86909c; }
 .ov-details { display: grid; gap: var(--xa24-page-gap); margin-block-start: 12px; }
 .ov-more > .xa24-control .haloe-btn { padding-inline: 0; }
 .ov-hero-meta {
@@ -68,15 +62,24 @@
 .ov-kpis.ov-summary-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .ov-summary-kpis .ov-kpi:nth-child(n) { grid-column: auto; border: 0; }
 .ov-summary-kpis .ov-kpi:not(:last-child) { border-inline-end: 1px solid #f0f0f0; }
-.ov-summary-kpis .ov-kpi dt { align-items: start; }
+.ov-summary-kpis .ov-kpi dt { min-block-size: 18px; color: #7d7e87; }
 .ov-summary-kpis .ov-kpi dt > span:first-of-type { min-inline-size: 0; overflow-wrap: anywhere; }
-.ov-summary-kpis .ov-kpi dt svg { color: #4b79cf; }
-.ov-summary-kpis .ov-kpi dt > svg { margin-block-start: 2px; }
+.ov-summary-kpis .ov-kpi-icon { color: #5c83c5; }
 .ov-summary-kpis .ov-kpi .xa24-help .haloe-btn { min-inline-size: 18px; inline-size: 18px; block-size: 18px; padding: 0; }
-.ov-summary-kpis .ov-kpi-value { margin-block-end: 0; }
-.ov-summary-kpis .ov-kpi-value strong { overflow-wrap: anywhere; }
-.ov-kpi-badge { border-radius: 4px; padding-inline: 6px; background: #e9f1ff; color: #185bda; font-size: 12px; line-height: 20px; }
-.ov-kpi-badge[data-peak="true"] { background: #fbf3e3; color: #885a00; }
+.ov-summary-kpis .ov-kpi-value { margin-block-end: 0; gap: 2px 6px; }
+.ov-summary-kpis .ov-kpi-value strong { color: var(--xa24-text); overflow-wrap: anywhere; }
+.ov-summary-kpis .ov-kpi-value > span { color: #7d7e87; }
+.ov-kpi-badge {
+  margin-inline-start: 4px;
+  padding-inline: 6px;
+  border-radius: 4px;
+  background: #e8f0ff;
+  color: var(--xa24-primary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+}
+.ov-kpi-badge[data-peak="true"] { background: #fdf5e6; color: #a86d00; }
 .ov-kpi-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; margin: 4px 0; color: var(--ov-muted); }
 .ov-kpi-value > span { font-size: 12px; line-height: 18px; font-weight: 400; }
 .ov-kpi-value strong, .ov-mini strong {
@@ -126,21 +129,64 @@
 }
 .ov-plot-heading { display: grid; justify-items: start; gap: 4px; margin-block-end: 12px; }
 .ov-plot-heading > .xa24-help { padding-inline-start: 12px; }
+.ov-summary .ov-plot .ov-plot-heading { margin-block-end: 0; }
+.ov-summary .ov-plot-heading > .xa24-text-secondary { padding-inline-start: 0; color: #7d7e87; }
+.ov-trend-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-block-start: 12px; }
+.ov-trend-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #4e5969;
+  font: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.ov-trend-legend button[aria-pressed="false"] { color: #86909c; }
+.ov-trend-legend button[aria-pressed="false"] i { opacity: .38; }
+.ov-trend-legend button:focus-visible { outline: 2px solid var(--xa24-primary); outline-offset: 3px; }
+.ov-trend-legend i { inline-size: 8px; block-size: 8px; border-radius: 2px; }
+.ov-top-content { padding: 16px 20px; }
+.ov-top-content .ov-plot-heading { gap: 12px; margin-block-end: 8px; }
 .ov-top .ov-rank-name.haloe-btn { padding-inline: 0; max-inline-size: 100%; text-align: start; }
 .ov-top .ov-rank-name .xa24-button-content { white-space: normal; overflow-wrap: anywhere; }
 .ov-top-more.haloe-btn { margin-block-start: 8px; }
 .ov-rank {
+  position: relative;
   display: inline-grid;
   place-items: center;
-  inline-size: 22px;
-  block-size: 22px;
+  min-inline-size: 20px;
+  block-size: 20px;
+  padding-inline: 4px;
   border-radius: 4px;
-  color: #57657c;
-  background: #eff1f5;
+  color: #86909c;
+  background: #f2f3f5;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 20px;
 }
-.ov-rank[data-medal] { border-radius: 50%; color: #825400; background: #fbe9b6; font-weight: 600; }
-.ov-rank[data-medal="2"] { color: #485677; background: #e4ebf4; }
-.ov-rank[data-medal="3"] { color: #964c21; background: #f9e0d0; }
+.ov-rank[data-medal] { inline-size: 20px; padding-inline: 0; background: transparent; }
+.ov-rank[data-medal="1"] { color: #9c6805; --ov-medal-fill: #fff0be; --ov-medal-stroke: #dfb355; }
+.ov-rank[data-medal="2"] { color: #596c83; --ov-medal-fill: #edf1f7; --ov-medal-stroke: #aebdce; }
+.ov-rank[data-medal="3"] { color: #9b6040; --ov-medal-fill: #f7e9dc; --ov-medal-stroke: #d8ad87; }
+.ov-rank svg {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  fill: var(--ov-medal-fill);
+  stroke: var(--ov-medal-stroke);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ov-rank > span { position: relative; }
+.ov-top .ov-delta { color: #86909c; font-size: 13px; font-weight: 400; }
+.ov-top .ov-delta[data-direction="up"] { color: var(--xa24-success); }
+.ov-top .ov-delta[data-direction="down"] { color: var(--xa24-danger); }
 .ov-economy { grid-template-columns: minmax(174px, 1fr) minmax(0, 2.25fr); }
 .ov-averages { grid-template-rows: repeat(2, minmax(0, 1fr)); }
 .ov-page .ov-average { background: var(--xa24-surface); }
@@ -188,9 +234,16 @@
 @container (max-width: 900px) {
   .ov-customers-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
   .ov-summary-pair { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 1360px) {
   .ov-kpis.ov-summary-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov-summary-kpis .ov-kpi:nth-child(even) { border-inline-end: 0; }
   .ov-summary-kpis .ov-kpi:nth-child(-n+2) { border-block-end: 1px solid #f0f0f0; }
+}
+@media (max-width: 800px) {
+  .ov-kpis.ov-summary-kpis { grid-template-columns: minmax(0, 1fr); }
+  .ov-summary-kpis .ov-kpi:nth-child(n) { border-inline-end: 0; }
+  .ov-summary-kpis .ov-kpi:not(:last-child) { border-block-end: 1px solid #f0f0f0; }
 }
 @container (max-width: 660px) {
   .ov-economy, .ov-customers-grid { grid-template-columns: minmax(0, 1fr); }
@@ -200,10 +253,8 @@
 @media (max-width: 680px) {
   .ov-activity-minis { gap: 8px; }
   .ov-kpis .ov-kpi { padding: 12px 16px; min-height: 88px; }
-  .ov-summary-kpis .ov-kpi { padding-inline: 12px; }
-  .ov-summary-kpis .ov-kpi-value { gap: 2px 5px; }
-  .ov-summary-kpis .ov-kpi-value strong { font-size: 21px; line-height: 28px; }
-  .ov-periods .haloe-btn { padding-inline: 8px; }
+  .ov-summary-kpis .ov-kpi { min-height: 96px; padding: 16px 24px; }
+  .ov-page .ov-periods .haloe-radio-wrapper { padding-inline: 8px; }
   .ov-mini { padding: 8px; }
   .ov-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 }

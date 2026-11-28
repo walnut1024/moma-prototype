@@ -1,5 +1,5 @@
 .admin-v2 .v2-content:has(> main[data-admin-page="package-data"]) {
-  background: #f4f5fa;
+  background: var(--xa24-page-bg);
 }
 
 .admin-v2 .v2-content > main[data-admin-page="package-data"]:has(> .package-report) {
@@ -28,15 +28,15 @@
 
 .package-report-hero :is(h1, h2, h3) {
   margin: 0;
-  color: #07162e;
+  color: var(--xa24-title);
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 650;
   line-height: 28px;
 }
 
 .package-report-hero p {
-  margin: 6px 0 0;
-  color: #59677d;
+  margin: 4px 0 0;
+  color: #626d81;
   font-size: 12px;
   line-height: 18px;
 }
@@ -62,7 +62,7 @@
   box-shadow: none;
 }
 
-.package-report-body > .haloe-card-body {
+.package-report-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
@@ -85,36 +85,42 @@
 
 .package-report-toolbar > :first-child {
   margin-inline-end: 12px;
-  color: var(--xa24-title);
+  color: var(--xa24-text);
   font-size: 14px;
 }
 
 .package-report .package-report-periods {
   display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
   padding: 4px;
   border-radius: 8px;
   background: var(--package-report-muted);
 }
 
-.package-report-periods .haloe-radio-group-button {
-  padding: 0;
-}
-
-.package-report-periods .haloe-radio-group-button .haloe-radio-wrapper {
-  padding: 4px 12px;
+.xa24-admin .package-report-periods.haloe-radio-group-button .haloe-radio-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 28px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
   border-radius: 6px;
-  color: var(--xa24-title);
+  background: transparent;
+  color: var(--xa24-text);
   font-size: 12px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 1.2;
 }
 
-.package-report-periods .haloe-radio-group-button .haloe-radio-wrapper-checked {
-  background: white;
+.xa24-admin .package-report-periods.haloe-radio-group-button .haloe-radio-wrapper::before { display: none; }
+.xa24-admin .package-report-periods.haloe-radio-group-button .haloe-radio-wrapper:hover { color: var(--xa24-primary-hover); }
+.xa24-admin .package-report-periods.haloe-radio-group-button .haloe-radio-wrapper-checked {
+  background: var(--xa24-surface);
   color: var(--xa24-primary);
-  box-shadow: 0 3px 10px rgb(30 77 167 / 8%);
+  box-shadow: 0 5px 14px rgb(41 91 173 / 8%);
 }
 
 .package-report-periods .haloe-radio-wrapper:has(input:focus-visible),
@@ -123,10 +129,10 @@
   outline-offset: -2px;
 }
 
-.package-report-dates {
+.package-report-toolbar .package-report-dates {
   min-width: 0;
   max-width: 100%;
-  color: var(--xa24-muted);
+  color: #86909c;
   font-size: 12px;
 }
 
@@ -152,29 +158,29 @@
   padding: 16px;
   border-radius: 8px;
   background: var(--package-report-muted);
-  color: var(--xa24-text);
+  color: #4e5969;
   font-size: 13px;
+  line-height: 18px;
 }
 
-.package-report-metric-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  align-items: baseline;
+.package-report-metric:first-child .package-report-metric-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .package-report-metric-values > * {
   display: flex;
-  flex: 1 0 max-content;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 0 12px;
 }
 
 .package-report-metric-values strong {
-  color: var(--xa24-title);
+  color: #1a1a1a;
   font-size: 24px;
-  font-weight: 650;
-  line-height: 30px;
+  font-weight: 600;
+  line-height: 32px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -191,8 +197,8 @@
 
 .package-report-chart {
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--xa24-divider);
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
 }
 
@@ -201,26 +207,27 @@
   align-items: center;
   gap: 12px;
   margin: 0;
-  color: var(--xa24-title);
+  color: #1a1a1a;
   font-size: 14px;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 22px;
 }
 
 .package-report-chart-heading svg {
   flex-shrink: 0;
-  color: var(--xa24-muted);
+  color: #6b7280;
 }
 
 .package-report-chart > p {
-  margin: 6px 0 8px;
-  color: var(--xa24-muted);
+  margin: 4px 0 10px;
+  color: #86909c;
   font-size: 12px;
+  line-height: 22px;
 }
 
 .package-report-chart .unified-chart-canvas,
 .package-report-distribution-empty {
-  min-height: 270px;
+  min-height: 260px;
 }
 
 .package-report-distribution-empty {
@@ -230,10 +237,12 @@
 
 .package-report-detail-heading {
   justify-content: space-between;
+  margin-block-end: 6px;
 }
 
 .package-report-detail-heading :is(h2, h3, h4) {
   margin: 0;
+  color: #2c3e50;
   font-size: 14px;
   font-weight: 700;
   line-height: 20px;
@@ -241,10 +250,11 @@
 
 .package-report-detail-controls {
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .package-report .package-report-detail-controls > :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)) {
-  width: 224px;
+  width: 220px;
   max-width: 100%;
 }
 
@@ -256,9 +266,9 @@
 }
 
 .package-report-table {
+  --xa24-table-head-height: 53px;
   min-width: 0;
   overflow-x: auto;
-  border-radius: 8px;
 }
 
 .package-report-table .haloe-table {
@@ -268,6 +278,35 @@
 .package-report-table thead > tr > th {
   background: var(--package-report-muted);
   color: var(--xa24-text);
+}
+
+.package-report-table [data-xa24-scope]:has(button[popovertarget]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.package-report-table [data-xa24-scope] button[popovertarget] {
+  inline-size: 24px;
+  min-inline-size: 24px;
+  padding-inline: 0;
+  color: var(--xa24-text);
+}
+
+.package-report-account-type {
+  display: inline-block;
+  padding-inline: 8px;
+  border-radius: 2px;
+  background: #e4f5ff;
+  color: var(--xa24-primary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.package-report-account-type[data-account-type="enterprise"] {
+  background: var(--xa24-success);
+  color: var(--xa24-surface);
 }
 
 .package-report-footnote {
@@ -281,7 +320,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .package-report-body > .haloe-card-body {
+  .package-report-content {
     padding-inline: 16px;
   }
 }

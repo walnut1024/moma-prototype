@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { Children, cloneElement, Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { h, nextTick } from 'vue';
 import { EAlert, EButton, ECard, ECheckbox, EDrawer, EDropdown, EInput, EModal, EOption, EOptionGroup, ESelect, ESpin, ETabPane, ETabs, ETag } from '@cmss-bfs/haloe/dist/es/index.js';
 import { Check, ChevronLeft, ChevronRight, CircleHelp, Copy, X } from 'lucide-react';
@@ -191,29 +191,74 @@ export function XaCopyId({ label = 'ID', value, copyAtStart, ellipsis, displayVa
   </span>;
 }
 
-export function XaPagination({ total, currentPage, pageSize, pageSizeOpts, onPageChange, onPageSizeChange }) {
+export function XaPagination({
+  total = 0, currentPage = 1, pageSize = 10, pageSizeOpts = [10, 20, 40, 100],
+  onPageChange, onPageSizeChange, onChange, showSizeChanger = Boolean(onPageSizeChange),
+  hideOnSinglePage = false, disabled, className = '', showTotal = true, style,
+}) {
   const t = useChannelText();
   const [draft, setDraft] = useState(null);
   const pages = Math.max(1, Math.ceil(total / pageSize));
-  return <div className="xa24-pagination" role="group" aria-label={t('分页')}>
-    <span>{t('共 {count} 条').replace('{count}', total)}</span>
-    <XaSpace wrap>
-      <XaButton size="small" theme="borderless" aria-label={t('上一页')} icon={<ChevronLeft size={16} aria-hidden="true"/>}
-        disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}/>
-      {pages > 1 && <XaInput className="xa24-page-number" size="small" type="number" aria-label={t('跳转页码')}
-        value={draft ?? currentPage} onChange={setDraft} onBlur={() => setDraft(null)} onKeyDown={event => {
+  const current = Math.min(Math.max(1, currentPage), pages);
+  const changePage = page => {
+    setDraft(null);
+    if (!Number.isInteger(page) || page < 1 || page > pages || page === current) return;
+    onPageChange?.(page);
+    onChange?.(page, pageSize);
+  };
+  const changeSize = size => {
+    if (size === pageSize) return;
+    setDraft(null);
+    onPageSizeChange?.(size);
+    onChange?.(1, size);
+  };
+  const first = Math.max(2, Math.min(current - 2, pages - 4));
+  const last = Math.min(pages - 1, Math.max(current + 2, 5));
+  const numbers = [1, ...Array.from({ length: Math.max(0, last - first + 1) }, (_, index) => first + index)];
+  if (pages > 1) numbers.push(pages);
+  const canGoBack = !disabled && current > 1;
+  const canGoNext = !disabled && current < pages;
+
+  return <div className={`haloe-page admin-pagination xa24-pagination ${className}`} style={style}
+    role="group" aria-label={t('分页')}>
+    <span className="sr-only" aria-live="polite">{current} / {pages}</span>
+    {showTotal && <span className="haloe-page__title">{t('共{count}条记录', '{count} records').replace('{count}', total)}</span>}
+    {showSizeChanger && <div className="haloe-page__opts">
+      {t('每页显示', 'Rows per page')}
+      <XaSelect size="middle" aria-label={t('每页条数')} value={pageSize} disabled={disabled} onChange={changeSize}
+        optionList={[...new Set([...pageSizeOpts, pageSize])].map(value => ({ value, label: String(value) }))}/>
+      {t('条', '')}
+    </div>}
+    {(!hideOnSinglePage || showSizeChanger || pages > 1) && <ul className="haloe-page__list">
+      <li className={`haloe-page-prev${canGoBack ? '' : ' haloe-page-disabled'}`}>
+        <button type="button" aria-label={t('上一页')} disabled={!canGoBack} onClick={() => changePage(current - 1)}>
+          <ChevronLeft size={14} aria-hidden="true"/>
+        </button>
+      </li>
+      {numbers.map((page, index) => <Fragment key={page}>
+        {page - numbers[index - 1] > 1 && <li className="haloe-page-item-jump-next" aria-hidden="true">…</li>}
+        <li className={`haloe-page-item${page === current ? ' haloe-page-item-active' : ''}`}>
+          <button type="button" aria-current={page === current ? 'page' : undefined} disabled={disabled}
+            onClick={() => changePage(page)}>{page}</button>
+        </li>
+      </Fragment>)}
+      <li className={`haloe-page-next${canGoNext ? '' : ' haloe-page-disabled'}`}>
+        <button type="button" aria-label={t('下一页')} disabled={!canGoNext} onClick={() => changePage(current + 1)}>
+          <ChevronRight size={14} aria-hidden="true"/>
+        </button>
+      </li>
+    </ul>}
+    {pages > 1 && <label className="haloe-page__jump">
+      {t('跳至', 'Go to')}
+      <input type="number" min={1} max={pages} inputMode="numeric" aria-label={t('跳转页码')} disabled={disabled}
+        value={draft ?? ''} onChange={event => setDraft(event.target.value)} onBlur={() => setDraft(null)}
+        onKeyDown={event => {
           if (event.key !== 'Enter') return;
-          const page = Number(event.target.value);
           event.preventDefault();
-          setDraft(null);
-          if (Number.isInteger(page) && page >= 1 && page <= pages) onPageChange(page);
-        }}/>}
-      <span aria-live="polite">{pages > 1 ? '/ ' + pages : '1 / 1'}</span>
-      <XaButton size="small" theme="borderless" aria-label={t('下一页')} icon={<ChevronRight size={16} aria-hidden="true"/>}
-        disabled={currentPage === pages} onClick={() => onPageChange(currentPage + 1)}/>
-      <XaSelect size="small" aria-label={t('每页条数')} value={pageSize} onChange={onPageSizeChange}
-        optionList={pageSizeOpts.map(value => ({ value, label: t('{count} 条 / 页').replace('{count}', value) }))}/>
-    </XaSpace>
+          changePage(Number(event.target.value));
+        }}/>
+      {t('页', '')}
+    </label>}
   </div>;
 }
 
@@ -308,7 +353,7 @@ export function XaSelect(allProps) {
     renderVue={target => h(limit === undefined ? ESelect : LimitedSelect, {
       ref: instance => { select.current = instance; },
       ...props, class: [className, limit !== undefined && 'xa24-select-tag-limit'],
-      size: controlSize(size), modelValue: selected, placeholder, transfer: false,
+      size: size === 'middle' ? size : controlSize(size), modelValue: selected, placeholder, transfer: false,
       role: 'combobox', 'aria-expanded': open, 'aria-haspopup': 'listbox', 'aria-controls': listId,
       'data-xa24-overflow-labels': showRestTagsPopover || undefined,
       onOnOpenChange: next => {
@@ -584,6 +629,7 @@ export function XaModal({
   const fallback = { small: 400, medium: 540, large: 720, full: 960 }[size] ?? 448;
   const modalWidth = typeof width === 'number' ? width + 'px' : width ?? `min(${fallback}px, calc(100vw - 32px))`;
   const drawerWidth = typeof width === 'number' ? width : Number(width?.match(/^min\((\d+)px/)?.[1]) || width;
+  const content = bodyStyle ? <div style={bodyStyle}>{children}</div> : children;
   return <HaloHost hostRef={host} component={drawer ? EDrawer : EModal} onClick={event => {
     if (mask && maskClosable && event.target.matches?.('.haloe-modal-mask, .haloe-modal-wrap, .haloe-drawer-mask, .haloe-drawer-wrap')) {
       onCancel?.(event);
@@ -598,8 +644,10 @@ export function XaModal({
     </div>,
     footer: drawer ? undefined : actions,
   }}>
-    {bodyStyle ? <div style={bodyStyle}>{children}</div> : children}
-    {drawer && actions && <footer className="xa24-drawer-footer">{actions}</footer>}
+    {drawer && actions ? <div className="xa24-drawer-layout">
+      <div className="xa24-drawer-main">{content}</div>
+      <footer className="xa24-drawer-footer">{actions}</footer>
+    </div> : content}
   </HaloHost>;
 }
 

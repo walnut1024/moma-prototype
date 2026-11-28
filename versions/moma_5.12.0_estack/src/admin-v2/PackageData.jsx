@@ -1,6 +1,5 @@
 import { useId, useMemo, useState } from 'react';
 import { Button, Card, DatePicker, Input, RadioGroup, Tag, Typography } from './xa24/HaloUI.jsx';
-import { IconActivity, IconPieChart2Stroked, IconSearch } from './xa24/HaloIcons.jsx';
 import { format } from 'date-fns';
 import { Chart } from '../components/AnalyticsCharts';
 import { AdminModal } from './AdminOverlay';
@@ -16,7 +15,7 @@ import './package-data.css';
 const periods = [['today', '今日'], ['yesterday', '昨日'], ['7d', '近7天'], ['30d', '近30天'], ['custom', '自定义']];
 const people = [['individual', '个人'], ['enterprise', '企业']];
 const claimGroups = ['个人版-Free', '团队版-Free'];
-const seriesColors = ['#2768df', '#00a871', '#8c6ce0', '#ea9b3d'];
+const seriesColors = ['#2b6de5', '#00a870', '#8c6ce0', '#ea9b3d'];
 const dateTime = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'medium' });
 const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
 const yuan = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' });
@@ -42,38 +41,43 @@ function reportPeriod(params, now) {
     range: { start: days === 1 ? end : dayOf(now - (days - 1) * dayMs), end } };
 }
 
+function ReportChartIcon({ path }) {
+  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={path}/></svg>;
+}
+
 function ReportCharts({ trend, distribution, demo }) {
   const t = useChannelText();
   const trendTitle = t(demo ? '每日领取趋势' : '每日订购趋势');
   const distributionTitle = t(demo ? '套餐领取分布' : '套餐订购分布');
   const series = people.map(([type, title], index) => ({ type: 'bar', name: t(demo ? claimGroups[index] : title),
-    data: trend.map(row => row[type]), barMaxWidth: 22 }));
+    data: trend.map(row => row[type]), barMaxWidth: 14, barMinHeight: 1 }));
   const tierColor = (label, index) => seriesColors[claimGroups.includes(label) ? claimGroups.indexOf(label) : (demo ? index + 2 : index) % seriesColors.length];
   const tiers = distribution.map(({ label, value }, index) => ({ name: t(label), value, itemStyle: { color: tierColor(label, index) } }));
-  const legend = { bottom: 2, icon: 'roundRect', textStyle: { color: '#4e5969', fontSize: 12 } };
+  const legend = { bottom: 0, icon: 'roundRect', textStyle: { color: '#333', fontSize: 12 } };
   const bars = {
-    animation: false, color: seriesColors, grid: { top: 36, left: 38, right: 18, bottom: 48 },
+    animation: false, color: seriesColors, grid: { top: 30, left: 40, right: 20, bottom: 40 },
     legend, tooltip: { trigger: 'axis', renderMode: 'richText', confine: true },
     xAxis: { type: 'category', data: trend.map(row => row.label), axisLabel: { hideOverlap: true, color: '#687283' } },
-    yAxis: { type: 'value', name: t(demo ? '领取数' : '订购份数'), minInterval: 1, splitNumber: 5,
+    yAxis: { type: 'value', name: t(demo ? '领取数' : '订购份数'), splitNumber: 5,
       axisLabel: { color: '#687283' }, splitLine: { lineStyle: { color: '#dce4f1' } } },
     series,
   };
   const donut = {
     animation: false, legend, tooltip: { trigger: 'item', renderMode: 'richText', formatter: '{b}\n{c} ({d}%)', confine: true },
-    series: [{ type: 'pie', radius: ['36%', '64%'], center: ['50%', '46%'], data: tiers,
-      label: { color: '#4e5969', formatter: '{b}\n{d}%' }, stillShowZeroSum: false }],
+    series: [{ type: 'pie', radius: ['35%', '62%'], center: ['50%', '46%'], data: tiers,
+      label: { color: '#333', fontSize: 12, formatter: '{b}\n{d}%' }, stillShowZeroSum: false }],
   };
   return <div className="package-report-charts">
     <section className="package-report-chart">
-      <h2 className="package-report-chart-heading"><IconActivity aria-hidden="true"/>{trendTitle}</h2>
+      <h2 className="package-report-chart-heading"><ReportChartIcon path="M2.5 3v10.5H13.5 M4.5 10l3-3 2.2 1.5 3.8-4"/>{trendTitle}</h2>
       <p>{t('按时段汇总 · 个人 vs 企业')}</p>
-      <Chart option={bars} height={270} label={trendTitle}/>
+      <Chart option={bars} height={260} label={trendTitle}/>
     </section>
     <section className="package-report-chart">
-      <h2 className="package-report-chart-heading"><IconPieChart2Stroked aria-hidden="true"/>{distributionTitle}</h2>
+      <h2 className="package-report-chart-heading"><ReportChartIcon path="M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Z M8 2.5v3.1m2 3.7 2.6 1.7"/>{distributionTitle}</h2>
       <p>{t(demo ? '按套餐档位统计领取次数占比' : '按套餐统计订购次数占比')}</p>
-      {tiers.length ? <Chart option={donut} height={270}
+      {tiers.length ? <Chart option={donut} height={260}
         label={distributionTitle + ' — ' + tiers.map(tier => `${tier.name} ${tier.value}`).join('、')}/> :
         <div className="package-report-distribution-empty">{t('暂无数据')}</div>}
     </section>
@@ -94,24 +98,27 @@ function ReportDetails({ rows, prices, demo, narrowToPackage, showAllPackages })
   const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize)));
   const detailTitle = t(demo ? '领取明细' : '订购明细');
   const columns = [
-    { title: demo ? '领取时间' : '订购时间', dataIndex: 'createdAt', width: 158, render: dateText },
-    { title: '套餐 ID', dataIndex: 'packageId', width: 154 },
+    { title: demo ? '领取时间' : '订购时间', dataIndex: 'createdAt', width: 150, render: dateText },
+    { title: '套餐 ID', dataIndex: 'packageId', width: 150, ellipsis: { showTitle: true } },
     { title: '实例 ID', dataIndex: 'id', width: 140, ellipsis: { showTitle: true } },
-    { title: '用户 ID', dataIndex: 'userId', width: 128 },
-    { title: demo ? '用户名' : '租户名称', dataIndex: 'accountName', width: 140 },
-    { title: '用户类型', dataIndex: 'accountType', width: 116,
-      render: value => people.some(([id]) => id === value) ? t(people.find(([id]) => id === value)[1]) : '—',
+    { title: '用户 ID', dataIndex: 'userId', width: 140, ellipsis: { showTitle: true } },
+    { title: demo ? '用户名' : '租户名称', dataIndex: 'accountName', width: 100 },
+    { title: '用户类型', dataIndex: 'accountType', width: 120, align: 'center',
+      render: value => {
+        const label = people.find(([id]) => id === value)?.[1];
+        return label ? <span className="package-report-account-type" data-account-type={value}>{t(label)}</span> : '—';
+      },
       filters: people.map(([value, text]) => ({ value, text: t(text) })), filteredValue: types },
-    { title: '套餐档位', dataIndex: 'tier', width: 125, render: value => t(value) },
+    { title: '套餐档位', dataIndex: 'tier', width: 120, render: value => t(value) },
     { title: '套餐额度', dataIndex: 'entitlement', width: 110, align: 'right', render: tokenText },
-    { title: '有效期至', dataIndex: 'expiresAt', width: 158, render: dateText },
-    { title: '状态', dataIndex: 'status', width: 96, render: value => value && value !== '—' ? <AdminStatus value={value}/> : '—' },
-    { title: demo ? '已消耗 Tokens' : '已抵扣 Tokens', dataIndex: 'used', width: 158, align: 'right',
+    { title: '有效期至', dataIndex: 'expiresAt', width: 120, render: dateText },
+    { title: '状态', dataIndex: 'status', width: 100, align: 'center', render: value => value && value !== '—' ? <AdminStatus value={value}/> : '—' },
+    { title: demo ? '已消耗 Tokens' : '已抵扣 Tokens', dataIndex: 'used', width: 130, align: 'right',
       render: (value, row) => <span className="package-report-usage">{tokenText(value)}
         <Button size="small" theme="borderless" onClick={() => setDialog(row)}>{t('详情')}</Button>
       </span> },
-    { title: '剩余额度（Tokens）', dataIndex: 'remaining', width: 146, align: 'right', render: tokenText },
-    { title: '累计成本（元）', dataIndex: 'cost', width: 124, align: 'right',
+    { title: '剩余额度（Tokens）', dataIndex: 'remaining', width: 150, align: 'right', render: tokenText },
+    { title: '累计成本（元）', dataIndex: 'cost', width: 140, align: 'right',
       render: value => Number.isFinite(value) ? moneyText(value) : t('待核算') },
   ];
   const priceRows = prices.flatMap(row => [
@@ -137,14 +144,14 @@ function ReportDetails({ rows, prices, demo, narrowToPackage, showAllPackages })
       <h2 id={headingId}>{detailTitle}</h2>
       <div className="package-report-detail-controls">
         {narrowToPackage && <Button theme="borderless" onClick={showAllPackages}>{t('查看全部套餐')}</Button>}
-        <Button theme="light" type="tertiary" onClick={() => setDialog('prices')}>{t('成本单价')}</Button>
-        <Input value={search} onChange={value => { setSearch(value); setPage(1); }} showClear prefix={<IconSearch aria-hidden="true"/>}
+        <Button onClick={() => setDialog('prices')}>{t('成本单价')}</Button>
+        <Input value={search} onChange={value => { setSearch(value); setPage(1); }} showClear
           aria-label={t('搜索用户 ID / 用户名 / 套餐 ID')} placeholder={t('搜索用户 ID / 用户名 / 套餐 ID')}/>
       </div>
     </div>
     <section className="package-report-table" aria-labelledby={headingId} tabIndex={0}>
       <Table rowKey="id" columns={columns} dataSource={filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)}
-        scroll={{ x: 'max(100%, 1765px)', y: 530, scrollToFirstRowOnChange: true }}
+        scroll={{ x: 'max(100%, 1670px)', y: 530, scrollToFirstRowOnChange: true }}
         onChange={({ extra, filters }) => {
           if (extra?.changeType !== 'filter') return;
           setTypes(filters.find(filter => filter.dataIndex === 'accountType')?.filteredValue ?? []);
@@ -191,7 +198,6 @@ export default function PackageData({ state, params, refreshRead }) {
   const orders = packageId ? source.filter(row => row.packageId === packageId) : source;
   const { rows, trend, distribution, totals } = packageReport(orders, state.tokenPackages ?? emptyRecords, range, now);
   const [quotaValue, quotaUnit] = tokenParts(totals.tokens);
-  const title = demo ? '套餐申领统计' : '套餐数据';
   const updateQuery = patch => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(patch)) {
@@ -236,7 +242,7 @@ export default function PackageData({ state, params, refreshRead }) {
   return <div className="package-report">
     <div className="package-report-hero">
       <div>
-        <h1>{t(title)}</h1>
+        <h1>{t('套餐数据')}</h1>
         <p>{t(demo ? '查看套餐申领记录及汇总数据。' : '查看套餐订购权益及汇总数据。')}</p>
       </div>
       <div className="package-report-hero-end">
@@ -247,43 +253,47 @@ export default function PackageData({ state, params, refreshRead }) {
         <img width="80" height="80" src={import.meta.env.BASE_URL + 'assets/package-claim-statistics.png'} alt=""/>
       </div>
     </div>
-    <Card className="package-report-body">
-      <div className="package-report-toolbar">
-        <span id={dateLabel}>{t('时间范围')}</span>
-        <RadioGroup className="package-report-periods" type="button" aria-labelledby={dateLabel}
-          value={selectingCustom ? 'custom' : period} options={periods.map(([value, label]) => ({ value, label: t(label) }))}
-          onChange={event => changePeriod(event.target.value)}/>
-        {selectingCustom ? <DatePicker className="package-report-dates" type="dateRange" aria-label={t('选择日期范围')}
-          placeholder={[t('开始日期'), t('结束日期')]} value={period === 'custom' ? [range.start, range.end] : []}
-          format="yyyy-MM-dd" showClear={false} disabledDate={date => Boolean(date && format(date, 'yyyy-MM-dd') > dayOf(now))}
-          onChange={(_, dates) => changeDates(dates)}/> :
-          <Typography.Text className="package-report-dates" type="tertiary">{range.start} 00:00 — {range.end} 23:59</Typography.Text>}
-        <Button className="package-report-query" theme="solid" onClick={query} loading={busy}
-          disabled={selectingCustom && period !== 'custom'}>{t('查询')}</Button>
-      </div>
-      {dateError && <Typography.Paragraph role="alert" type="danger">{t(dateError)}</Typography.Paragraph>}
-      <div className="package-report-metrics">
-        <div className="package-report-metric">
-          <span>{t(demo ? '累计领取' : '累计订购')}</span>
-          <div className="package-report-metric-values">
-            <div><strong>{numberText(demo ? totals.individualAccounts : totals.individual)}</strong>
-              <small>{t(demo ? '人 · 个人版-Free' : '份 · 个人')}</small></div>
-            <div><strong>{numberText(demo ? totals.enterpriseAccounts : totals.enterprise)}</strong>
-              <small>{t(demo ? '家 · 团队版-Free' : '份 · 企业')}</small></div>
+    <Card className="package-report-body" padding={0}>
+      <div className="package-report-content">
+        <div className="package-report-toolbar">
+          <span id={dateLabel}>{t('时间范围')}</span>
+          <RadioGroup className="package-report-periods" type="button" aria-labelledby={dateLabel}
+            value={selectingCustom ? 'custom' : period} options={periods.map(([value, label]) => ({ value, label: t(label) }))}
+            onChange={event => changePeriod(event.target.value)}/>
+          {selectingCustom ? <DatePicker className="package-report-dates" type="dateRange" aria-label={t('选择日期范围')}
+            placeholder={[t('开始日期'), t('结束日期')]} value={period === 'custom' ? [range.start, range.end] : []}
+            format="yyyy-MM-dd" showClear={false} disabledDate={date => Boolean(date && format(date, 'yyyy-MM-dd') > dayOf(now))}
+            onChange={(_, dates) => changeDates(dates)}/> :
+            <Typography.Text className="package-report-dates" type="tertiary">{range.start} 00:00 — {range.end} 23:59</Typography.Text>}
+          <div className="package-report-query">
+            <Button theme="solid" onClick={query} loading={busy}
+              disabled={selectingCustom && period !== 'custom'}>{t('查询')}</Button>
           </div>
         </div>
-        <div className="package-report-metric">
-          <span>{t('累计发放额度')}</span>
-          <div className="package-report-metric-values"><div><strong>{quotaValue}</strong><small>{t(quotaUnit)}</small></div></div>
+        {dateError && <Typography.Paragraph role="alert" type="danger">{t(dateError)}</Typography.Paragraph>}
+        <div className="package-report-metrics">
+          <div className="package-report-metric">
+            <span>{t(demo ? '累计领取' : '累计订购')}</span>
+            <div className="package-report-metric-values">
+              <div><strong>{numberText(demo ? totals.individualAccounts : totals.individual)}</strong>
+                <small>{t(demo ? '人 · 个人版-Free' : '份 · 个人')}</small></div>
+              <div><strong>{numberText(demo ? totals.enterpriseAccounts : totals.enterprise)}</strong>
+                <small>{t(demo ? '家 · 团队版-Free' : '份 · 企业')}</small></div>
+            </div>
+          </div>
+          <div className="package-report-metric">
+            <span>{t('累计发放额度')}</span>
+            <div className="package-report-metric-values"><div><strong>{quotaValue}</strong><small>{t(quotaUnit)}</small></div></div>
+          </div>
+          <div className="package-report-metric">
+            <span>{t('累计成本')}</span>
+            <div className="package-report-metric-values"><div><strong>{moneyText(totals.cost)}</strong></div></div>
+          </div>
         </div>
-        <div className="package-report-metric">
-          <span>{t('累计成本')}</span>
-          <div className="package-report-metric-values"><div><strong>{moneyText(totals.cost)}</strong></div></div>
-        </div>
+        <ReportCharts trend={trend} distribution={distribution} demo={demo}/>
+        <ReportDetails key={`${demo}/${range.start}/${range.end}/${packageId}`} rows={rows} prices={demo ? sample.prices : emptyRecords}
+          demo={demo} narrowToPackage={packageId} showAllPackages={() => updateQuery({ package: null })}/>
       </div>
-      <ReportCharts trend={trend} distribution={distribution} demo={demo}/>
-      <ReportDetails key={`${demo}/${range.start}/${range.end}/${packageId}`} rows={rows} prices={demo ? sample.prices : emptyRecords}
-        demo={demo} narrowToPackage={packageId} showAllPackages={() => updateQuery({ package: null })}/>
     </Card>
   </div>;
 }

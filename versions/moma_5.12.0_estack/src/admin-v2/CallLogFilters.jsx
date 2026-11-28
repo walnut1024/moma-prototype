@@ -1,7 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useId, useRef, useState } from 'react';
 import { Button, DatePicker, Input, Select, Tag, Toast } from './xa24/HaloUI.jsx';
-import { IconFilter, IconRefresh, IconSearch } from './xa24/HaloIcons.jsx';
 import { ObservationIdentitySearch, ObservationSupplyPick, useObservationSupply } from './CallObservationControls';
 import { logMinuteRange } from './call-log-filters.mjs';
 import { callPresets, changeObservationTenant, httpLabel, modelTypes, observationKey, observationOptions,
@@ -59,7 +58,7 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
   const value = values[id];
   const supply = useObservationSupply(id === 'supply' ? pool : [], id === 'supply' ? value : null);
   const change = patch => onChange('tenant' in patch ? changeObservationTenant(pool, values, patch.tenant) : patch);
-  if (id === 'query') return <Input aria-label={label} prefix={<IconSearch aria-hidden="true"/>}
+  if (id === 'query') return <Input aria-label={label}
     placeholder={view === 'upstream' ? '请求 ID 或上游请求 ID' : '搜索 Request ID'} value={value} showClear
     onChange={query => change({ query, request: '' })}/>;
   if (id === 'period') return <CallLogPeriod view={view} filters={values} window={window} change={change}/>;
@@ -89,7 +88,7 @@ function LogFilterField({ id, view, pool, values, window, errors, onChange }) {
     value={value || []} onChange={ids => change({ [id]: ids?.length ? ids : null, ...(id === 'model' && { callId: null }) })}/>;
 }
 
-export default function CallLogFilters({ view, pool, filters, window, errors, onChange, onReset, onRefresh, refreshing }) {
+export default function CallLogFilters({ view, pool, filters, window, errors, onChange, onReset }) {
   const translateLabel = useChannelText();
   const [draft, setDraft] = useState(null);
   const moreId = useId();
@@ -116,14 +115,12 @@ export default function CallLogFilters({ view, pool, filters, window, errors, on
     <div className="admin-log-primary">
       {fields(primary, filters, patch => onChange(patch))}
       <div className="admin-log-filter-actions">
-        <Button icon={<IconFilter aria-hidden="true"/>} aria-expanded={draft !== null} aria-controls={moreId}
+        <Button aria-expanded={draft !== null} aria-controls={moreId}
           onClick={event => {
             moreButton.current = event.currentTarget;
             setDraft(draft === null ? {} : null);
           }}>{draft === null ? '更多筛选' : '收起筛选'}{active.length ? ' · ' + active.length : ''}</Button>
-        <Button type="tertiary" theme="borderless" onClick={() => { setDraft(null); onReset(); }}>重置</Button>
-        {onRefresh && <Button className="admin-log-refresh" aria-label="刷新" title="刷新" theme="borderless"
-          icon={<IconRefresh aria-hidden="true"/>} loading={refreshing} onClick={onRefresh}/>}
+        <Button onClick={() => { setDraft(null); onReset(); }}>重置</Button>
       </div>
     </div>
     <div id={moreId} hidden={draft === null}>

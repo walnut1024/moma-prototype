@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Banner, Button, Card, Space, Typography } from './xa24/HaloUI.jsx';
 import AdminPageHeading from './AdminPageHeading';
+import connectionsArtwork from './xa27-artwork/xaConnections.png';
 import ChannelHealthTable from './ChannelHealthTable';
 import { Choice } from './ServiceUI';
 import { FilterReset, FilterToolbar } from '../components/FilterControls';
@@ -126,8 +127,8 @@ export default function ChannelHealthPage({ state, params, simulation, setSimula
     </ObservationFilterLayout>
   </div>;
   return <div className="xa24-page xa24-channel-health-page">
-    <AdminPageHeading title={t('模型接入')} className="xa24-entry-header"
-      description={t('管理上游连接、模型列表和连接健康', 'Manage upstream connections, model lists and connection health')}>
+    <AdminPageHeading title={t('模型接入')} className="xa24-entry-header" artwork={connectionsArtwork}
+      description={t('管理上游连接、模型列表和连接健康。', 'Manage upstream connections, model lists, and connection health.')}>
       <Space wrap><Button theme="light" onClick={toggleSimulation}>{t(simulation ? '退出模拟' : '模拟数据')}</Button></Space>
     </AdminPageHeading>
     {catalogueError && <Banner type="danger" closeIcon={null} description={<Space>连接清单加载失败：{catalogueError}

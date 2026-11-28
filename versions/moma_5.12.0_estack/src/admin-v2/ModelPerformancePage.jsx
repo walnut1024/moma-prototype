@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { EMessage } from '@cmss-bfs/haloe/dist/es/index.js';
+import { ChartNoAxesCombined, CircleDot, Clock } from 'lucide-react';
 import { XaButton as Button, XaHelp, XaInput as Input, XaModal as Modal, XaSelect as Select,
   XaTabs as Tabs, XaTag as Tag } from './xa24/HaloComponents.jsx';
 import { XaRadio as Radio, XaRadioGroup as RadioGroup } from './xa24/HaloInputs.jsx';
@@ -7,6 +8,8 @@ import { XaDatePicker as DatePicker } from './xa24/HaloDatePicker.jsx';
 import Table from './xa24/HaloTable.jsx';
 import { callObservations, observationTime } from './call-observations.mjs';
 import AdminPageHeading from './AdminPageHeading.jsx';
+import { useChannelText } from './channel-language';
+import performanceArtwork from './xa27-artwork/modelObservationRealtimePerformance.png';
 import ModelPerformanceChart from './ModelPerformanceChart';
 import ModelPerformanceScenes from './ModelPerformanceScenes.jsx';
 import { chartColor, formatMetric, histogramCard, lineCard, ringCard } from './model-performance-charts';
@@ -17,8 +20,8 @@ import './model-performance.css';
 const minute = 60_000;
 const requestsUnit = '次';
 const rpmUnit = '次/分钟';
-const tokensUnit = '百万 Tokens';
-const tpmUnit = '百万 Tokens/分钟';
+const tokensUnit = '百万Tokens';
+const tpmUnit = '百万Tokens/分钟';
 const inMillions = value => Number.isFinite(value) ? value / 1_000_000 : null;
 const tokenSeries = [
   { key: 'prompt', label: '输入 Token', color: chartColor.primary },
@@ -79,9 +82,10 @@ function MetricTiles({ items, context = false }) {
   </div>;
 }
 
-const tabs = [['volume', '调用与 Token 汇总'], ['context', '上下文与 Token 分布'], ['latency', '延迟与耗时']];
+const tabs = [['volume', '调用与 Token 汇总', ChartNoAxesCombined], ['context', '上下文与 Token 分布', CircleDot], ['latency', '延迟与耗时', Clock]];
 
 export default function ModelPerformancePage({ state }) {
+  const t = useChannelText();
   const labelId = useId();
   const recordedAttempts = useMemo(() => callObservations(state).attempts.filter(row => row.purpose === 'customer'), [state]);
   const [demoAt, setDemoAt] = useState(Date.now);
@@ -155,7 +159,8 @@ export default function ModelPerformancePage({ state }) {
   ];
 
   return <div className="model-performance xa24-page">
-    <AdminPageHeading title="模型性能" className="xa24-entry-header"/>
+    <AdminPageHeading title={t('模型性能')} className="xa24-entry-header" artwork={performanceArtwork}
+      description={t('观察模型请求量、延迟和成功率等实时指标。', 'Monitor live model request volume, latency, and success rates.')}/>
     <form className="performance-filters xa24-page-card xa24-toolbar" aria-label="模型性能筛选" onSubmit={query}>
       <div className="filter-field filter-granularity">
         <label htmlFor={`${labelId}-grain`}>显示粒度</label>
@@ -203,7 +208,8 @@ export default function ModelPerformancePage({ state }) {
 
     <section className="performance-tabs-panel xa24-page-card" aria-label="模型性能图表">
       <Tabs className="performance-tabs" activeKey={tab} onChange={setTab}>
-        {tabs.map(([key, label]) => <Tabs.TabPane itemKey={key} tab={label} key={key}>
+        {tabs.map(([key, label, TabIcon]) => <Tabs.TabPane itemKey={key} key={key}
+          tab={<span className="xa24-tab-label"><TabIcon size={16} className="xa24-outline-icon" aria-hidden="true"/>{label}</span>}>
           {tab === key && <>
             {tab === 'context' && <MetricTiles items={context} context/>}
             <div className="performance-chart-grid">

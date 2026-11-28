@@ -8,6 +8,8 @@
 }
 
 .new-model-services .new-service-search { flex: 0 1 auto; width: 17rem; max-width: 100%; }
+.new-model-services .new-service-toolbar.xa24-toolbar { margin-block-end: 20px; }
+.new-model-services .xa24-toolbar .new-service-search { width: min(100%, 255px); }
 .new-model-services .new-service-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .new-model-services .new-service-tab { padding-top: 16px; }
 .new-model-services .new-service-route-bar {

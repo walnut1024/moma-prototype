@@ -61,7 +61,7 @@
 .channel-material-preview { overflow-wrap: anywhere; }
 
 .channel-management-card { min-width: 0; }
-.channel-management-list-card > .haloe-card-body { padding: 12px 20px 18px; }
+.channel-management-list-card > .haloe-card-body { padding: 12px 20px 20px; }
 .channel-management-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -72,6 +72,7 @@
 }
 .haloe-tabs-content .channel-management-toolbar { margin-top: 8px; }
 .channel-management-toolbar .mo-search { width: min(100%, 284px); }
+.channel-management-list-card .channel-management-toolbar .xa24-channel-search { width: min(100%, 255px); }
 .channel-management-toolbar-filters {
   display: flex;
   flex-wrap: wrap;
