@@ -1,77 +1,128 @@
 .admin-v2 {
-  --v2-layout-gap: 8px;
+  --v2-layout-gap: var(--xa24-page-gap);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
-  min-height: calc(100dvh - 48px);
-  background: var(--semi-color-bg-0);
-  color: var(--semi-color-text-0);
+  min-height: calc(100dvh - var(--xa24-top-height));
+  background: var(--xa24-surface);
+  color: var(--xa24-title);
 }
 .admin-v2 .v2-content { min-width: 0; }
 .admin-v2 .v2-content > main { min-width: 0; padding: var(--v2-layout-gap); }
 .v2-sidebar { min-width: 0; }
 .v2-sidebar-desktop {
   position: sticky;
-  top: 48px;
+  top: var(--xa24-top-height);
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 232px;
-  height: calc(100dvh - 48px);
-  padding: 12px;
-  border-right: 1px solid var(--semi-color-border);
-  background: var(--semi-color-bg-0);
+  width: var(--xa24-nav-width);
+  height: calc(100dvh - var(--xa24-top-height));
+  padding: 12px 8px;
+  border-right: 1px solid var(--xa24-divider);
+  background: var(--xa24-surface);
 }
 .v2-sidebar-desktop > .v2-sidebar { flex: 1; overflow-y: auto; scrollbar-width: thin; }
 .v2-sidebar-toggle { align-self: flex-end; }
-.v2-sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 2px; width: 100%; }
-.v2-sidebar nav { display: grid; gap: 12px; margin-top: 12px; }
-.v2-sidebar nav section { display: grid; gap: 2px; }
-.v2-sidebar nav section > span { margin: 0 8px 2px; }
-.v2-sidebar .semi-button { justify-content: flex-start; }
-.v2-sidebar-desktop[data-collapsed="true"] { width: 80px; padding-inline: 4px; }
-.v2-sidebar-desktop[data-collapsed="true"] .v2-sidebar-toggle { align-self: center; }
-.v2-sidebar-desktop[data-collapsed="true"] nav .semi-button { width: 48px; justify-content: center; }
-.v2-sidebar-desktop[data-collapsed="true"] .semi-tabs-bar { display: flex; justify-content: center; gap: 2px; }
-.v2-sidebar-desktop[data-collapsed="true"] .v2-sidebar .semi-tabs-bar .semi-tabs-tab {
-  margin-inline: 0;
-  padding-inline: 3px;
-  font-size: 12px;
+.v2-sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+.v2-sidebar-title {
+  margin: 4px 2px 12px;
+  overflow: hidden;
+  color: var(--xa24-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.v2-sidebar-workspaces {
+  display: flex;
+  gap: 4px;
+  margin: 0 4px 12px;
+  padding: 4px;
+  border-radius: var(--xa24-control-radius);
+  background: var(--xa24-page-bg);
+}
+.v2-sidebar-workspaces > .xa24-control { flex: 1 1 0; }
+.v2-sidebar-workspaces .v2-sidebar-workspace.haloe-btn {
+  min-width: 0;
+  height: 30px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: #4e5969;
+  font-size: 14px;
+  line-height: 22px;
+}
+.v2-sidebar-workspaces .v2-sidebar-workspace.haloe-btn:hover { color: var(--xa24-primary); }
+.v2-sidebar-workspaces .v2-sidebar-workspace.haloe-btn[aria-pressed="true"] {
+  background: var(--xa24-surface);
+  box-shadow: 0 1px 4px rgb(31 31 33 / 4%);
+  color: var(--xa24-primary);
+  font-weight: 600;
+}
+.v2-sidebar nav { display: grid; gap: 0; }
+.v2-sidebar nav section { display: grid; gap: 2px; }
+.v2-sidebar-children:not([hidden]) { display: grid; }
+.v2-sidebar nav .v2-sidebar-item.haloe-btn {
+  height: auto;
+  min-height: 38px;
+  padding-block: 8px;
+  line-height: 18px;
+}
+.v2-sidebar nav .v2-sidebar-item-child.haloe-btn { min-height: 36px; padding-block: 7px; }
+.v2-sidebar nav .v2-sidebar-group > :is(span, div) { inline-size: 100%; text-align: start; }
+.v2-sidebar nav .v2-sidebar-group .xa24-button-content { display: flex; inline-size: 100%; }
+.v2-sidebar nav .v2-sidebar-group .v2-sidebar-chevron { margin-inline-start: auto; }
+.v2-sidebar nav .v2-sidebar-group[aria-expanded="true"] .v2-sidebar-chevron { transform: rotate(90deg); }
+.v2-sidebar nav .v2-sidebar-children[id] .v2-sidebar-item-child.haloe-btn { padding-inline-start: 32px; }
+.v2-sidebar nav .v2-sidebar-item.haloe-btn:not([aria-current], :disabled):hover { background: #f6f9ff; }
+.v2-sidebar-desktop[data-collapsed="true"] { width: 52px; padding-inline: 4px; }
+.v2-sidebar-desktop[data-collapsed="true"] .v2-sidebar-workspaces { flex-direction: column; margin-inline: 0; }
+.v2-sidebar-desktop[data-collapsed="true"] .v2-sidebar-toggle { align-self: center; }
 .v2-sidebar-desktop[data-collapsed="true"] nav { gap: 6px; }
 .v2-sidebar-desktop[data-collapsed="true"] nav section { justify-items: center; }
 .v2-sidebar-desktop[data-collapsed="true"] nav section + section {
-  border-top: 1px solid var(--semi-color-border);
+  border-top: 1px solid var(--xa24-divider);
   padding-top: 6px;
 }
 .v2-content > .admin-context-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 44px;
+  min-height: 60px;
   gap: 12px;
-  padding: 4px 16px;
-  border-bottom: 1px solid var(--semi-color-border);
-  background: var(--semi-color-bg-0);
-  color: var(--semi-color-text-1);
+  padding: 4px var(--xa24-page-gap);
+  border-bottom: 1px solid var(--xa24-divider);
+  background: var(--xa24-surface);
+  color: var(--xa24-text);
 }
 .admin-breadcrumb { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; }
-.admin-breadcrumb .semi-breadcrumb { flex-wrap: nowrap; }
-.admin-breadcrumb a { color: var(--semi-color-link); }
+.admin-breadcrumb .xa24-breadcrumbs { padding: 0; font-size: 12px; line-height: 18px; }
+.admin-breadcrumb .xa24-breadcrumbs a { color: var(--xa24-primary); }
+.admin-breadcrumb .xa24-breadcrumbs a:hover { color: var(--xa24-primary); }
 .admin-breadcrumb a:hover { text-decoration: underline; }
-.admin-breadcrumb a:focus-visible { outline: 2px solid var(--semi-color-primary); outline-offset: -1px; }
+.admin-breadcrumb a:focus-visible { outline: 2px solid var(--xa24-primary); outline-offset: -1px; }
+.admin-breadcrumb [aria-current="page"] {
+  color: var(--xa24-title);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+}
 .admin-breadcrumb .us-breadcrumb-meta { flex: none; }
 .v2-module-tabs { margin-inline: var(--v2-layout-gap); }
-.v2-content .admin-nav-toggle { display: none; }
+.channel-workspace-tab-label { display: inline-flex; align-items: center; gap: 8px; }
+.channel-management-tabs > .haloe-tabs-line .haloe-tabs-tab { padding-block: 7px 6px; }
+.channel-health-heading { margin-block-end: 12px; }
 
 @media (max-width: 900px) {
   .admin-v2 { grid-template-columns: minmax(0, 1fr); }
   .admin-v2 .v2-content > main { padding: 14px; }
   .v2-sidebar-desktop { display: none; }
-  .v2-content .admin-nav-toggle { display: inline-flex; }
+  .v2-content > .admin-context-bar { min-height: 48px; }
 }
 
-/* Shared page layout. Semi supplies the visual styles of the components. */
+/* Shared page layout. */
 .admin-v2 {
   --admin-section-gap: 16px;
   --admin-control-gap: 12px;
@@ -84,8 +135,8 @@
 .admin-list-toolbar { margin-bottom: var(--admin-section-gap); }
 .admin-list-search { width: min(100%, 280px); }
 .admin-table-record { display: grid; justify-items: start; min-width: 0; gap: 2px; overflow-wrap: anywhere; }
-.admin-table-record .semi-button { max-width: 100%; height: auto; min-height: 24px; }
-.admin-table-record .semi-button-content { white-space: normal; text-align: start; overflow-wrap: anywhere; }
+.admin-table-record .haloe-btn { max-width: 100%; height: auto; min-height: 24px; }
+.admin-table-record .xa24-button-content { white-space: normal; text-align: start; overflow-wrap: anywhere; }
 .admin-sheet-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
 .admin-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
@@ -94,9 +145,9 @@
 }
 
 /* Keep the fixed banner offset on the admin shell alone. */
-.app-shell > .admin-main { padding-top: 48px; min-height: 100vh; font-size: 14px; }
+.app-shell > .admin-main { padding-top: var(--xa24-top-height); min-height: 100vh; font-size: 14px; }
 
-/* Layout for the Semi controls in the fixed admin banner. */
+/* Fixed admin banner. */
 .app-shell > .admin-banner {
   position: fixed;
   inset: 0 0 auto;
@@ -104,16 +155,25 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 48px;
-  gap: 12px;
-  padding-inline: 12px;
-  background: var(--semi-color-bg-0);
-  color: var(--semi-color-text-0);
-  border-bottom: 1px solid var(--semi-color-border);
+  height: var(--xa24-top-height);
+  gap: 16px;
+  padding-inline: var(--xa24-page-gap);
+  background: var(--xa24-surface);
+  color: var(--xa24-title);
+  border-bottom: 1px solid var(--xa24-divider);
 }
-.app-shell > .admin-banner .brand-mark { min-width: 32px; flex: 1; }
-.app-shell > .admin-banner .brand-mark img { flex: none; }
+.app-shell > .admin-banner .brand-mark { min-width: 32px; flex: 1; gap: 12px; }
 .app-shell > .admin-banner .brand-mark span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell > .admin-banner .brand-mark .xa24-brand-logo {
+  display: grid;
+  flex: 0 0 32px;
+  place-items: center;
+  height: 28px;
+  padding: 4px;
+  border: 1px solid var(--xa24-divider);
+  border-radius: var(--xa24-control-radius);
+}
+.app-shell > .admin-banner .xa24-brand-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .app-shell > .admin-banner .top-actions { gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .app-shell > .admin-banner :is(.top-actions > *, .admin-banner-return) { flex-shrink: 0; }
 .admin-banner-controls, .admin-banner-field { display: flex; align-items: center; gap: 8px; }

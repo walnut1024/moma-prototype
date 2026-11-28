@@ -4,8 +4,9 @@ import { pendingGuidedOnboardings } from './guided-onboarding';
 import ChannelDiscovery from './ChannelDiscovery';
 import ChannelAdvancedFields from './ChannelAdvancedFields';
 import { useEffect, useRef, useState } from 'react';
-import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
-import { Button, Checkbox, Input, Select, Steps, TextArea, Typography } from '@douyinfe/semi-ui';
+import { IconDelete, IconPlus } from './xa24/HaloIcons.jsx';
+import { Button, Checkbox, Input, Select, TextArea, Typography } from './xa24/HaloUI.jsx';
+import { Steps } from './xa24/HaloUI.jsx';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { Choice, Field } from './ServiceUI';
 import { CopyId, Disclosure, Modal, Notice } from './ModelOperationsUI';
@@ -126,7 +127,7 @@ export default function SupplierChannelConfiguration({ state, provider: initialP
       if (!endpoint) { const issue = nameIssue(); if (issue) { showNameError(issue); return; } }
       const identityErrors = rows.filter(row => row.selected !== false && row.newModel).flatMap(row => { try { resolveOnboardingModel(state, row); return []; } catch (error) { return [{ rowId: row.id, field: 'newModel', message: error.message }]; } });
       const checked = [...identityErrors, ...validateChannelRows(validationState, rows.map(row => ({ ...row, libraryId: pickerValue(row) })), endpoint || { interfaceType: value.interfaceType })];
-      if (checked.length) { setErrors(checked); const rowIndex = rows.findIndex(row => row.id === checked[0].rowId); if (rowIndex >= 0) setPage(Math.floor(rowIndex / 10) + 1); requestAnimationFrame(() => document.querySelector(`[data-channel-row="${checked[0].rowId}"]`)?.querySelector('input, button, .semi-select')?.focus()); return; }
+      if (checked.length) { setErrors(checked); const rowIndex = rows.findIndex(row => row.id === checked[0].rowId); if (rowIndex >= 0) setPage(Math.floor(rowIndex / 10) + 1); requestAnimationFrame(() => document.querySelector(`[data-channel-row="${checked[0].rowId}"]`)?.querySelector('input, button, [role="combobox"] [tabindex]')?.focus()); return; }
       const models = rows.filter(row => row.selected !== false).map(({ libraryId, modelPresetId, newModel, upstreamModelId, scenarios }) => ({ ...(newModel ? { newModel } : modelPresetId ? { modelPresetId } : { libraryId }), upstreamModelId, scenarios }));
       const values = endpoint ? { endpointId: endpoint.id, models } : { ...value, ...connection(), apiKeyId, models };
       let newApiKey;

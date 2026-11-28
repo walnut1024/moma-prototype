@@ -1,28 +1,29 @@
 import { channelEnglish } from './admin-v2/channel-language';
 import AdminPageLoading from './admin-v2/AdminPageLoading';
 import {
-  IconActivity, IconApartment, IconAppCenter, IconArticle, IconBarChartVStroked, IconBellStroked,
-  IconBookOpenStroked, IconBookStroked, IconBox, IconChainStroked, IconChecklistStroked,
-  IconComponentStroked, IconFlowChartStroked, IconGridStroked, IconLayers,
-  IconDoubleChevronLeft, IconDoubleChevronRight, IconLanguage,
-  IconMenu, IconPlayCircle, IconPriceTag, IconPulse, IconServerStroked, IconSetting,
-  IconShield, IconUserGroup, IconUserSetting, IconUserStroked,
-} from '@douyinfe/semi-icons';
+  Activity as IconActivity, Network as IconApartment, PanelsTopLeft as IconAppCenter, FileText as IconArticle,
+  ChartNoAxesColumn as IconBarChartVStroked, Bell as IconBellStroked, BookOpen as IconBookOpenStroked,
+  Book as IconBookStroked, Box as IconBox, Link as IconChainStroked, ListChecks as IconChecklistStroked,
+  Component as IconComponentStroked, Workflow as IconFlowChartStroked, LayoutGrid as IconGridStroked, List as IconList,
+  Layers as IconLayers, ChevronsLeft as IconDoubleChevronLeft, ChevronsRight as IconDoubleChevronRight, ChevronRight,
+  Menu as IconMenu, CirclePlay as IconPlayCircle, Tag as IconPriceTag, HeartPulse as IconPulse,
+  Server as IconServerStroked, Settings as IconSetting, Shield as IconShield, Users as IconUserGroup,
+  UserCog as IconUserSetting, UserRound as IconUserStroked,
+} from 'lucide-react';
 import CloudModelOperations from './admin-v2/CloudModelOperations';
-import { Badge, Banner, Breadcrumb, Button, ConfigProvider, Dropdown, Select, Tabs, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { AdminModal as Modal } from './admin-v2/AdminOverlay';
-import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
-import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
+import { XaBanner as Banner, XaButton as Button, XaModal as Modal, XaSelect as Select,
+  XaTabs as Tabs, XaTypography as Typography } from './admin-v2/xa24/HaloComponents.jsx';
+import { XaToastRegion } from './admin-v2/xa24/HaloFeedback.jsx';
 import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, isInfrastructurePage, pageFromHash, channelManagementListRoute } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
 import { modelMaterial } from './admin-v2/model-library';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from 'react-dom';
 import "./admin-v2/admin-shell.css";
+import './admin-v2/xa24/xa24-overrides.css';
 import { managedIndividualAccounts } from "./admin-v2/individual-users";
 import { managedEnterpriseTenants } from "./admin-v2/enterprise";
 import { LICENSE_NAMES, LICENSE_UNAVAILABLE } from './deployment-license.mjs';
-import { Toast } from '@douyinfe/semi-ui';
 import AdminPageBoundary from "./admin-v2/AdminPageBoundary";
 import { tenantHref } from './admin-v2/access-control.mjs';
 import { AdminUIContext } from "./components/admin-ui-context";
@@ -58,7 +59,7 @@ const inferenceDemoPages = new Set([
 const loadModelConnections = () => import('./admin-v2/ChannelDirectory');
 const ChannelManagementNew = lazy(() => loadModelConnections().then(module => ({ default: module.ChannelManagementNew })));
 const ModelPrices = lazy(() => import('./admin-v2/ModelPrices'));
-const GatewayPage = lazy(() => import('./admin-v2/GatewayPages'));
+const GatewayRouteSettings = lazy(() => import('./admin-v2/GatewayRouteSettings.jsx'));
 const CustomerAnalysis = lazy(() => import('./admin-v2/CustomerAnalysis'));
 const TrafficOperations = lazy(() => import('./admin-v2/TrafficOperations'));
 const SiteConfiguration = lazy(() => import('./admin-v2/SiteConfiguration'));
@@ -117,6 +118,7 @@ export default function AdminConsoleV2(props) {
   const { license } = props;
   const [hash,setHash]=useState(location.hash);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarGroups, setSidebarGroups] = useState({});
   const [menuPreview, setMenuPreview] = useState(null);
   const { english, changeLanguage } = props;
   useEffect(()=>{const sync=()=>setHash(location.hash);addEventListener('hashchange',sync);return()=>removeEventListener('hashchange',sync);},[]);
@@ -130,10 +132,10 @@ export default function AdminConsoleV2(props) {
   const packageWorkspace=license?.commercial && /^#\/admin-2\/(?:package-production|package-data)(?:[/?]|$)/.test(hash);
   const area = packageWorkspace ? 'packages' : cloud ? 'models' : 'application';
   if (!license) return <AdminPageLoading label="部署授权"/>;
-  return <ConfigProvider locale={english ? enUS : zhCN}><CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}
-    menuPreview={menuPreview} setMenuPreview={setMenuPreview}/>}</CloudModelOperations></ConfigProvider>;
+  return <CloudModelOperations key={area} packageWorkspace={packageWorkspace} applicationWorkspace={!cloud && !packageWorkspace}>{store=><AdminConsoleV2View {...props} store={store} license={license} sidebarCollapsed={sidebarCollapsed} setSidebarCollapsed={setSidebarCollapsed} english={english} changeLanguage={changeLanguage}
+    sidebarGroups={sidebarGroups} setSidebarGroups={setSidebarGroups} menuPreview={menuPreview} setMenuPreview={setMenuPreview}/>}</CloudModelOperations>;
 }
-function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,english,changeLanguage,draftDirty,bannerTarget,menuPreview,setMenuPreview}) {
+function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sidebarCollapsed,setSidebarCollapsed,sidebarGroups,setSidebarGroups,english,changeLanguage,draftDirty,bannerTarget,menuPreview,setMenuPreview}) {
   const { state: workspaceState, dispatch: persist, transact, transactModel, transactIndividual, transactAdminAccount, reload, refreshRead, conflict } = store;
   const internalSite = !deploymentLicense.commercial || (!deploymentLicense.managed && workspaceState.spacePolicy?.operatingMode==='internal');
   const license = internalSite ? { ...deploymentLicense, commercial:false, commerceWritable:false } : deploymentLicense;
@@ -142,9 +144,15 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     ...workspaceState.spacePolicy,
     operatingMode: internalSite ? 'internal' : 'factory',
   } };
+  const [notice, setNotice] = useState(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(timeout);
+  }, [notice]);
   const dispatch = action => {
     if (commercialPage(active) && (active !== 'tenants' || !internalSite) && !license.commerceWritable) {
-      Toast.warning(LICENSE_UNAVAILABLE);
+      setNotice({ type: 'warning', text: LICENSE_UNAVAILABLE });
       return null;
     }
     return persist(action);
@@ -241,6 +249,9 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   const detailProvider = active === 'provider-materials' ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
   const detailConnection = active === 'providers-reference' ? state.endpoints.find(item => item.id === detailParams.get('connection') && !item.deletedAt) : null;
   const activeGroup = page.groupId;
+  useEffect(() => {
+    setSidebarGroups(current => current[activeGroup] === false ? { ...current, [activeGroup]: true } : current);
+  }, [activeGroup, setSidebarGroups]);
   const activeArea = page.area;
   const activeModule = sections.find(group => group.id === page.groupId)?.items.find(item => item.id === page.area);
   const detailTenant = active === 'customer-usage-detail' ? pageState.tenants.find(item => item.id === detailParams.get('customer')) : null;
@@ -256,9 +267,30 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
     personalTenant?.name, detailTenant?.name, detailModel?.name, detailModel?.serviceName, projectName,
     state.deployments.find(item => item.id === detailParams.get('deployment'))?.name]);
   const breadcrumbLabel = label => english && !resourceNames.has(label) ? channelEnglish(label) : label;
+  const detailView = active === 'model-templates'
+    ? ['template', 'templateImport'].includes(detailParams.get('view'))
+    : ['customer-analysis-detail', 'customer-usage-detail', 'organization-members'].includes(active)
+      || active === 'tenants' && detailParams.has('create')
+      || breadcrumbs.slice(1, -1).some(({ href }) => href?.split('?')[0] === '#/admin-2/' + active);
   const hasAccount = state.admins.some(account => account.id === state.adminSession?.accountId && account.status === '已启用');
   const showPage = hasAccount && canVisit;
-  const gatewaySettings = activeArea === 'gateway';
+  const channelWorkspace = activeArea === 'channels-reference';
+  const moduleTabs = showPage && activeModule?.children.length > 1 && activeModule.id !== 'materials'
+    && !(active === 'providers-reference' && detailParams.has('connection')) ? (
+      <Tabs className={channelWorkspace ? 'channel-management-tabs' : 'v2-module-tabs'}
+        aria-label={english ? channelEnglish(page.areaLabel) : page.areaLabel}
+        activeKey={active}
+        onChange={channelWorkspace ? id => navigate(channelManagementListRoute(id, new URLSearchParams(location.hash.split('?')[1]))) : navigate}>
+        {activeModule.children.map(([id, label]) => {
+          const text = english ? channelEnglish(label) : label;
+          const Icon = id === 'providers-reference' ? IconList : IconActivity;
+          return <Tabs.TabPane key={id} itemKey={id} tab={channelWorkspace
+            ? <span className="channel-workspace-tab-label"><Icon size={16} aria-hidden="true"/>{text}</span>
+            : text}/>;
+        })}
+      </Tabs>
+    ) : null;
+  const workspaceTabs = channelWorkspace ? moduleTabs : null;
   const inferenceDemo = inferenceDemoPages.has(active) && (demoMode === 'inference' || interactiveDemo);
   const renderInferencePage = (inferenceState, demo = false, {
     refresh = refreshRead, interactive = false, infrastructure, dispatch: demoDispatch, changeInfrastructure,
@@ -289,85 +321,100 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
         return canAccessPage(state.currentRole, target, visibilityLicense);
       });
       if (!items.length) return null;
-      const groupStatus = locked ? '（未授权）' : '';
-      return <section key={group.id} aria-label={english ? channelEnglish(group.title) : group.title}>
-        {!collapsed && !group.direct && <Typography.Text type="tertiary" size="small">{english ? channelEnglish(group.title) : group.title}{groupStatus}</Typography.Text>}
-        {items.map(item => {
-          const Icon = NAVIGATION_ICONS[item.id];
-          const selected = activeGroup === group.id && activeArea === item.id;
-          const target = item.children[0][0];
-          const disabled = locked;
-          const label = english ? channelEnglish(item.label) : item.label;
-          const collapsedLabel = label + (disabled ? '（未授权）' : '');
-          const button = <Button key={item.id} disabled={disabled} block icon={<Icon aria-hidden="true"/>} type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
-            aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} onClick={() => {
-              if (previewingMenu && !canAccessPage(state.currentRole, target, license)) {
-                Toast.info(english ? 'Preview only. This page requires commercial authorization.' : '仅供预览，该入口需要商业运营授权。');
-                return;
-              }
-              navigate(target);
-            }}>{collapsed ? null : label}</Button>;
-          return collapsed ? <Tooltip key={item.id} content={collapsedLabel} position="right" clickToHide closeOnEsc>{button}</Tooltip> : button;
-        })}
+      const label = english ? channelEnglish(group.title) : group.title;
+      const expanded = sidebarGroups[group.id] ?? (activeGroup === group.id || group.id === 'models' || group.id === 'commerce');
+      const grouped = !collapsed && !group.direct;
+      const GroupIcon = NAVIGATION_ICONS[items[0].id];
+      const sectionId = 'admin-sidebar-group-' + group.id;
+      return <section key={group.id} aria-label={label}>
+        {grouped && <Button className="v2-sidebar-item v2-sidebar-group" theme="borderless" block
+          icon={<GroupIcon size={16} aria-hidden="true"/>} aria-expanded={expanded} aria-controls={sectionId}
+          onClick={() => setSidebarGroups(current => ({ ...current, [group.id]: !expanded }))}>
+          <span>{label}{locked && '（未授权）'}</span><ChevronRight size={13} className="v2-sidebar-chevron" aria-hidden="true"/>
+        </Button>}
+        <div className="v2-sidebar-children" id={grouped ? sectionId : undefined} hidden={grouped && !expanded}>
+          {items.map(item => {
+            const Icon = NAVIGATION_ICONS[item.id];
+            const target = item.children[0][0];
+            const selected = activeGroup === group.id && activeArea === item.id;
+            const text = english ? channelEnglish(item.label) : item.label;
+            const collapsedLabel = text + (locked ? '（未授权）' : '');
+            return <Button key={target} className={group.direct ? 'v2-sidebar-item' : 'v2-sidebar-item v2-sidebar-item-child'}
+              disabled={locked} block icon={grouped ? undefined : <Icon size={16} aria-hidden="true"/>}
+              type={selected ? 'primary' : 'tertiary'} theme={selected ? 'light' : 'borderless'}
+              aria-current={selected ? 'page' : undefined} aria-label={collapsed ? collapsedLabel : undefined} title={collapsed ? collapsedLabel : undefined} onClick={() => {
+                if (previewingMenu && !canAccessPage(state.currentRole, target, license)) {
+                  setNotice({ type: 'info', text: english ? 'Preview only. This page requires commercial authorization.' : '仅供预览，该入口需要商业运营授权。' });
+                  return;
+                }
+                navigate(target);
+              }}>{collapsed ? null : text}</Button>;
+          })}
+        </div>
       </section>;
     })}</nav>;
-  const renderNavigation = (collapsed = false) => <Tabs type="button" size="small" activeKey={currentWorkspace} onChange={switchWorkspace}>
-    {allowedWorkspaces.filter(id => !interactiveDemo || id === currentWorkspace).map(id =>
-      <Tabs.TabPane key={id} itemKey={id} tab={english ? channelEnglish(WORKSPACES[id]) : WORKSPACES[id]}>{id === currentWorkspace && renderMenu(collapsed)}</Tabs.TabPane>)}
-  </Tabs>;
+  const renderNavigation = (collapsed = false) => <>
+    {!collapsed && <p className="v2-sidebar-title" title={workbenchName}>{workbenchName}</p>}
+    <div className="v2-sidebar-workspaces" role="group" aria-label={english ? 'Workbench mode' : '工作台模式'}>
+      {allowedWorkspaces.filter(id => !interactiveDemo || id === currentWorkspace).map(id => {
+        const label = english ? channelEnglish(WORKSPACES[id]) : WORKSPACES[id];
+        const Icon = id === 'operations' ? IconBarChartVStroked : IconSetting;
+        return <Button key={id} className="v2-sidebar-workspace" theme="borderless" size="small" block
+          aria-pressed={id === currentWorkspace} aria-label={collapsed ? label : undefined}
+          title={collapsed ? label : undefined} icon={collapsed ? <Icon size={16} aria-hidden="true"/> : undefined}
+          onClick={() => switchWorkspace(id)}>{collapsed ? null : label}</Button>;
+      })}
+    </div>
+    {renderMenu(collapsed)}
+  </>;
   useEffect(() => { const media = matchMedia('(min-width: 901px)'); const close = () => { if (media.matches) setNavOpen(false); }; media.addEventListener('change', close); return () => media.removeEventListener('change', close); }, []);
   const alertCount = state.alerts.filter(item => !["已恢复", "已转事件"].includes(item.status)).length;
   const sidebarToggleLabel = sidebarCollapsed ? '展开侧边栏' : '收起侧边栏';
-  const renderLanguage = collapsed =>
-    <Dropdown trigger="click" position="topLeft" render={<Dropdown.Menu>
-      <Dropdown.Item active={!english} onClick={() => changeLanguage(false)}><span lang="zh-CN">简体中文</span></Dropdown.Item>
-      <Dropdown.Item active={english} onClick={() => changeLanguage(true)}><span lang="en">English</span></Dropdown.Item>
-    </Dropdown.Menu>}>
-      <Button theme="borderless" type="tertiary" size="small" icon={<IconLanguage aria-hidden="true"/>}
-        aria-label={english ? 'Language: English' : '语言：简体中文'} aria-haspopup="menu">
-        {collapsed ? null : english ? 'English' : '简体中文'}
-      </Button>
-    </Dropdown>;
-  return <AdminUIContext.Provider value={true}><div className="admin-v2">
-    {canPreviewMenu && bannerTarget && createPortal(<div className="admin-banner-field">
-      <span id="admin-menu-preview-label">{english ? channelEnglish('菜单模拟') : '菜单模拟'}</span>
-      <Select size="small" aria-labelledby="admin-menu-preview-label" value={selectedMenu}
-        optionList={Object.entries(LICENSE_NAMES).map(([value,label])=>({ value,label:english ? channelEnglish(label) : label }))}
-        onChange={value => setMenuPreview(value === licenseMenu ? null : value)}/>
-    </div>, bannerTarget)}
-    {!navOpen && <aside className="v2-sidebar-desktop" data-collapsed={sidebarCollapsed}>
+  const renderLanguage = collapsed => <Select className={collapsed ? 'xa24-language-collapsed' : 'xa24-language'}
+    placement="top-start" aria-label={english ? 'Language: English' : '语言：简体中文'}
+    value={english ? 'en' : 'zh'} onChange={locale => changeLanguage(locale === 'en')}
+    optionList={[{ value: 'zh', label: '简体中文' }, { value: 'en', label: 'English' }]}/>;
+  return <AdminUIContext.Provider value={true}><div className="admin-v2 xa24-shell">
+    <XaToastRegion/>
+    {bannerTarget && createPortal(<>
+      <span className="xa24-mobile-nav"><Button className="admin-nav-toggle" type="tertiary" theme="borderless"
+        icon={<IconMenu size={16} aria-hidden="true"/>} aria-label="展开后台导航" aria-haspopup="dialog"
+        aria-expanded={navOpen} onClick={() => setNavOpen(true)}/></span>
+      {canPreviewMenu && <div className="admin-banner-field">
+        <span id="admin-menu-preview-label">{english ? channelEnglish('菜单模拟') : '菜单模拟'}</span>
+        <Select size="small" aria-labelledby="admin-menu-preview-label" value={selectedMenu}
+          optionList={Object.entries(LICENSE_NAMES).map(([value,label])=>({ value,label:english ? channelEnglish(label) : label }))}
+          onChange={value => setMenuPreview(value === licenseMenu ? null : value)}/>
+      </div>}
+      <span className="xa24-alert-count" role="img" aria-label={`${alertCount} 条待处理告警`}>
+        <IconBellStroked size={16} aria-hidden="true"/>{alertCount > 0 && <span aria-hidden="true">{alertCount}</span>}
+      </span>
+    </>, bannerTarget)}
+    {!navOpen && <aside className="v2-sidebar-desktop xa24-sidebar" data-collapsed={sidebarCollapsed}>
       <div id="admin-desktop-navigation" className="v2-sidebar">{renderNavigation(sidebarCollapsed)}</div>
       <div className="v2-sidebar-footer">
         {renderLanguage(sidebarCollapsed)}
-      <Tooltip content={sidebarToggleLabel} position="top" clickToHide closeOnEsc>
         <Button className="v2-sidebar-toggle" type="tertiary" theme="borderless"
-          icon={sidebarCollapsed ? <IconDoubleChevronRight aria-hidden="true"/> : <IconDoubleChevronLeft aria-hidden="true"/>}
+          icon={sidebarCollapsed ? <IconDoubleChevronRight size={16} aria-hidden="true"/> : <IconDoubleChevronLeft size={16} aria-hidden="true"/>}
+          title={sidebarToggleLabel}
           aria-label={sidebarToggleLabel} aria-controls="admin-desktop-navigation" aria-expanded={!sidebarCollapsed}
           onClick={() => setSidebarCollapsed(collapsed => !collapsed)}/>
-      </Tooltip>
       </div>
     </aside>}
-    <div className="v2-content">
-      <header className="admin-context-bar">
-        <Button className="admin-nav-toggle" type="tertiary" theme="borderless" icon={<IconMenu aria-hidden="true"/>} aria-label="展开后台导航" aria-haspopup="dialog" aria-expanded={navOpen} onClick={() => setNavOpen(true)}/>
+    <div className="v2-content xa24-main" data-admin-layout={detailView ? 'detail' : 'entry'}>
+      {detailView && <header className="admin-context-bar">
         <div className="admin-breadcrumb">
-          <Breadcrumb aria-label="面包屑">{breadcrumbs.map(({ label, href }, index) => (
-            <Breadcrumb.Item key={index} noLink>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{breadcrumbLabel(label)}</a> : <span title={breadcrumbLabel(label)} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{breadcrumbLabel(label)}</span>}</Breadcrumb.Item>
-          ))}</Breadcrumb>
+          <nav aria-label="面包屑"><ol className="xa24-breadcrumbs">{breadcrumbs.map(({ label, href }, index) => (
+            <li key={index}>{href ? <a data-model-list-breadcrumb data-admin-breadcrumb href={href}>{breadcrumbLabel(label)}</a> : <span title={breadcrumbLabel(label)} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{breadcrumbLabel(label)}</span>}</li>
+          ))}</ol></nav>
           {detailTenant && <Typography.Text type="tertiary" size="small" className="us-breadcrumb-meta">{detailTenant.id} · {detailTenant.type} · {detailTenant.status}</Typography.Text>}
         </div>
-        <Badge count={alertCount} aria-label={`${alertCount} 条待处理告警`}><IconBellStroked aria-hidden="true"/></Badge>
-      </header>
+      </header>}
+      {notice && <div className="xa24-shell-notice"><Banner type={notice.type} description={notice.text}/></div>}
       {!interactiveDemo && state.storageError && <Banner type="danger" closeIcon={null} description={<>本地数据异常：{state.storageError.toLowerCase().includes('quota') ? '浏览器本地存储空间不足，原数据未更改。' : state.storageError} <Button onClick={reload}>重新加载</Button></>}/>}
       {!interactiveDemo && conflict && <Banner type="warning" closeIcon={null} description={<>检测到其他页面的新版本数据。 <Button onClick={reload}>载入新版本</Button></>}/>}
       {showPage && !organizationView && commercialPage(active) && active !== 'tenants' && commerceReadOnly && <Banner type="warning" closeIcon={null} description={license.status === 'expired' ? '商业运营授权已到期，可查阅已保存的记录。' : '商业运营授权不可用，可查阅已保存的记录。'}/>}
-      {showPage && activeModule?.children.length > 1 && activeModule.id !== 'materials' &&
-        !(active === 'providers-reference' && detailParams.get('connection')) && (
-        <Tabs className={activeArea === 'channels-reference' ? 'v2-module-tabs channel-management-tabs' : 'v2-module-tabs'}
-          activeKey={active} onChange={activeArea === 'channels-reference' ? id => navigate(channelManagementListRoute(id, new URLSearchParams(location.hash.split('?')[1]))) : navigate}>
-          {activeModule.children.map(([id, label]) => <Tabs.TabPane key={id} itemKey={id} tab={english ? channelEnglish(label) : label}/>)}
-        </Tabs>
-      )}
+      {!channelWorkspace && moduleTabs}
       <main data-admin-page={active}>
         <AdminPageBoundary key={interactiveDemo ? demoMode : active}>
           {!hasAccount ? <Banner title="后台账号不可用" description={<a href="#/auth/login">重新登录</a>} closeIcon={null}/> : !canVisit ? (
@@ -396,7 +443,8 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
             : active === "model-market" ? <ModelMarket state={state} transact={transactModel} conflict={conflict} internal={internalSite}/>
             : active === "model-prices" ? <ModelPrices state={state} transact={transactModel} conflict={conflict} reload={reload} readOnly={commerceReadOnly}/>
             : active === "tariff-dictionary" ? <MaterialDictionaryPage state={state} transact={transactModel} conflict={conflict}/>
-            : active === 'providers-reference' ? <ChannelManagementNew state={state} transact={transactModel} conflict={conflict} reload={reload}/>
+            : active === 'providers-reference' ? <ChannelManagementNew state={state} transact={transactModel} conflict={conflict} reload={reload}
+              workspaceTabs={workspaceTabs}/>
             : active === 'provider-materials' ? <ProviderMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'model-templates' ? <ModelMaterials state={state} transact={transactModel} conflict={conflict} reload={reload}/>
             : active === 'listing-new' ? <ModelServicesNew state={factState} params={detailParams} dirtyRef={draftDirty} sourceConflict={conflict} reloadWorkspace={reload}/>
@@ -411,10 +459,10 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
               tenantId={resourceTenant?.id} tenantName={resourceTenant?.name} tab={detailParams.get('tab')}
               returnHref={resourceTenant && tenantHref(resourceTenant,{tab:'organization'})}
               onTabChange={tab=>navigate(active + '?' + new URLSearchParams({tenant:resourceTenant.id,tab}))}/>
-            : gatewaySettings ? <GatewayPage key={active} pageId={active} state={state} dispatch={dispatch}/>
+            : active === 'routes' ? <GatewayRouteSettings state={state} dispatch={dispatch} refreshRead={refreshRead}/>
             : ["providers-health", "logs"].includes(active) ? <ObservabilityPage pageId={active} params={detailParams}
               state={factState} dispatch={dispatch} navigate={navigate} simulation={logSimulation} setSimulation={setLogSimulation} refreshRead={refreshRead}
-              canViewFullLog={state.currentRole === '平台管理员'}/>
+              canViewFullLog={state.currentRole === '平台管理员'} workspaceTabs={workspaceTabs}/>
             : inferenceDemo ? <InferenceDemo key={state.currentRole} role={state.currentRole} interactive={interactiveDemo}>
               {(...args) => <AdminPageBoundary key={active}>{renderInferencePage(...args)}</AdminPageBoundary>}
             </InferenceDemo>

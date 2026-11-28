@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import {useLayoutEffect, useRef, useState} from 'react';
-import {Button, Space, Tabs, Typography} from '@douyinfe/semi-ui';
+import {Button, Space, Tabs, Typography} from './xa24/HaloUI.jsx';
 import { AdminSideSheet as SideSheet } from './AdminOverlay';
 import ModelLibraryEditor from './ModelLibraryEditor';
 import Table from './AdminTable';

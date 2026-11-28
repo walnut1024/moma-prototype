@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import AdminPageHeading from './AdminPageHeading';
 import {userBusinessData} from '../business-facts.mjs';
-import { Card, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Card, Space, Toast, Typography } from './xa24/HaloUI.jsx';
 import AnalysisMetric from './AnalysisMetric';
 import { useMemo, useState } from 'react';
 import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';

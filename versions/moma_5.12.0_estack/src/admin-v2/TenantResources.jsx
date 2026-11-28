@@ -1,4 +1,4 @@
-import { Banner, Typography } from '@douyinfe/semi-ui';
+import { Banner, Typography } from './xa24/HaloUI.jsx';
 import { useTenantData } from '../useTenantData';
 import OrganizationWorkspace from '../components/OrganizationWorkspace';
 import AdminPageHeading from './AdminPageHeading';

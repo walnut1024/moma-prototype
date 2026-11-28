@@ -1,7 +1,8 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Form, Input, Space, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
-import { IconUpload } from '@douyinfe/semi-icons';
+import { Button, Form, Input, Space, TextArea, Typography } from './xa24/HaloUI.jsx';
+import { Upload } from './xa24/HaloUI.jsx';
+import { IconUpload } from './xa24/HaloIcons.jsx';
 import { Choice, Field, Notice } from './ServiceUI';
 import { providerCode, PROVIDER_TYPES } from './provider-management';
 import MaterialLogo, { readMaterialLogo } from './MaterialLogo';

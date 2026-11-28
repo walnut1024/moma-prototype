@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useId, useRef, useState } from 'react';
-import { Button, DatePicker, Input, Select, Tag, Toast } from '@douyinfe/semi-ui';
-import { IconFilter, IconRefresh, IconSearch } from '@douyinfe/semi-icons';
+import { Button, DatePicker, Input, Select, Tag, Toast } from './xa24/HaloUI.jsx';
+import { IconFilter, IconRefresh, IconSearch } from './xa24/HaloIcons.jsx';
 import { ObservationIdentitySearch, ObservationSupplyPick, useObservationSupply } from './CallObservationControls';
 import { logMinuteRange } from './call-log-filters.mjs';
 import { callPresets, changeObservationTenant, httpLabel, modelTypes, observationKey, observationOptions,

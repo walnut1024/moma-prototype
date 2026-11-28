@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
-import { useId, useLayoutEffect, useEffect, useRef, useState } from 'react';
-import { Card, Select, Tag, Typography } from '@douyinfe/semi-ui';
+import { useId, useLayoutEffect, useEffect, useState } from 'react';
+import { Card, Select, Tag, Typography } from './xa24/HaloUI.jsx';
 import AdminPageHeading from './AdminPageHeading';
 import { protocols, channels, services, examples, branchId, canForward, endpoint, planDemoRequest } from './model-link-demo.mjs';
 import './model-links.css';
@@ -26,7 +26,7 @@ export default function ModelLinks() {
   const [sample, setSample] = useState(0);
   const [index, setIndex] = useState(0);
   const [paths, setPaths] = useState({});
-  const canvas = useRef(null);
+  const [stage, setStage] = useState(null);
   const arrow = useId();
   const example = examples[sample];
   const plan = plans[sample];
@@ -56,7 +56,7 @@ export default function ModelLinks() {
   }
   const edgeIds = edges.map(({ from, to }) => edgeKey(from, to)).join(' ');
   useLayoutEffect(() => {
-    const stage = canvas.current;
+    if (!stage) return;
     const nodes = new Map([...stage.querySelectorAll('[data-link-node]')].map(node => [node.dataset.linkNode, node]));
     const draw = () => {
       const origin = stage.getBoundingClientRect();
@@ -74,7 +74,7 @@ export default function ModelLinks() {
     observer.observe(stage);
     nodes.forEach(node => observer.observe(node));
     return () => observer.disconnect();
-  }, [edgeIds]);
+  }, [edgeIds, stage]);
 
   useEffect(() => {
     if (!playing) return;
@@ -98,7 +98,7 @@ export default function ModelLinks() {
         </div>
       </div>
       <div className="model-links-viewport" role="region" aria-label="模型链路画布" tabIndex={0}>
-        <div className="model-links-stage" ref={canvas} style={{ '--service-count': services.length }}>
+        <div className="model-links-stage" ref={setStage} style={{ '--service-count': services.length }}>
           <svg className="model-links-wires" aria-hidden="true">
             <defs><marker id={arrow} orient="auto-start-reverse" markerWidth="7" markerHeight="8" refX="6" refY="4" markerUnits="userSpaceOnUse">
               <path d="M1 1 L5 4 L1 7" fill="none" stroke="context-stroke" strokeWidth="1.4"/>

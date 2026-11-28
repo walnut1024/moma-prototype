@@ -3,7 +3,7 @@
   text-underline-offset: 4px;
   cursor: help;
 }
-.semi-button.table-field-sort-trigger {
+:is(.semi-button, .haloe-btn).table-field-sort-trigger {
   padding-inline: 0;
   height: auto;
   font: inherit;

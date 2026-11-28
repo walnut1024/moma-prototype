@@ -6,7 +6,7 @@ import { consoleActiveItem } from './console-navigation.mjs';
 import { projectServiceEnabled, tenantProjectAdmin } from './project-access.mjs';
 import { MarketAction, marketRequest, useCloudMarket } from './CloudMarket';
 import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
-import { Button as SemiButton, ConfigProvider, Modal, Input as SemiInput, Select as SemiSelect, Slider, Tabs as SemiTabs, Tag, Toast, Typography as SemiTypography } from '@douyinfe/semi-ui';
+import { Button as SemiButton, ConfigProvider, Modal, Input as SemiInput, Select as SemiSelect, Slider, Tabs as SemiTabs, Tag, Toast } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
 import { AdminSideSheet as SideSheet } from './admin-v2/AdminOverlay';
@@ -33,6 +33,7 @@ import {
   AudioLines,
   Calculator,
   ChartNoAxesCombined,
+  CornerUpLeft,
   FileText,
   Flame,
   Image,
@@ -77,6 +78,7 @@ const CallLogs = lazy(() => import('./CallLogs'));
 const TextExperience = lazy(() => import('./TextExperience'));
 const ModelComparison = lazy(() => import('./ModelComparison'));
 const AdminConsoleV2 = lazy(() => import('./AdminConsoleV2'));
+const AdminReturnButton = lazy(() => import('./admin-v2/xa24/HaloComponents.jsx').then(module => ({ default: module.XaButton })));
 const loadProjectConfiguration = () => import('./components/ProjectConfiguration');
 const ProjectModels = lazy(() => loadProjectConfiguration().then(module => ({ default: module.ProjectModels })));
 const ProjectSettings = lazy(() => loadProjectConfiguration().then(module => ({ default: module.ProjectSettings })));
@@ -287,7 +289,8 @@ function PrototypeApp({ version }) {
     try { localStorage.setItem('moma-5120-admin-guide-language', value ? 'en' : 'zh-CN'); }
     catch { /* The current selection still applies when storage is unavailable. */ }
   };
-  const workbenchName = site.workbenchName || DEFAULT_WORKBENCH_NAME;
+  const configuredWorkbenchName = site.workbenchName || DEFAULT_WORKBENCH_NAME;
+  const workbenchName = english && configuredWorkbenchName === DEFAULT_WORKBENCH_NAME ? 'Token Admin Workbench' : configuredWorkbenchName;
   useSiteChrome(site);
   const auth = useAuthNavigation();
   const modeFromHash = () =>
@@ -670,14 +673,14 @@ function PrototypeApp({ version }) {
     activeKey={activePage==='模型排行' ? 'model-ranking' : 'model-market'}
     tabList={[{itemKey:'model-market',tab:'模型列表'},{itemKey:'model-ranking',tab:'模型排行'}]}
     onChange={page=>openProjectPage(undefined,page)} />;
+  const siteLogo = <img src={site.logo || DEFAULT_SITE_LOGO} alt="" onError={event => restoreSiteImage(event, DEFAULT_SITE_LOGO)}/>;
   const shell = (
-    <AdminUIContext.Provider value={admin === "v2"}><div ref={tenantShell} className={`app-shell ${admin === "front" ? "tenant-semi" : ""} ${auth.route ? "auth-shell auth-enterprise-shell" : ""}`}>
-      <header className={admin === "v2" ? "admin-banner" : !auth.route ? "tenant-banner" : undefined}>
+    <AdminUIContext.Provider value={admin === "v2"}><div ref={tenantShell} className={`app-shell ${admin === "front" ? "tenant-semi" : "xa24-admin"} ${auth.route ? "auth-shell auth-enterprise-shell" : ""}`}>
+      <header className={admin === "v2" ? "admin-banner xa24-topbar" : !auth.route ? "tenant-banner" : undefined}>
         <div className="brand-mark">
-          <img src={site.logo || DEFAULT_SITE_LOGO} alt="" onError={event => restoreSiteImage(event, DEFAULT_SITE_LOGO)} />
           {admin === "v2"
-            ? <SemiTypography.Text strong>{english && workbenchName === DEFAULT_WORKBENCH_NAME ? 'Token Admin Workbench' : workbenchName}</SemiTypography.Text>
-            : <span>{site.userConsoleName || DEFAULT_USER_CONSOLE_NAME}</span>}
+            ? <><span className="xa24-brand-logo">{siteLogo}</span><span>{workbenchName}</span></>
+            : <>{siteLogo}<span>{site.userConsoleName || DEFAULT_USER_CONSOLE_NAME}</span></>}
         </div>
         <div className="top-actions">
           {admin === "v2" && (
@@ -694,7 +697,8 @@ function PrototypeApp({ version }) {
             onSwitchSpace={()=>openProjectPage(undefined,'home',{},true)}/> : null}
         </div>
         {admin === "v2" && (
-          <SemiButton className="admin-banner-return" type="tertiary" theme="borderless" size="small" onClick={() => navigateAdmin("front")}>{english ? 'Return to Console' : '返回前台'}</SemiButton>
+          <Suspense fallback={null}><AdminReturnButton className="admin-banner-return" type="tertiary"
+            icon={<CornerUpLeft size={16} aria-hidden="true"/>} onClick={() => navigateAdmin("front")}>{english ? 'Return to Console' : '返回前台'}</AdminReturnButton></Suspense>
         )}
       </header>
       {admin === "front" && !auth.route && !waitingForSession && (
@@ -702,13 +706,13 @@ function PrototypeApp({ version }) {
           projects={activeProjects} enabled={Boolean(owner)} onProjectChange={changeCurrentProject}
           active={currentNav} navigate={navigateTenant} icons={navIcons}/>
       )}
-      <TenantAnnouncementDialog
-        accountId={admin === 'front' && !auth.route && market.tenant ? market.account?.id : undefined}
-        getPopupContainer={getTenantPopupContainer}/>
+      {admin === 'front' && <TenantAnnouncementDialog
+        accountId={!auth.route && market.tenant ? market.account?.id : undefined}
+        getPopupContainer={getTenantPopupContainer}/>}
       <main key={auth.route ? "auth" : admin === "front" ? owner || "anonymous" : "admin"} className={admin !== "front" ? "admin-main" : "front-main"}>
         {admin === 'front' && !auth.route && !detailRoute && projectPages.has(activeRoute) && !spaceLogs && project?.canManage &&
           <div className="project-page-notice"><ProjectBudgetNotice project={project} spend={projectTenant.projectBudgets?.[project.id]} /></div>}
-        {entryChoice && <Modal visible title={entryChoice.kind==='project' ? '选择体验项目' : '模型体验'} footer={null}
+        {admin === 'front' && entryChoice && <Modal visible title={entryChoice.kind==='project' ? '选择体验项目' : '模型体验'} footer={null}
           onCancel={()=>setEntryChoice(null)} className="project-modal">
           {entryChoice.message && <p role="status">{entryChoice.message}</p>}
           {entryChoice.kind==='project' && (activeProjects.length ? <div><span id="experience-project-label">体验项目</span><SemiSelect aria-labelledby="experience-project-label" placeholder="选择项目"

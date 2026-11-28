@@ -1,7 +1,7 @@
 import { MODEL_TYPE_LABELS } from '../model-types.mjs';
 
 export const chartPalette = ['#3568f9', '#18a69a', '#f09b38', '#865bd6', '#7199ca', '#dd659d', '#8a97ac', '#946d42', '#3d8a66', '#b46b85', '#547dc0', '#a68a35'];
-export const adminChartColor = (color, primary = 'var(--semi-color-primary)') => color === chartPalette[0] ? primary : color;
+export const adminChartColor = (color, primary = 'var(--xa24-primary)') => color === chartPalette[0] ? primary : color;
 
 const semantic = { [MODEL_TYPE_LABELS.text]: 1, [MODEL_TYPE_LABELS.multimodal]: 2, [MODEL_TYPE_LABELS.visual]: 3,
   [MODEL_TYPE_LABELS.audio]: 5, [MODEL_TYPE_LABELS.embedding]: 4, [MODEL_TYPE_LABELS.rerank]: 6 };

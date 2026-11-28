@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useState } from 'react';
-import { Checkbox, Empty, Input, Typography } from '@douyinfe/semi-ui';
+import { Checkbox, Empty, Input, Typography } from './xa24/HaloUI.jsx';
 import { modelReleaseOrder, modelCatalogue } from './model-library';
 import { SUPPLIER_REGISTRATION_LIMIT } from './supplier-model-registration';
 import { modelTypeLabel } from '../model-types.mjs';

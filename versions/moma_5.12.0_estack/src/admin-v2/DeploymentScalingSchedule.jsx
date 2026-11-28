@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState } from 'react';
-import { Banner, Button, Input, InputNumber, Select, Switch, Tag, TimePicker, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconClock, IconHelpCircle, IconMinus, IconPlus } from '@douyinfe/semi-icons';
+import { Banner, Button, Input, InputNumber, Select, Switch, Tag, TimePicker, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { IconClock, IconHelpCircle, IconMinus, IconPlus } from './xa24/HaloIcons.jsx';
 import { AdminModal } from './AdminOverlay';
 import { useChannelText } from './channel-language';
 import {

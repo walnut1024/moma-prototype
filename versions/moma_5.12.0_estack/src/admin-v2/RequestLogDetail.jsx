@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import Descriptions from './AdminDescriptions';
-import { Banner, Button, Collapse, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconCopy, IconDownload } from '@douyinfe/semi-icons';
+import { Banner, Button, Space, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Collapse } from './xa24/HaloUI.jsx';
+import { Tabs } from './xa24/HaloUI.jsx';
+import { IconCopy, IconDownload } from './xa24/HaloIcons.jsx';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { AdminSideSheet } from './AdminOverlay';
 import AdminStatus from './AdminStatus';
@@ -236,18 +238,19 @@ export default function RequestLogDetail({ row, attemptId, evidence, canViewFull
         <div className="admin-request-log-title">{requestId}{owner}</div>
         {copyId}
       </div>}
-      <Tabs activeKey={activeTab} onChange={setTab} keepDOM={false} tabPaneMotion={false}
-        aria-label="请求详情视图" renderTabBar={(props, TabBar) => <div className="admin-request-log-context">
-          {!fromCallLogs && <TabBar {...props}/>}
-          <RequestFacts row={row} trace={trace} resultLabel={evidence?.resultLabel}/>
-          {fromCallLogs && <TabBar {...props}/>}
-        </div>}>
-        <Tabs.TabPane itemKey="summary" tab="摘要日志"><RequestMetadata row={row} fromCallLogs={fromCallLogs}/></Tabs.TabPane>
+      {fromCallLogs && <RequestFacts row={row} trace={trace} resultLabel={evidence?.resultLabel}/>}
+      <Tabs activeKey={activeTab} onChange={setTab} keepDOM={false} aria-label="请求详情视图">
+        <Tabs.TabPane itemKey="summary" tab="摘要日志">
+          {!fromCallLogs && <RequestFacts row={row} trace={trace} resultLabel={evidence?.resultLabel}/>}
+          <RequestMetadata row={row} fromCallLogs={fromCallLogs}/>
+        </Tabs.TabPane>
         <Tabs.TabPane itemKey="trace" tab="请求链路">
+          {!fromCallLogs && <RequestFacts row={row} trace={trace} resultLabel={evidence?.resultLabel}/>}
           <RequestTrace trace={trace} state={evidence?.traceState} finalChannel={row.channelName} selected={selected}
             onSelect={setSelected} onSummary={showSummary} fromCallLogs={fromCallLogs}/>
         </Tabs.TabPane>
         {canViewFullLog && <Tabs.TabPane itemKey="raw" tab="完整日志">
+          {!fromCallLogs && <RequestFacts row={row} trace={trace} resultLabel={evidence?.resultLabel}/>}
           {tab === 'raw' && <RequestBody body={readRequestBody(evidence)} attemptIndex={attemptIndex} onSummary={showSummary}
             includeClientRequest={fromCallLogs && !attemptId} maskedKey={fromCallLogs ? row.keyMasked : undefined}/>}
         </Tabs.TabPane>}

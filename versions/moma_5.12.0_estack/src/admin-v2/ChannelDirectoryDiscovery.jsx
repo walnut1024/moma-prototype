@@ -1,8 +1,8 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useId, useRef, useState } from 'react';
 import Descriptions from './AdminDescriptions';
-import { Button, Checkbox, Empty, Input, InputNumber, Pagination, Space, Table, TextArea, Typography } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Button, Checkbox, Empty, Input, InputNumber, Pagination, Space, Table, TextArea, Typography } from './xa24/HaloUI.jsx';
+import { IconSearch } from './xa24/HaloIcons.jsx';
 import { Modal, Notice, CopyId } from './ModelOperationsUI';
 import { channelDiscoveryPreview, directoryDiscoveryPolicy, directoryDiscoveryReceipt, directoryDiscoverySignature, ignoredDiscoveryModel } from './channel-discovery-diff';
 import { connectionCredentialsReady } from './connection-state';

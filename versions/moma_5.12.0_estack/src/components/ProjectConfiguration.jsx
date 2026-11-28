@@ -1,8 +1,25 @@
-import { useEffect, useState } from 'react';
-import { Button, Checkbox, Input, Modal, Select, Table, TextArea } from '@douyinfe/semi-ui';
+import { use, useContext, useEffect, useState } from 'react';
+import {
+  Button as FrontButton, Checkbox as FrontCheckbox, Input as FrontInput, Modal as FrontModal,
+  Select as FrontSelect, Table as FrontTable, TextArea as FrontTextArea,
+} from '@douyinfe/semi-ui';
+import { AdminUIContext } from './admin-ui-context';
 import { PROJECT_ADMIN, PROJECT_MEMBER, projectRoleLabel, projectServiceEnabled } from '../project-access.mjs';
 import { departmentPath } from '../organization-data.mjs';
 import { millionTokens, PROJECT_BUDGET_PERIODS } from '../project-token-budget.mjs';
+
+const frontControls = {
+  Button: FrontButton, Checkbox: FrontCheckbox, Input: FrontInput, Modal: FrontModal,
+  Select: FrontSelect, Table: FrontTable, TextArea: FrontTextArea,
+};
+let adminControls;
+
+function useProjectControls() {
+  if (!useContext(AdminUIContext)) return frontControls;
+  // Resolve the kit before mounting the panel so opening an editor does not suspend its form.
+  adminControls ??= import('../admin-v2/xa24/HaloUI.jsx');
+  return use(adminControls);
+}
 
 export const projectTime = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', hour12:false }) : '—';
 export const projectMoney = value => value == null ? '—' : value.toLocaleString('zh-CN', {
@@ -14,6 +31,7 @@ const saveOptions = tenant => ({ expectedRevision:tenant.revision, identityKey:t
 const budgetPeriods = Object.entries(PROJECT_BUDGET_PERIODS).map(([value, label]) => ({ value, label }));
 
 export function ProjectFields({ value, setValue, tenant }) {
+  const { Input, TextArea } = useProjectControls();
   const change = (key, field) => setValue({ ...value, [key]:field });
   return <>
     <label>项目名称<Input aria-label="项目名称" required maxLength={60} readonly={tenant.identity.spaceId === 'personal'} value={value.name} onChange={name => change('name',name)} /></label>
@@ -22,6 +40,7 @@ export function ProjectFields({ value, setValue, tenant }) {
 }
 
 export function ProjectCreateDialog({ tenant, onClose, onCreated }) {
+  const { Button, Modal, Select } = useProjectControls();
   const [draft,setDraft] = useState({name:'',description:''});
   const [options] = useState(()=>saveOptions(tenant));
   const [error,setError] = useState('');
@@ -61,6 +80,7 @@ export function ProjectCreateDialog({ tenant, onClose, onCreated }) {
 }
 
 export function ProjectMembers({ tenant, project, adminMembers }) {
+  const { Button, Modal, Select, Table } = useProjectControls();
   const members = tenant.projectMembers[project.id] || [];
   const canManage = project.canManage && project.status !== '已删除';
   const [choice, setChoice] = useState('');
@@ -124,6 +144,7 @@ export function ProjectMembers({ tenant, project, adminMembers }) {
 }
 
 export function ProjectModels({ tenant, project, onExperience, dirtyRef }) {
+  const { Button, Checkbox, Input, Table } = useProjectControls();
   const personal = tenant.identity.spaceId === 'personal';
   const available = new Map();
   for (const service of tenant.projectServices) {
@@ -207,6 +228,7 @@ export const projectLifecycle = {
 };
 
 export function ProjectLifecycleDialog({ tenant, project, intent, onClose, onDone }) {
+  const { Modal } = useProjectControls();
   const [options] = useState(() => saveOptions(tenant));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -232,6 +254,7 @@ export function ProjectLifecycleDialog({ tenant, project, intent, onClose, onDon
 }
 
 export function ProjectTokenBudget({ tenant, project }) {
+  const { Button, Input, Modal, Select } = useProjectControls();
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -321,6 +344,7 @@ export function ProjectTokenBudget({ tenant, project }) {
 }
 
 export function ProjectSettings({ tenant, project, mode = 'personal', showAudit = true }) {
+  const { Button, Checkbox, Input, Modal, Table } = useProjectControls();
   const editable = project.canManage && project.status !== '已删除';
   const editingDetails = mode === 'details';
   const fields = mode === 'personal' || editingDetails;

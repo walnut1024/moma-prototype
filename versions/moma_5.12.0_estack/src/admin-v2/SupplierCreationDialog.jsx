@@ -1,6 +1,5 @@
 import { useId } from 'react';
-import { Button } from '@douyinfe/semi-ui';
-import { Modal } from './ModelOperationsUI';
+import { XaButton as Button, XaOperationDialog as Modal } from './xa24/HaloComponents.jsx';
 
 export default function SupplierCreationDialog({ title, description, cancel, submit, disabled, children, action, footer, cancelLabel = '取消', embedded = false, wide = false, drawer = false, drawerSide = 'right', className = '' }) {
   const formId = useId();

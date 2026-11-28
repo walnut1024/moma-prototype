@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react';
-import { Banner, Button, Empty, Input, Radio, RadioGroup, Tag, Typography } from '@douyinfe/semi-ui';
-import { IconSearch, IconServerStroked } from '@douyinfe/semi-icons';
+import { Banner, Button, Empty, Input, Radio, RadioGroup, Tag, Typography } from './xa24/HaloUI.jsx';
+import { IconSearch, IconServerStroked } from './xa24/HaloIcons.jsx';
 import { AdminSideSheet } from './AdminOverlay';
 import AdminStatus from './AdminStatus';
 import { useChannelText } from './channel-language';

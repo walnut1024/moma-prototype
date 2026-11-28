@@ -52,7 +52,7 @@ export const sections = [
     { id: "ops-model-files", label: "模型文件", children: [["ops-model-files", "模型文件"]] },
   ]},
   { id: "gateway", workspace: "maintenance", title: "网关管理", items: [
-    { id: "gateway", label: "模型路由", children: [["routes", "模型路由"], ["limits", "限流与并发"], ["fallback", "熔断与回退"], ["cache", "缓存策略"], ["releases", "配置版本与发布"]] },
+    { id: "gateway", label: "模型路由", children: [["routes", "模型路由"]] },
     { id: "global-routing", label: "路由设置（全局）", children: [["global-routing", "路由设置（全局）"]] },
   ]},
   { id: "getting-started", workspace: "operations", title: "研发须知", items: [

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Empty, Select, Space, Tabs, Tag, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconChevronLeft, IconChevronRight } from '@douyinfe/semi-icons';
+import { Button, Card, Empty, Select, Space, Tabs, Tag, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { IconChevronLeft, IconChevronRight } from './xa24/HaloIcons.jsx';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import AdminDescriptions from './AdminDescriptions';
 import { AdminSideSheet } from './AdminOverlay';
@@ -299,7 +299,7 @@ export function BenchmarkExecutionEnvironment({ row, records }) {
       </Button>}>
       <ResultTable label={t('节点与 GPU')} rowKey="id" dataSource={workers} columns={workerColumns} scroll={{ x: 980 }} pagination={false}
         empty={t('没有保存节点与 GPU 快照')} rowExpandable={worker => worker.devices.length > 0}
-        expandedRowKeys={expanded} onExpandedRowsChange={setExpanded}
+        expandedRowKeys={expanded} onExpandedRowsChange={rows => setExpanded(rows.map(row => row.id))}
         expandedRowRender={worker => <ResultTable label={`${worker.name} ${t('GPU 设备')}`} rowKey="id"
           dataSource={worker.devices} columns={gpuColumns} pagination={false}/>}/>
     </Card>

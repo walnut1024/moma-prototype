@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { AutoComplete, Banner, Button, Card, Cascader, Checkbox, Dropdown, Empty, Input, InputNumber, RadioGroup, Select, Space, Switch, Tabs, Tag, TextArea, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconArrowDown, IconArrowUp, IconDelete, IconDownload, IconLayers, IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { AutoComplete, Banner, Button, Card, Checkbox, Empty, Input, InputNumber, RadioGroup, Select, Space, Switch, Tabs, Tag, TextArea, Toast, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { Cascader } from './xa24/HaloUI.jsx';
+import { Dropdown } from './xa24/HaloUI.jsx';
+import { IconArrowDown, IconArrowUp, IconDelete, IconDownload, IconLayers, IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { DEFAULT_SCHEMA, dump, JSON_SCHEMA, load } from 'js-yaml';
 import AdminDescriptions from './AdminDescriptions';
 import AdminActionMenu from './AdminActionMenu';

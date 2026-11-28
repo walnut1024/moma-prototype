@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Button, Space, TextArea, Typography } from '@douyinfe/semi-ui';
+import { Button, Space, Typography } from './xa24/HaloUI.jsx';
 import { useChannelText } from './channel-language';
 import { backendYamlFieldHints } from './inference-backend';
 import { backendYamlCompletion, backendYamlNewline, backendYamlPair } from './inference-backend-yaml-completion';
@@ -40,6 +40,7 @@ export default function InferenceBackendYamlInput({ row, inputRef, value, onChan
   const shortcutId = useId();
   const container = useRef(null);
   const mirror = useRef(null);
+  const gutter = useRef(null);
   const list = useRef(null);
   const suggestionRef = useRef(null);
   const edit = useRef(null);
@@ -48,13 +49,11 @@ export default function InferenceBackendYamlInput({ row, inputRef, value, onChan
   const [active, setActive] = useState(0);
   const [inComposition, setInComposition] = useState(false);
   const [formatStatus, setFormatStatus] = useState('');
-  const showLineNumbers = value.length <= 128 * 1024 && value.split('\n', 1001).length <= 1000;
+  const lineCount = value.split('\n', 1001).length;
+  const showLineNumbers = value.length <= 128 * 1024 && lineCount <= 1000;
   const syntax = useMemo(() => showLineNumbers && !inComposition && !busy ? backendYamlSyntax(value) : null, [value, showLineNumbers, inComposition, busy]);
   const mirrorEnabled = syntax !== null;
 
-  useLayoutEffect(() => {
-    container.current?.querySelector('.semi-input-textarea-lineNumber')?.setAttribute('aria-hidden', 'true');
-  }, [showLineNumbers]);
   useLayoutEffect(() => {
     const frame = mirror.current;
     const input = inputRef.current;
@@ -205,13 +204,18 @@ export default function InferenceBackendYamlInput({ row, inputRef, value, onChan
   };
 
   return <div className={`inference-yaml-input${mirrorEnabled ? ' inference-yaml-input-colored' : ''}`} ref={container}>
-    <TextArea ref={inputRef} aria-label={t('YAML 配置')} className="inference-backend-yaml" spellCheck={false}
-      rows={18} showLineNumber={showLineNumbers} wrap="off" disabled={busy} value={value}
-      onChange={change} onKeyDown={keyDown} onBlur={() => { setSuggestions(null); onBlur(); }}
+    <div className="inference-yaml-surface">
+      {showLineNumbers && <div className="inference-yaml-gutter" aria-hidden="true"><pre ref={gutter}>
+        {Array.from({ length: lineCount }, (_, index) => index + 1).join('\n')}
+      </pre></div>}
+      <textarea ref={inputRef} aria-label={t('YAML 配置')} className="inference-backend-yaml" spellCheck={false}
+      rows={18} wrap="off" disabled={busy} value={value}
+      onChange={event => change(event.target.value, event)} onKeyDown={keyDown} onBlur={() => { setSuggestions(null); onBlur(); }}
       onCompositionStart={() => { composing.current = true; setInComposition(true); setSuggestions(null); }}
       onCompositionEnd={() => { composing.current = false; setInComposition(false); }}
       onScroll={event => {
         syncMirrorScroll(mirror.current, event.currentTarget);
+        if (gutter.current) gutter.current.style.transform = `translateY(${-event.currentTarget.scrollTop}px)`;
         if (suggestionRef.current) setSuggestions(null);
       }}
       onSelect={event => {
@@ -219,10 +223,11 @@ export default function InferenceBackendYamlInput({ row, inputRef, value, onChan
         const caret = suggestionRef.current?.caret;
         if (caret != null && (input.selectionStart !== caret || input.selectionEnd !== caret)) setSuggestions(null);
       }}
-      validateStatus={invalid ? 'error' : 'default'} aria-invalid={invalid} aria-details={hintId}
+      aria-invalid={invalid} aria-details={hintId}
       aria-describedby={invalid ? `${errorId} ${shortcutId}` : shortcutId} aria-keyshortcuts="Control+Space Meta+Space Alt+Shift+F Control+Shift+I"
       aria-autocomplete="list" aria-controls={suggestion ? listId : undefined}
       aria-activedescendant={suggestion ? `${listId}-${active}` : undefined}/>
+    </div>
     {syntax && <div className="inference-yaml-syntax" ref={mirror} aria-hidden="true">
       <pre>{syntax.map(([token, tone], index) => tone ? <span key={index} data-yaml-tone={tone}>{token}</span> : token)}</pre>
     </div>}

@@ -12,3 +12,28 @@
 .admin-pagination .admin-page-number {
   width: 64px;
 }
+
+.xa24-admin .admin-pagination input[type="number"] {
+  appearance: textfield;
+}
+
+.xa24-admin .admin-pagination input[type="number"]::-webkit-inner-spin-button,
+.xa24-admin .admin-pagination input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.xa24-admin .admin-table-empty {
+  padding: 20px;
+  color: var(--xa24-secondary-text, #646673);
+}
+
+.xa24-admin .xa24-table-host[data-xa24-table-height] > .haloe-table-wrapper > .haloe-table > .haloe-table-body {
+  max-block-size: var(--xa24-table-max-height);
+  overflow-y: auto;
+}
+
+.xa24-admin .xa24-table-host[data-xa24-table-height] > .haloe-table-wrapper > .haloe-table
+  > :is(.haloe-table-fixed, .haloe-table-fixed-right) > .haloe-table-fixed-body {
+  max-block-size: var(--xa24-table-max-height);
+}

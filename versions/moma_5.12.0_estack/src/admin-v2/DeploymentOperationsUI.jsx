@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Banner, Button, Card, Collapse, Input, InputNumber, Radio, RadioGroup, Space, TextArea, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Input, InputNumber, Radio, RadioGroup, Space, TextArea, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { Collapse } from './xa24/HaloUI.jsx';
 import { dump, loadAll } from 'js-yaml';
 import AdminActionMenu from './AdminActionMenu';
 import AdminCollapsePanel from './AdminCollapsePanel';

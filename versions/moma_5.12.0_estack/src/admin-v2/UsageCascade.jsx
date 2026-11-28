@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
-import { Button, Checkbox, Input, Popover, Space, Typography } from '@douyinfe/semi-ui';
-import { IconChevronDown } from '@douyinfe/semi-icons';
+import { Button, Checkbox, Input, Popover, Space, Typography } from './xa24/HaloUI.jsx';
+import { IconChevronDown } from './xa24/HaloIcons.jsx';
 import { Choice } from './ServiceUI';
 
 export default function UsageCascade({ label, parentLabel, groups, items, value, onChange }) {

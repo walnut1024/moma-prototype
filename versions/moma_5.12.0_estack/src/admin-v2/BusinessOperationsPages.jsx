@@ -4,9 +4,9 @@ import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { useId, useState } from 'react';
 import Descriptions from './AdminDescriptions';
-import { Banner, Button, Card, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Space, Toast, Typography } from './xa24/HaloUI.jsx';
 import { AdminModal as Modal } from './AdminOverlay';
-import { IconPlus, IconSearch, IconUpload } from '@douyinfe/semi-icons';
+import { IconPlus, IconSearch, IconUpload } from './xa24/HaloIcons.jsx';
 import { DEFAULT_PAGE_SIZE, FilterReset, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import OperationInputDialog from '../components/OperationInputDialog';
 import { displayAdminBusinessCopy } from '../display-copy.mjs';
@@ -259,14 +259,14 @@ function Bills({ state, dispatch, params }) {
       <Button theme="solid" disabled={!canWrite || scopeInvalid} onClick={() => dispatch({type:'generateBills', ...(scopedTenant && {tenantId:scopedTenant})})}>生成 {period} 模拟账单</Button>
     </AdminPageHeading>
     {scopeInvalid && <Banner type="warning" closeIcon={null} description="所选租户或项目不存在，请调整筛选条件。"/>}
-    <BusinessTable rows={rows} minWidth={project ? 1110 : 940} tableKey={params.toString()} columns={[
+    <BusinessTable rows={rows} minWidth={project ? 1275 : 1155} tableKey={params.toString()} columns={[
       { title: '账单号', dataIndex: 'billNo', width: 240 },
-      { title: '所属租户', render: (_, row) => tenants.get(row.tenantId)?.name || row.tenantId },
-      { title: '账期', dataIndex: 'period' },
-      { title: '租户应收', dataIndex: 'amount', align: 'right', render: money },
-      ...(project ? [{ title: '项目金额', align: 'right', render: (_, row) => yuanMicros(projectBillAmount(row, project.id)) }] : []),
-      { title: '优惠', dataIndex: 'discount', align: 'right', render: money },
-      { title: '实收', dataIndex: 'paid', align: 'right', render: money },
+      { title: '所属租户', width: 200, render: (_, row) => tenants.get(row.tenantId)?.name || row.tenantId },
+      { title: '账期', dataIndex: 'period', width: 100 },
+      { title: '租户应收', dataIndex: 'amount', width: 120, align: 'right', render: money },
+      ...(project ? [{ title: '项目金额', width: 120, align: 'right', render: (_, row) => yuanMicros(projectBillAmount(row, project.id)) }] : []),
+      { title: '优惠', dataIndex: 'discount', width: 120, align: 'right', render: money },
+      { title: '实收', dataIndex: 'paid', width: 120, align: 'right', render: money },
       statusColumn,
       actionColumn(row => <Space>
         <Button size="small" theme="borderless" onClick={() => setInspectId(row.id)}>{translateLabel("详情")}</Button>

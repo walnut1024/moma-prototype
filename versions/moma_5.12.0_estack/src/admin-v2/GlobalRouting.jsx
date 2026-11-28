@@ -1,6 +1,7 @@
 import { useChannelText } from './channel-language';
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Select, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Select, Tabs } from './xa24/HaloUI.jsx';
 import FailoverFields from "./FailoverFields";
 import { ROUTING_STRATEGIES } from "./service-routing-strategies.mjs";
 import { failoverError, globalRoutingStrategies } from './global-routing-parameters.mjs';
@@ -55,7 +56,6 @@ export default function GlobalRouting({ saved, revision, transact, conflict, dir
     <Tabs.TabPane itemKey="routing" tab={t('全局路由策略')}><Card title={t('上游模型选择')} headerExtraContent={actions}>
       <Space vertical align="start"><Select aria-label={t('全局路由策略')} value={values.strategy} disabled={!draft || saving || conflict}
         optionList={globalRoutingStrategies.map(value => ({ value, label: t(ROUTING_STRATEGIES[value].label) }))}
-        renderSelectedItem={({ value }) => t(ROUTING_STRATEGIES[value].label)}
         onChange={strategy => change({ strategy })}/>
         <Typography.Text type="secondary">{t(ROUTING_STRATEGIES[values.strategy].description)}</Typography.Text>
       </Space>

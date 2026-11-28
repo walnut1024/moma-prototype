@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IconImageStroked } from '@douyinfe/semi-icons';
+import { IconImageStroked } from './xa24/HaloIcons.jsx';
 import { normalizeModelLogo } from './model-profile';
 
 const brandIcons = import.meta.glob('./model-icons/*.svg', { eager: true, import: 'default' });

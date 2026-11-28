@@ -1,4 +1,4 @@
-import { Descriptions } from '@douyinfe/semi-ui';
+import { Descriptions } from './xa24/HaloUI.jsx';
 import { useChannelText } from './channel-language';
 
 export default function AdminDescriptions({ data, ...props }) {

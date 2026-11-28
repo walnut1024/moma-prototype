@@ -1,4 +1,4 @@
-import { Banner, Button, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Space, Toast, Typography } from './xa24/HaloUI.jsx';
 import { Fragment, useRef, useState } from 'react';
 import { AdminModal } from './AdminOverlay';
 import { useChannelText } from './channel-language';

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Cascader, Input, InputNumber, Select, Space, Switch, Tabs, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconMinus, IconPlus, IconRefresh } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Input, InputNumber, Select, Space, Switch, Tabs, Tag, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Cascader } from './xa24/HaloUI.jsx';
+import { IconMinus, IconPlus, IconRefresh } from './xa24/HaloIcons.jsx';
 import AdminDescriptions from './AdminDescriptions';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import { serviceOperationsUi } from './ServiceUI';

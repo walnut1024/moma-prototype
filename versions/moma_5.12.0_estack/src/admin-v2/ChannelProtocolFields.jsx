@@ -1,8 +1,9 @@
 import { useChannelText } from './channel-language';
-import { Button, Input, Typography } from '@douyinfe/semi-ui';
+import {
+  XaButton as Button, XaInput as Input, XaTypography as Typography, XaChoice as Choice, XaField as Field,
+} from './xa24/HaloComponents.jsx';
 import { CHANNEL_LIST_TYPES, channelProtocolPaths, channelProtocolUsesFullAddress } from './channel-connection-directory';
 import { workbenchProtocolLabel } from './workbench-protocol';
-import { Choice, Field } from './ServiceUI';
 
 import { connectionRequestUrl } from './channel-interface';
 

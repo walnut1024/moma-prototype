@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { overviewCustomers, overviewMetrics, overviewRanks, overviewTimeline } from '../src/admin-v2/overview.js';
+import { overviewCustomers, overviewMetrics, overviewRange, overviewRanks, overviewSummary, overviewTimeline } from '../src/admin-v2/overview.js';
 
 const time = value => Date.parse(value + '+08:00');
 const now = time('2026-11-18T10:30:00');
@@ -93,4 +93,46 @@ test('first day of the year can show the previous December', () => {
   assert.equal(data.today.calls, 0);
   assert.equal(data.today.successRate, null);
   assert.equal(overviewMetrics(data)[1].change, null);
+});
+
+test('the 610 overview keeps snapshot metrics fixed and recomputes trends and rankings from bounded facts', () => {
+  const workspace = state([
+    call('prior-late', '2026-11-17T11:00:00', { input: 50, output: 0 }),
+    call('prior', '2026-11-17T08:00:00', { input: 20, output: 0 }, { charge: { micros: 800000, currency: 'USD' } }),
+    call('current', '2026-11-18T08:00:00', { input: 50, output: 0 }, { charge: { micros: 5000000, currency: 'CNY' } }),
+    { ...call('current', '2026-11-18T08:00:00', { input: 30, output: 0 }, { charge: { micros: 1500000, currency: 'CNY' } }),
+      updatedAt: '2026-11-18T00:30:00Z' },
+    call('same-hour', '2026-11-18T08:30:00', { input: 10, output: 0 }, { endpointId: 'external', settlement: 'internal',
+      charge: { micros: 2000000, currency: 'CNY' } }),
+    call('pending', '2026-11-18T09:00:00', {}),
+    call('future', '2026-11-18T11:00:00', { input: 50, output: 0 }),
+  ]);
+  workspace.models[0].listingStatus = '已上架';
+  workspace.models[0].firstPublishedAt = '2026-11-02T00:00:00+08:00';
+  workspace.users = [
+    { id: 'registered', createdAt: '2026-10-01T00:00:00+08:00', realNameCertification: { status: '已认证' } },
+    { id: 'pending', createdAt: '2026-11-16T00:00:00+08:00', realNameCertification: { status: '审核中' } },
+  ];
+  workspace.identityEvents = [{ type: 'login', userId: 'registered', at: '2026-11-01T01:00:00+08:00' },
+    { type: 'login', userId: 'registered', at: '2026-11-18T01:00:00+08:00' }];
+  workspace.apiKeys = [];
+  const today = overviewSummary(workspace, overviewRange('today', now), now);
+  const week = overviewSummary(workspace, overviewRange('7d', now), now);
+  assert.equal(today.registered, 2);
+  assert.equal(today.certified, 1);
+  assert.equal(today.mau, 1);
+  assert.equal(today.listed, 1);
+  assert.equal(today.firstListings, 1);
+  assert.deepEqual(today.spend, [{ currency: 'USD', value: 0.8 }, { currency: 'CNY', value: 1.5 }]);
+  assert.equal(today.peak, 40);
+  assert.equal(week.peak, today.peak);
+  assert.equal(week.monthTokens.total, 110);
+  assert.equal(week.monthTokens.total, today.monthTokens.total);
+  assert.equal(today.trend.length, 11);
+  assert.equal(today.trend[9].tokens, null);
+  assert.equal(week.trend.length, 7);
+  assert.equal(week.trend.at(-1).label, '2026-11-18');
+  assert.equal(today.customers[0].change, 100);
+  assert.equal(today.models[0].calls, 3);
+  assert.equal(week.models[0].total, 110);
 });

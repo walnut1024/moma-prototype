@@ -1,11 +1,11 @@
-.provider-removal-modal .semi-modal-body{max-height:72vh;overflow:auto}
-.provider-removal-modal .semi-steps{margin-bottom:24px}
+.provider-removal-modal .haloe-modal-body{max-height:72vh;overflow:auto}
+.provider-removal-modal .haloe-steps{margin-bottom:24px}
 .provider-removal-summary{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-block:20px 12px}
-.provider-removal-modal .semi-banner{margin-block:16px}
+.provider-removal-modal .xa24-banner-host{margin-block:16px}
 .provider-removal-process{margin-top:24px}
-.provider-removal-process .semi-typography{margin-top:8px}
+.provider-removal-process > p{margin-top:8px}
 .provider-removal-facts{display:grid;gap:12px;margin-block:24px}
 .provider-removal-facts>div{display:grid;grid-template-columns:100px 1fr;gap:16px}
-.provider-removal-facts dt{color:var(--semi-color-text-2)}
+.provider-removal-facts dt{color:var(--xa24-muted)}
 .provider-removal-facts dd{margin:0}
 

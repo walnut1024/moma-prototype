@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Banner, Button, Space, Spin } from '@douyinfe/semi-ui';
+import { Banner, Button, Space, Spin } from './xa24/HaloUI.jsx';
 import { cloudAdminRequest } from './admin-client.mjs';
 import './model-operations-requirements.css';
 

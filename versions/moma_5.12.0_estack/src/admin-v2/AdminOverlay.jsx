@@ -1,7 +1,17 @@
-import { Children, cloneElement, isValidElement, useCallback, useId, useLayoutEffect, useRef } from 'react';
+import { Children, cloneElement, isValidElement, lazy, Suspense, useCallback, useContext, useId, useLayoutEffect, useRef } from 'react';
 import { Modal, SideSheet } from '@douyinfe/semi-ui';
+import { AdminUIContext } from '../components/admin-ui-context.js';
+const WorkbenchModal = lazy(() => import('./xa24/HaloComponents.jsx').then(module => ({ default: module.XaModal })));
 
-export function AdminModal({
+export function AdminModal(props) {
+  return useContext(AdminUIContext) ? <Suspense fallback={null}><WorkbenchModal {...props}/></Suspense> : <FrontModal {...props}/>;
+}
+
+export function AdminSideSheet(props) {
+  return useContext(AdminUIContext) ? <Suspense fallback={null}><WorkbenchModal {...props} drawer/></Suspense> : <FrontSideSheet {...props}/>;
+}
+
+function FrontModal({
   title, width, size, maskClosable = false,
   okText = '确定', cancelText = '取消', okButtonProps, cancelButtonProps, ...props
 }) {
@@ -61,7 +71,7 @@ function keepSheetTabInside(event) {
   }
 }
 
-export function AdminSideSheet({ title, label, footer, mask = true, maskClosable = false, ...props }) {
+function FrontSideSheet({ title, label, footer, mask = true, maskClosable = false, ...props }) {
   const titleId = useId();
   const opener = useRef(null);
   const labelSheet = useCallback(node => {

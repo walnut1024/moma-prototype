@@ -1,11 +1,11 @@
 .mo-cloud-login {
   display: grid;
   min-width: 0;
-  min-height: calc(100dvh - 48px);
+  min-height: calc(100dvh - var(--xa24-top-height));
   grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 24px 16px;
-  background: var(--semi-color-bg-0);
+  background: var(--xa24-surface);
 }
 .mo-cloud-login-card { width: min(100%, 400px); }
 .mo-cloud-login-card form { margin-top: 12px; }

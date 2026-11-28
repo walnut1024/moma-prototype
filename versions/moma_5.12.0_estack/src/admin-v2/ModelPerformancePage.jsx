@@ -1,7 +1,12 @@
 import { useId, useMemo, useState } from 'react';
-import { Button, DatePicker, Input, Radio, RadioGroup, Select, Table, Tabs, Tag, Toast, Tooltip } from '@douyinfe/semi-ui';
-import { AdminModal } from './AdminOverlay';
+import { EMessage } from '@cmss-bfs/haloe/dist/es/index.js';
+import { XaButton as Button, XaHelp, XaInput as Input, XaModal as Modal, XaSelect as Select,
+  XaTabs as Tabs, XaTag as Tag } from './xa24/HaloComponents.jsx';
+import { XaRadio as Radio, XaRadioGroup as RadioGroup } from './xa24/HaloInputs.jsx';
+import { XaDatePicker as DatePicker } from './xa24/HaloDatePicker.jsx';
+import Table from './xa24/HaloTable.jsx';
 import { callObservations, observationTime } from './call-observations.mjs';
+import AdminPageHeading from './AdminPageHeading.jsx';
 import ModelPerformanceChart from './ModelPerformanceChart';
 import { chartColor, formatMetric, histogramCard, lineCard, ringCard } from './model-performance-charts';
 import { defaultPerformanceFilters, maxPerformanceBuckets, modelPerformance, performanceBucketCount, performanceGrain, performanceOptions } from './model-performance-data.mjs';
@@ -62,8 +67,8 @@ function performanceCharts(tab, report, histogramMode, histogramVisibility) {
 
 function MetricTiles({ items, context = false }) {
   return <div className={`performance-metrics${context ? ' context-metrics' : ''}`}>
-    {items.map(([label, value, unit, caption, tooltip]) => <div className="metric-tile" key={label}>
-      <div className="metric-label">{tooltip ? <Tooltip content={tooltip}><span tabIndex={0}>{label}</span></Tooltip> : label}</div>
+    {items.map(([label, value, unit, caption, tooltip]) => <div className="metric-tile xa24-metric-card" key={label}>
+      <div className="metric-label">{label}{tooltip && <XaHelp label={label + '说明'}>{tooltip}</XaHelp>}</div>
       <div className="metric-value">
         <strong>{formatMetric(value, unit)}</strong>
         {unit && unit !== '%' && <span>{unit}</span>}
@@ -110,11 +115,11 @@ export default function ModelPerformancePage({ state }) {
     event.preventDefault();
     if (!Number.isFinite(draft.start) || !Number.isFinite(draft.end) || draft.end <= draft.start
         || draft.end > defaultPerformanceFilters().end) {
-      Toast.warning('请选择有效的时间范围');
+      EMessage.warning('请选择有效的时间范围');
       return;
     }
     if (performanceBucketCount(draft) > maxPerformanceBuckets) {
-      Toast.warning('请缩短时间范围');
+      EMessage.warning('请缩短时间范围');
       return;
     }
     setApplied(draft);
@@ -127,7 +132,7 @@ export default function ModelPerformancePage({ state }) {
   }
 
   function selectUpstream(upstream) {
-    setDraft(current => ({ ...current, upstream }));
+    setDraft(current => ({ ...current, upstream: upstream || '' }));
   }
 
   const overview = [
@@ -148,15 +153,16 @@ export default function ModelPerformancePage({ state }) {
     { title: '占失败比例', dataIndex: 'failures', key: 'share', align: 'right', render: value => formatMetric(value * 100 / summary.failedCalls, '%') },
   ];
 
-  return <div className="model-performance">
-    <form className="performance-filters" aria-label="模型性能筛选" onSubmit={query}>
+  return <div className="model-performance xa24-page">
+    <AdminPageHeading title="模型性能" className="xa24-entry-header"/>
+    <form className="performance-filters xa24-page-card xa24-toolbar" aria-label="模型性能筛选" onSubmit={query}>
       <div className="filter-field filter-granularity">
         <label htmlFor={`${labelId}-grain`}>显示粒度</label>
         <Input id={`${labelId}-grain`} value={performanceGrain(draft) === 'hour' ? '按小时' : '按天'} readOnly/>
       </div>
       <div className="filter-field filter-range">
         <span id={`${labelId}-range`}>时间范围</span>
-        <DatePicker aria-labelledby={`${labelId}-range`} type="dateTimeRange" format="yyyy-MM-dd HH:mm"
+        <DatePicker className="performance-range-picker" aria-labelledby={`${labelId}-range`} type="dateTimeRange" format="yyyy-MM-dd HH:mm"
           timeZone="Asia/Shanghai" timePickerOpts={{ format: 'HH:mm' }} needConfirm showClear={false} inputReadOnly
           rangeSeparatorNode="–"
           dropdownClassName={popupClass} value={rangeDates} onChangeWithDateFirst
@@ -166,22 +172,21 @@ export default function ModelPerformancePage({ state }) {
       </div>
       <div className="filter-field filter-model">
         <span id={`${labelId}-model`}>模型服务</span>
-        <Select aria-labelledby={`${labelId}-model`} placeholder="全部模型" filter showClear dropdownClassName={popupClass}
-          optionList={options.models} value={draft.model || undefined} onSelect={selectModel} onClear={() => selectModel('')}/>
+        <Select aria-labelledby={`${labelId}-model`} placeholder="全部模型" filter showClear
+          optionList={options.models} value={draft.model || undefined} onChange={selectModel}/>
       </div>
       <div className="filter-field filter-upstream-model">
         <span id={`${labelId}-upstream`}>上游模型</span>
-        <Select aria-labelledby={`${labelId}-upstream`} placeholder="全部上游模型" filter showClear dropdownClassName={popupClass}
-          optionList={options.upstreams} value={draft.upstream || undefined}
-          onSelect={selectUpstream} onClear={() => selectUpstream('')}/>
+        <Select aria-labelledby={`${labelId}-upstream`} placeholder="全部上游模型" filter showClear
+          optionList={options.upstreams} value={draft.upstream || undefined} onChange={selectUpstream}/>
       </div>
       <div className="filter-actions">
-        <Button theme="light" type="tertiary" onClick={reset}>重置</Button>
+        <Button type="tertiary" onClick={reset}>重置</Button>
         <Button theme="solid" htmlType="submit">查询</Button>
       </div>
     </form>
 
-    <section className="performance-overview" aria-labelledby={`${labelId}-overview`} aria-live="polite">
+    <section className="performance-overview xa24-page-card" aria-labelledby={`${labelId}-overview`} aria-live="polite">
       <div className="overview-heading">
         <h2 id={`${labelId}-overview`}>数据总览</h2>
         <div className="performance-mode">
@@ -195,7 +200,7 @@ export default function ModelPerformancePage({ state }) {
       <MetricTiles items={overview}/>
     </section>
 
-    <section className="performance-tabs-panel" aria-label="模型性能图表">
+    <section className="performance-tabs-panel xa24-page-card" aria-label="模型性能图表">
       <Tabs className="performance-tabs" activeKey={tab} onChange={setTab}>
         {tabs.map(([key, label]) => <Tabs.TabPane itemKey={key} tab={label} key={key}>
           {tab === key && <>
@@ -221,10 +226,10 @@ export default function ModelPerformancePage({ state }) {
       </Tabs>
     </section>
 
-    {errorOpen && <AdminModal visible centered closeOnEsc title="错误明细" className={popupClass} width="min(660px, calc(100vw - 32px))"
+    {errorOpen && <Modal visible closeOnEsc title="错误明细" className={popupClass} width="min(660px, calc(100vw - 32px))"
       onCancel={() => setErrorOpen(false)} footer={<Button onClick={() => setErrorOpen(false)}>关闭</Button>}>
       <Table columns={errorColumns} dataSource={errorUsers} rowKey={row => row.userId ?? ''} pagination={false} size="small"
         scroll={{ x: 515, y: 350 }}/>
-    </AdminModal>}
+    </Modal>}
   </div>;
 }

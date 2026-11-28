@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Banner, Button, Card, Space, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Space, Typography } from './xa24/HaloUI.jsx';
 import AdminPageHeading from './AdminPageHeading';
 import ChannelHealthTable from './ChannelHealthTable';
 import { Choice } from './ServiceUI';
@@ -20,7 +20,7 @@ const emptyCatalogue = [];
 const filtersShown = [['endpoint', '端点'], ['callId', '模型 ID']];
 const pageId = 'providers-health';
 
-export default function ChannelHealthPage({ state, params, simulation, setSimulation }) {
+export default function ChannelHealthPage({ state, params, simulation, setSimulation, workspaceTabs }) {
   const t = useChannelText();
   const updateObservationRoute = hash => {
     const [path, query] = hash.split('?');
@@ -125,27 +125,29 @@ export default function ChannelHealthPage({ state, params, simulation, setSimula
       </ObservationFilterGroup>
     </ObservationFilterLayout>
   </div>;
-  return <div className="admin-page-stack">
-    <AdminPageHeading title={t('连接健康')}>
+  return <div className="xa24-page xa24-channel-health-page">
+    <AdminPageHeading title={t('模型接入')} className="xa24-entry-header"
+      description={t('管理上游连接、模型列表和连接健康', 'Manage upstream connections, model lists and connection health')}>
       <Space wrap><Button theme="light" onClick={toggleSimulation}>{t(simulation ? '退出模拟' : '模拟数据')}</Button></Space>
     </AdminPageHeading>
-    {!window && <Card>{filterPanel}</Card>}
     {catalogueError && <Banner type="danger" closeIcon={null} description={<Space>连接清单加载失败：{catalogueError}
       <Button size="small" onClick={() => setRetry(value => value + 1)}>重新加载</Button></Space>}/>}
+    <Card padding={16} className="channel-health-card xa24-page-card">
+      {workspaceTabs}
+      {window && <div className="admin-page-heading channel-health-heading">
+        <Title heading={5} component="h2" className="xa24-card-title">{t('上游模型观测列表')}</Title>
+        <Choice label={t('对比分组')} value="channelModel" options={[[ 'channelModel', t('按上游模型') ]]}/>
+      </div>}
+      <div className="channel-health-filters">{filterPanel}</div>
+      {window && <ChannelHealthTable loading={loadingCatalogue} rows={visibleHealthRows} labels={labels} summaries={summaries}
+        simulated={Boolean(simulation)} canManageChannels={canAccessPage(state.currentRole, 'providers-reference')}
+        onTrend={id => {
+          setTrendGroupId(id);
+          requestAnimationFrame(() => trendPanel.current?.focus());
+        }}/>}
+    </Card>
     {!window ? <Banner type="danger" closeIcon={null} description="请选择不超过 365 天的有效时间范围。"/> :
-      <div className="admin-page-stack">
-        <Card title={<Title heading={5} component="h2">{t('上游模型观测列表')}</Title>} headerExtraContent={
-          <Choice label={t('对比分组')} value="channelModel" options={[[ 'channelModel', t('按上游模型') ]]}/>
-        }>
-          <div className="channel-health-filters">{filterPanel}</div>
-          <ChannelHealthTable loading={loadingCatalogue} rows={visibleHealthRows} labels={labels} summaries={summaries}
-            simulated={Boolean(simulation)} canManageChannels={canAccessPage(state.currentRole, 'providers-reference')}
-            onTrend={id => {
-              setTrendGroupId(id);
-              requestAnimationFrame(() => trendPanel.current?.focus());
-            }}/>
-        </Card>
-        {trendGroup && <section ref={trendPanel} tabIndex={-1} aria-label="上游模型趋势" className="admin-page-stack">
+      trendGroup && <section ref={trendPanel} tabIndex={-1} aria-label="上游模型趋势" className="admin-page-stack">
           <div className="channel-health-trend-heading">
             <Title heading={5} component="h2">{trendName} 趋势</Title>
             <Button size="small" theme="borderless" onClick={() => setTrendGroupId(null)}>{t('查看全部')}</Button>
@@ -155,7 +157,6 @@ export default function ChannelHealthPage({ state, params, simulation, setSimula
             <ObservationPlot title="吞吐量 (P50) 趋势" labels={labels} unit="Token/s" series={trendSeries('otps')}/>
             <ObservationPlot title="缓存命中率趋势" labels={labels} unit="%" domain={[0, 100]} series={trendSeries('cacheRate')}/>
           </div>
-        </section>}
-      </div>}
+      </section>}
   </div>;
 }

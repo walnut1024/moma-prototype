@@ -1,5 +1,5 @@
 import { useChannelText } from './channel-language';
-import {Banner, Typography} from '@douyinfe/semi-ui';
+import {Banner, Typography} from './xa24/HaloUI.jsx';
 import { AdminModal as Modal } from './AdminOverlay';
 import MaterialsHeader, {materialOperationsUi} from './MaterialsHeader';
 import MaterialCatalogue from './MaterialCatalogue';
@@ -22,14 +22,13 @@ export default function ModelMaterials(props) {
     go({view:'templates',template:null,materialMode:null,materialTab:null,drawerSide:null},{saved,preserveScroll:true});
   };
   const fromElsewhere=Boolean(operationsReturn(params.get('returnTo')));
-  return <div className="semi-materials materials-page">
-    {view==='templateImport'?<><Typography.Title heading={4}>{translateLabel("批量导入模型资料")}</Typography.Title><section className="materials-description"><ModelBatchImport kind="model" state={state} ops={ops} transact={props.transact} close={saved=>go({view:'templates'},{saved:saved===true})}/></section></>:<>
-      <MaterialsHeader active={kind || 'model-templates'} ops={ops}/>
+  return <div className={view === 'templateImport' ? 'semi-materials materials-page' : 'semi-materials admin-page-stack'}>
+    {view==='templateImport'?<><Typography.Title heading={4}>{translateLabel("批量导入模型资料")}</Typography.Title><section className="materials-description"><ModelBatchImport kind="model" state={state} ops={ops} transact={props.transact} close={saved=>go({view:'templates'},{saved:saved===true})}/></section></>:<MaterialsHeader active={kind || 'model-templates'} ops={ops}>
       {kind ? <ModelClassificationDictionary key={kind} kind={kind} state={state} ops={ops}/> : <>
         <MaterialCatalogue state={state} ops={ops}/>
         {view==='template' && (params.get('template') && !template?<Modal visible className="semi-materials" title="模型资料不存在" footer={null} onCancel={()=>returnFromLibrary()}><Banner type="danger" description="该模型资料可能已移除。"/></Modal>:<ModelMaterialDrawer state={state} record={template} ops={ops} initial={{modelId:params.get('code') || '',name:params.get('code') || ''}} onClose={()=>returnFromLibrary()} onSaved={(_next,id)=>fromElsewhere?returnFromLibrary(true):go({template:id,materialMode:'view'},{saved:true,replace:true,preserveScroll:true})}/>)}
       </>}
-    </>}
+    </MaterialsHeader>}
     {ops.error && view!=='template' && <Banner type="danger" description={ops.error}/>}{ops.leaveDialog}
   </div>;
 }

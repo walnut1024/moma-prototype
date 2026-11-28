@@ -4,19 +4,19 @@ import Table from './AdminTable';
 import { internalSpace } from '../operating-space.mjs';
 import { requestCharge } from '../project-call.mjs';
 import AdminPageHeading from './AdminPageHeading';
-import { Banner, Card, Typography } from '@douyinfe/semi-ui';
+import { XaBanner as Banner, XaCard as Card, XaChoice as Choice, XaTypography as Typography } from './xa24/HaloComponents.jsx';
 import AnalysisMetric from './AnalysisMetric';
 import { useEffect, useState } from 'react';
 import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { FilterPresets, FilterReset, FilterToolbar } from '../components/FilterControls';
 import { canAccessPage } from './navigation.mjs';
-import { Choice } from './ServiceUI';
 import { analysisProjects, unassignedProject } from './analysis-projects.mjs';
 import { requestIdentity } from '../request-identity.mjs';
 import { customerModelDetails, filterAnalytics } from './analytics';
 import { formatUsageNumber, usageMeter, operationsPeriod, operationsPeriodFromQuery, usagePresets, usageValue } from './usage-analysis';
 
 const amount = value => value == null ? '—' : formatUsageNumber(value);
+const allProjects = '__all__';
 
 export default function CustomerUsageDetail({ state }) {
   const [clock, setClock] = useState(Date.now);
@@ -64,7 +64,7 @@ export default function CustomerUsageDetail({ state }) {
   };
   const recent = [...rows].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 10);
   if (!tenant) return <Banner type="warning" title="租户不存在" closeIcon={null}
-    description={<Typography.Text link={{ href: '#/admin-2/user-analysis' }}>返回用户数据重新选择</Typography.Text>}/>;
+    description={<a href="#/admin-2/user-analysis">返回用户数据重新选择</a>}/>;
   const counts = new Map();
   if (!projectId) for (const row of rows) {
     const id = row.projectId || unassignedProject;
@@ -88,8 +88,10 @@ export default function CustomerUsageDetail({ state }) {
     return '#/admin-2/logs?' + filters;
   };
   const callColumns = [
-    { title: 'Request ID', dataIndex: 'requestId', render: (value, row) => value
-      ? <Typography.Text link={canViewLogs ? { href: logHref(row.projectId || unassignedProject, value) } : undefined}>{value}</Typography.Text> : '未采集' },
+    { title: 'Request ID', dataIndex: 'requestId', render: (value, row) => {
+      if (!value) return '未采集';
+      return canViewLogs ? <a href={logHref(row.projectId || unassignedProject, value)}>{value}</a> : value;
+    } },
     { title: '项目', dataIndex: 'projectId', render: id => id ? projects.find(row => row.id === id)?.name || id : '未记录项目' },
     ...(internal ? [{title:'调用时所属部门',dataIndex:'departmentId',render:(id,row)=>row.settlement==='internal' ? departmentName(id) : '—'}] : []),
     {title:internal ? '内部成本' : '调用费用',render:(_,row)=>{const cost=costOf(row);return cost ? money(cost.micros,cost.currency) : '—';}},
@@ -99,17 +101,17 @@ export default function CustomerUsageDetail({ state }) {
     { title: '计量用量', key: 'usage', align: 'right', render: (_, row) => requestUsage(row) },
     { title: '状态码', dataIndex: 'httpStatus', align: 'right', render: value => value ?? '—' },
   ];
-  return <div className="admin-page-stack">
-    <AdminPageHeading title={internal ? '内部成本归集'+(project ? ' · '+project.name : '') : project && project.id!==unassignedProject ? '项目用量 · '+project.name : '租户用量'}>
+  return <div className="admin-page-stack xa24-page">
+    <AdminPageHeading className="xa24-detail-header" title={internal ? '内部成本归集'+(project ? ' · '+project.name : '') : project && project.id!==unassignedProject ? '项目用量 · '+project.name : '租户用量'}>
       {tenant && <Typography.Text type="secondary">{tenant.name}</Typography.Text>}
-      {canViewLogs && <Typography.Text link={{ href: logHref(projectId) }}>查看调用日志</Typography.Text>}
+      {canViewLogs && <a href={logHref(projectId)}>查看调用日志</a>}
     </AdminPageHeading>
-    <Card>
+    <Card className="xa24-page-card">
       <FilterToolbar>
         <FilterPresets label="时间筛选" value={period} onChange={value => selectPeriod(value)} items={usagePresets}/>
         <DateRange presets={usagePresets} start={start} end={end} allowLongRange rangeHint="最多 365 天" onChange={range => selectPeriod('custom', range)}/>
-        <Choice label="项目" value={projectId} options={[[ '', '全部项目' ], ...projects.map(row => [row.id, row.name]),
-          ...(projectId && !project ? [[projectId, '项目不可用']] : [])]} onSelect={selectProject}/>
+        <Choice label="项目" value={projectId || allProjects} options={[[allProjects, '全部项目'], ...projects.map(row => [row.id, row.name]),
+          ...(projectId && !project ? [[projectId, '项目不可用']] : [])]} onChange={value => selectProject(value === allProjects ? '' : value)}/>
         <FilterReset onClick={() => selectPeriod('yesterday')}/>
       </FilterToolbar>
     </Card>
@@ -120,32 +122,32 @@ export default function CustomerUsageDetail({ state }) {
       <AnalysisMetric title="调用模型数" value={new Set(rows.map(row => row.modelId)).size}/>
       <AnalysisMetric title="调用 API 密钥数" value={new Set(rows.map(row => row.keyId).filter(Boolean)).size}/>
     </div>
-    {internal && <Card title="部门成本明细">
+    {internal && <Card title="部门成本明细" className="xa24-page-card">
       <Table size="small" rowKey="id" dataSource={[...departments.values()]} pagination={false} empty="所选范围暂无内部成本记录"
         columns={[
           {title:'调用时所属部门',dataIndex:'department'}, {title:'调用次数',dataIndex:'calls'},
           {title:'内部成本',render:(_,row)=>money(row.micros,row.currency)},
         ]}/>
     </Card>}
-    {!projectId && <Card title={<Typography.Title heading={5} component="h2">项目调用明细</Typography.Title>}>
+    {!projectId && <Card className="xa24-page-card" title={<Typography.Title heading={5} component="h2" className="xa24-card-title">项目调用明细</Typography.Title>}>
       <Table size="small" rowKey="id" dataSource={projectUsage} empty="所选时间范围暂无调用记录"
         pagination={{ pageSize: 10, hideOnSinglePage: true, showTotal: true }} columns={[
           { title: '项目', dataIndex: 'id', render: id => {
             const next = new URLSearchParams(params);
             next.set('project', id);
-            return <Typography.Text link={{ href: '#/admin-2/customer-usage-detail?' + next }}>
+            return <a href={'#/admin-2/customer-usage-detail?' + next}>
               {projects.find(item => item.id === id)?.name || id}
-            </Typography.Text>;
+            </a>;
           } },
           { title: '调用次数', dataIndex: 'calls', align: 'right', render: amount },
         ]}/>
     </Card>}
-    <Card title={<Typography.Title heading={5} component="h2">模型用量明细</Typography.Title>}
+    <Card className="xa24-page-card" title={<Typography.Title heading={5} component="h2" className="xa24-card-title">模型用量明细</Typography.Title>}
       headerExtraContent={<Typography.Text type="secondary">{start} — {end} · 共 {rows.length} 次调用</Typography.Text>}>
       <Table size="small" rowKey="id" pagination={false} dataSource={models} columns={modelColumns}
         scroll={{ x: 'max(100%, 740px)' }} empty="所选时间范围暂无调用记录"/>
     </Card>
-    <Card title={<Typography.Title heading={5} component="h2">最近调用</Typography.Title>}>
+    <Card className="xa24-page-card" title={<Typography.Title heading={5} component="h2" className="xa24-card-title">最近调用</Typography.Title>}>
       <Table size="small" rowKey={requestIdentity} pagination={false} dataSource={recent} columns={callColumns}
         scroll={{ x: 'max(100%, 740px)' }} empty="所选时间范围暂无调用记录"/>
     </Card>

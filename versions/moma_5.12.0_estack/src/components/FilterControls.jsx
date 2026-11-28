@@ -1,8 +1,10 @@
 import { useChannelText } from '../admin-v2/channel-language';
-import { useContext } from 'react';
+import { lazy, Suspense, useContext } from 'react';
 import { Button, Pagination } from '@douyinfe/semi-ui';
 import { AdminUIContext } from './admin-ui-context';
 import './filter-controls.css';
+
+const WorkbenchButton = lazy(() => import('../admin-v2/xa24/HaloComponents.jsx').then(module => ({ default: module.XaButton })));
 
 export const PAGE_SIZES = [20, 50, 100];
 export const DEFAULT_PAGE_SIZE = 20;
@@ -19,9 +21,11 @@ export function FilterToolbar({ children, className = '' }) {
 export function FilterPresets({ label = '时间筛选', value, onChange, items = TIME_PRESETS, children, className = '' }) {
   const admin = useContext(AdminUIContext);
   const classes = admin ? 'admin-time-presets' : `filter-presets ${className}`.trim();
+  const PresetButton = admin ? WorkbenchButton : Button;
+  const controls = items.map(([id, text]) => <PresetButton key={id} theme={value === id ? 'solid' : 'light'}
+    aria-pressed={value === id} onClick={() => onChange(id)}>{text}</PresetButton>);
   return <div className={classes} role="group" aria-label={label}>
-    {items.map(([id, text]) => <Button key={id} theme={value === id ? 'solid' : 'light'}
-      aria-pressed={value === id} onClick={() => onChange(id)}>{text}</Button>)}
+    {admin ? <Suspense fallback={null}>{controls}</Suspense> : controls}
     {children}
   </div>;
 }
@@ -29,8 +33,10 @@ export function FilterPresets({ label = '时间筛选', value, onChange, items =
 export function FilterReset({ onClick, label = '重置筛选' }) {
   const t = useChannelText();
   const admin = useContext(AdminUIContext);
-  return <Button type="tertiary" theme="borderless" size={admin ? 'default' : 'small'}
-    className={admin ? undefined : 'filter-reset'} onClick={onClick}>{t(label)}</Button>;
+  if (admin) return <Suspense fallback={null}>
+    <WorkbenchButton type="tertiary" theme="borderless" onClick={onClick}>{t(label)}</WorkbenchButton>
+  </Suspense>;
+  return <Button type="tertiary" theme="borderless" size="small" className="filter-reset" onClick={onClick}>{t(label)}</Button>;
 }
 
 export function FilterField({ label, labelId, children, className = '' }) {

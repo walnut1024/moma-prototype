@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox } from '@douyinfe/semi-ui';
+import { Button, Checkbox } from './xa24/HaloUI.jsx';
 import { Disclosure, GridTable, Row, Cell, Notice, SearchBox } from './ModelOperationsUI';
 import { libraryRecord } from './model-library';
 import { channelDiscoveryPreview, channelDiscoveryRevision } from './channel-discovery-diff';

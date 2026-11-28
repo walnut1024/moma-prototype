@@ -2,11 +2,11 @@
   max-width: 760px;
 }
 
-.admin-v2 .site-config-card .semi-form-field + .semi-form-field {
+.admin-v2 .site-config-card .xa24-form-field + .xa24-form-field {
   margin-top: 12px;
 }
 
-.admin-v2 .site-agreement-document .semi-form-field {
+.admin-v2 .site-agreement-document .xa24-form-field {
   margin-block: 12px;
 }
 
@@ -34,7 +34,7 @@
 }
 
 .admin-v2 .site-agreement-url a {
-  color: var(--semi-color-link);
+  color: var(--xa24-primary);
   overflow-wrap: anywhere;
   min-width: 0;
 }
@@ -57,9 +57,9 @@
   place-items: center;
   width: 112px;
   min-height: 76px;
-  border: 1px solid var(--semi-color-border);
-  border-radius: var(--semi-border-radius-medium);
-  background: var(--semi-color-fill-0);
+  border: 1px solid var(--xa24-divider);
+  border-radius: var(--xa24-card-radius);
+  background: var(--xa24-page-bg);
 }
 
 .admin-v2 .site-config-image-controls {

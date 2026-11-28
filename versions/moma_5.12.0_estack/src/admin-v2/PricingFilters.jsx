@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
-import { Button, Input } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Button, Input } from './xa24/HaloUI.jsx';
+import { IconSearch } from './xa24/HaloIcons.jsx';
 import { Choice, Field } from './ServiceUI';
 import { pricingFilterOptions } from './model-pricing-workspace';
 

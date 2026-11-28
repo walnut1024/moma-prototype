@@ -4,9 +4,11 @@ import { callLogFieldHelp } from '../components/call-log-field-help';
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { projectCallErrors } from '../project-call.mjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Banner, Button, CheckboxGroup, Empty, InputNumber, Space, Switch, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconArrowDown, IconArrowUp, IconSetting, IconSort } from '@douyinfe/semi-icons';
+import { Banner, Button, Empty, InputNumber, Space, Switch, Tabs, Tag, Toast, Typography } from './xa24/HaloUI.jsx';
+import { CheckboxGroup } from './xa24/HaloUI.jsx';
+import { IconArrowDown, IconArrowUp, IconSetting, IconSort } from './xa24/HaloIcons.jsx';
 import Table from './AdminTable';
+import AdminPageHeading from './AdminPageHeading';
 import AdminStatus from './AdminStatus';
 import { AdminModal as Modal } from './AdminOverlay';
 import RequestLogDetail from './RequestLogDetail';
@@ -251,9 +253,12 @@ export default function CallLogsPage({ state, params, simulation, setSimulation,
   const trendSeries = trend && preflightTypes.map(([kind, name], index) => ({ label: name, color: trendColors[index],
     values: trend.map(bucket => bucket.rows.filter(row => row.preflightType === kind).length) }));
   return <div className="admin-page-stack admin-call-logs">
+    <AdminPageHeading className="xa24-entry-header" title={translateLabel('调用日志')}
+      description={translateLabel('查询模型调用记录并查看单次请求详情', 'Inspect model calls and individual request details')}>
+      <Space wrap>{simulation && <Tag color="blue">模拟数据</Tag>}{settings}</Space>
+    </AdminPageHeading>
     <section className="admin-call-logs-panel" aria-label={translateLabel('调用日志')}>
-      <Tabs activeKey={view} onChange={chooseView} aria-label="调用日志视图"
-        tabBarExtraContent={<Space>{simulation && <Tag color="blue">模拟数据</Tag>}{settings}</Space>}>
+      <Tabs activeKey={view} onChange={chooseView} aria-label="调用日志视图">
         {Object.entries(logViews).map(([id, item]) => <Tabs.TabPane key={id} itemKey={id} tab={item.label}/>)}
       </Tabs>
       <CallLogFilters key={view} view={view} pool={pool} filters={filters} window={window} errors={errors}

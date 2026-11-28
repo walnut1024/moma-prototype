@@ -1,8 +1,8 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useId, useState } from 'react';
 import Descriptions from './AdminDescriptions';
-import { Banner, Button, Card, DatePicker, Empty, Input, Space, Spin, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconRefresh, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, DatePicker, Empty, Input, Space, Spin, Tabs, Tag, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconRefresh, IconSearch } from './xa24/HaloIcons.jsx';
 import AdminPageHeading from './AdminPageHeading';
 import AdminTable from './AdminTable';
 import { AdminSideSheet } from './AdminOverlay';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Input, Select } from '@douyinfe/semi-ui';
+import { Button, Input, Select } from './xa24/HaloUI.jsx';
 import { AdminModal } from './AdminOverlay';
 import { Field, Notice } from './ServiceUI';
 import { protocolLabels, validateOffer } from './supplier-offer-fields';

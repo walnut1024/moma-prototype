@@ -1,4 +1,4 @@
-import { Space, Spin, Typography } from '@douyinfe/semi-ui';
+import { XaSpace as Space, XaSpin as Spin, XaTypography as Typography } from './xa24/HaloComponents.jsx';
 
 export default function AdminPageLoading({ label }) {
   return <div role="status">

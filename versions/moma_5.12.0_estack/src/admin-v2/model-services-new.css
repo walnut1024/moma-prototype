@@ -12,8 +12,8 @@
 .new-model-services .new-service-tab { padding-top: 16px; }
 .new-model-services .new-service-route-bar {
   padding: 8px 12px;
-  border-radius: var(--semi-border-radius-small);
-  background: var(--semi-color-fill-0);
+  border-radius: var(--xa24-control-radius);
+  background: var(--xa24-page-bg);
 }
 .new-model-services .new-service-route-preview {
   justify-content: flex-start;
@@ -21,14 +21,14 @@
 }
 .new-model-services .new-service-cell { display: grid; gap: 4px; min-width: 0; }
 .new-model-services .new-service-cell > * { justify-self: start; max-width: 100%; }
-.new-model-services .new-service-channel-actions .semi-button { padding-inline: 4px; }
+.new-model-services .new-service-channel-actions .haloe-btn { padding-inline: 4px; }
 .new-service-form { display: grid; gap: 12px; }
 .new-service-form .new-service-weight-table { min-width: 0; }
-.new-service-form .semi-input-number { width: 100%; }
+.new-service-form :is(.haloe-input-number, span:has(> .haloe-input-number)) { width: 100%; }
 
 .new-service-priority-group {
   margin-top: 20px;
-  border: 1px solid var(--semi-color-primary-light-active);
+  border: 1px solid var(--xa24-nav-selected);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -36,14 +36,14 @@
   padding: 14px 16px;
   margin: 0;
   flex-wrap: wrap;
-  background: var(--semi-color-primary-light-default);
-  border-bottom: 1px solid var(--semi-color-border);
+  background: var(--xa24-primary-soft);
+  border-bottom: 1px solid var(--xa24-divider);
 }
 .new-service-group-title {
   margin: 0 8px 0 0;
   padding-inline-start: 10px;
-  border-inline-start: 3px solid var(--semi-color-primary);
-  color: var(--semi-color-text-0);
+  border-inline-start: 3px solid var(--xa24-primary);
+  color: var(--xa24-title);
   font-size: 16px;
   line-height: 22px;
 }
@@ -55,6 +55,6 @@
   gap: 8px 32px;
   padding: 12px 16px;
   margin-bottom: 16px;
-  border-inline-start: 3px solid var(--semi-color-primary);
-  background: var(--semi-color-primary-light-default);
+  border-inline-start: 3px solid var(--xa24-primary);
+  background: var(--xa24-primary-soft);
 }

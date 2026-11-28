@@ -1,8 +1,8 @@
 import { useChannelText } from './channel-language';
 import Table, { AdminPagination } from './AdminTable';
 import { useEffect, useId, useRef, useState } from 'react';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
-import { Banner, Button, Card, Input, Select, Spin, Switch, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
+import { Banner, Button, Card, Input, Select, Spin, Switch, Tag, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
 import { AdminModal as Modal, AdminSideSheet } from './AdminOverlay';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
 import { loadPackageFactorHistory } from './admin-client.mjs';

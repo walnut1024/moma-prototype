@@ -1,5 +1,5 @@
 import { useChannelText } from './channel-language';
-import { Input } from '@douyinfe/semi-ui';
+import { Input } from './xa24/HaloUI.jsx';
 import { Disclosure } from './ModelOperationsUI';
 import { Choice, Field } from './ServiceUI';
 import { MODEL_TYPES } from './model-management';

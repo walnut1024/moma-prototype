@@ -5,8 +5,9 @@ import AdminStatus from './AdminStatus';
 import Table, { AdminPagination } from './AdminTable';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { useMemo, useRef, useState } from 'react';
-import { Button, Card, Collapse, Empty, Input, InputNumber, RadioGroup, Space, Typography } from '@douyinfe/semi-ui';
-import { IconBox, IconChevronRight, IconHandle, IconImageStroked, IconMicrophoneStroked, IconPlus, IconSearch, IconTextStroked, IconVideoStroked } from '@douyinfe/semi-icons';
+import { Button, Card, Empty, Input, InputNumber, RadioGroup, Space, Typography } from './xa24/HaloUI.jsx';
+import { Collapse } from './xa24/HaloUI.jsx';
+import { IconBox, IconChevronRight, IconHandle, IconImageStroked, IconMicrophoneStroked, IconPlus, IconSearch, IconTextStroked, IconVideoStroked } from './xa24/HaloIcons.jsx';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
 import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -23,6 +24,7 @@ import ModelModuleHeading from './ModelModuleHeading';
 import { marketSupplyGroups } from './model-market-supplies';
 import { registeredServiceUpstreams } from './service-model-mappings';
 import { orderedMarketModels } from './model-market-order';
+import './model-pricing-workspace.css';
 import './model-market.css';
 
 const filters = [
@@ -106,12 +108,7 @@ function MarketCard({ model, services, groups, position, canReorder, savingOrder
   const context = source.capabilities?.context;
   const channelCount = groups.reduce((count, group) => count + group.channels.size, 0);
   return <li ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} data-dragging={isDragging || undefined}>
-    <Card className="market-model-card" footer={<div className="market-card-footer">
-      <Space wrap>
-        <CardVisibility card={model.card}/>
-      </Space>
-      {actions}
-    </div>}>
+    <Card className="market-model-card">
       <div className="market-card-heading">
         <MarketLogo key={profile.logo || ''} src={profile.logo}/>
         <div className="market-card-identity">
@@ -152,6 +149,10 @@ function MarketCard({ model, services, groups, position, canReorder, savingOrder
           </ul>
         </div>
       </div>
+      <footer className="market-card-footer">
+        <CardVisibility card={model.card}/>
+        {actions}
+      </footer>
     </Card>
   </li>;
 }
@@ -295,8 +296,8 @@ export default function ModelMarket(live) {
     <Button size="small" theme="borderless" type="danger" disabled={!ops.can || busy}
       onClick={event => openCard('delete', row.cardId, event.currentTarget)}>{t('删除')}</Button>
   </Space>;
-  return <div className="semi-services sp-workspace">
-    <ModelModuleHeading module="market" className="market-heading">
+  return <div className="semi-services admin-page-stack">
+    <ModelModuleHeading module="market" className="market-heading xa24-entry-header">
       <Space wrap spacing={12} className="market-heading-actions">
         <Button theme="light" onClick={toggleDemo}>{t(demo ? '退出模拟' : '模拟数据')}</Button>
         <Button theme="solid" icon={<IconPlus/>} disabled={!ops.can || busy}
@@ -306,63 +307,65 @@ export default function ModelMarket(live) {
       </Space>
     </ModelModuleHeading>
     {demo && <Notice>模拟数据仅用于当前页面，退出后清除。</Notice>}
-    <div className="sp-filters">
-      <Input ref={searchInput} prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
-      {filters.map(({ key, label, options }) => <Field key={key} label={label}>
-        <Choice translateOptions label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
-          onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
-      </Field>)}
-      <Button onClick={() => changeFilters({ q: null, type: null, visibility: null })}>{t('重置筛选')}</Button>
-    </div>
-    {!orderEdit && !cardDialog && ops.error && <Notice error>{ops.error}</Notice>}
-    {view === 'cards' ? rows.length ? <>
-      <DndContext sensors={sensors} collisionDetection={cardCollision} accessibility={{
-        screenReaderInstructions: { draggable: '按空格开始拖动，用方向键移动，再按空格放下，按 Esc 取消。' },
-        announcements: {
-          onDragStart: ({ active }) => `已拿起 ${active.data.current.name}。`,
-          onDragOver: ({ over }) => over ? `移至序号 ${positions.get(over.id)}。` : undefined,
-          onDragEnd: ({ over }) => over ? '已放下卡片。' : '已取消拖动。',
-          onDragCancel: () => '已取消拖动。',
-        },
-      }} onDragStart={() => { cardDragRevision.current = props.state.revision; }}
-        onDragEnd={({ active, over }) => {
-          if (over && active.id !== over.id) void saveOrder(active.id, positions.get(over.id), cardDragRevision.current);
-        }}>
-        <SortableContext items={pageRows.map(row => row.id)} strategy={rectSortingStrategy}>
-          <ul className="market-card-grid" aria-label={t("模型卡片")}>
-            {pageRows.map(row => <MarketCard key={row.id} model={row} services={linkedServices(row)} groups={supplyGroups(row, linkedUpstreams(row))} position={positions.get(row.id)}
-              canReorder={ops.can && pageRows.length > 1} savingOrder={busy} actions={actions(row)} openSupplies={openSupplies}/>)}
-          </ul>
-        </SortableContext>
-      </DndContext>
-      <AdminPagination className="market-card-pagination" total={rows.length} pageSize={pageSize} currentPage={currentPage} onPageChange={changePage}/>
-    </> : <Empty description={t(emptyMessage)}/> : <Table className="market-model-table" size="small" rowKey="id" dataSource={pageRows}
-      scroll={{ x: '100%' }} pagination={{ pageSize, currentPage, total: rows.length, onPageChange: changePage }} empty={emptyMessage}
-      onRow={row => ({
-        className: dropTarget === row.id ? 'market-order-target' : undefined,
-        onDragOver: event => {
-          if (!drag || drag.id === row.id) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-          setDropTarget(row.id);
-        },
-        onDrop: event => {
-          if (!drag || drag.id === row.id) return;
-          event.preventDefault();
-          endDrag();
-          void saveOrder(drag.id, positions.get(row.id), drag.revision);
-        },
-      })} columns={[
-      { title: '序号', width: '9%', render: (_, row) => orderButton(row) },
-      { title: '模型', render: (_, row) => <Typography.Text className="market-list-identity" strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text> },
-      { title: '类型', width: '8%', render: (_, row) => t(MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type) },
-      { title: '关联服务', width: '12%', render: (_, row) => row.card.linked.length
-        ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t(row.card.linked.length === 1 ? '1 个服务' : '{count} 个服务').replace('{count}', row.card.linked.length)}</Button>
-        : t('未关联') },
-      { title: '可见范围', width: '14%', render: (_, row) => scopeLabel(row.card, t) },
-      { title: '可见性', width: '9%', render: (_, row) => <CardVisibility card={row.card}/> },
-      { title: '操作', width: 320, render: (_, row) => actions(row, true) },
-    ]}/>}
+    <Card className="market-workspace-card xa24-page-card">
+      <div className="sp-filters">
+        <Input ref={searchInput} prefix={<IconSearch aria-hidden="true"/>} showClear aria-label={t("搜索模型展示名称、模型服务 ID 或模型 ID")} placeholder={t('模型展示名称 / 模型服务 ID / 模型 ID')} value={query} onChange={q => changeFilters({ q: q || null })}/>
+        {filters.map(({ key, label, options }) => <Field key={key} label={label}>
+          <Choice translateOptions label={`筛选${label}`} value={params.get(key) || 'all'} options={options}
+            onChange={value => changeFilters({ [key]: value === 'all' ? null : value })}/>
+        </Field>)}
+        <Button onClick={() => changeFilters({ q: null, type: null, visibility: null })}>{t('重置筛选')}</Button>
+      </div>
+      {!orderEdit && !cardDialog && ops.error && <Notice error>{ops.error}</Notice>}
+      {view === 'cards' ? rows.length ? <>
+        <DndContext sensors={sensors} collisionDetection={cardCollision} accessibility={{
+          screenReaderInstructions: { draggable: '按空格开始拖动，用方向键移动，再按空格放下，按 Esc 取消。' },
+          announcements: {
+            onDragStart: ({ active }) => `已拿起 ${active.data.current.name}。`,
+            onDragOver: ({ over }) => over ? `移至序号 ${positions.get(over.id)}。` : undefined,
+            onDragEnd: ({ over }) => over ? '已放下卡片。' : '已取消拖动。',
+            onDragCancel: () => '已取消拖动。',
+          },
+        }} onDragStart={() => { cardDragRevision.current = props.state.revision; }}
+          onDragEnd={({ active, over }) => {
+            if (over && active.id !== over.id) void saveOrder(active.id, positions.get(over.id), cardDragRevision.current);
+          }}>
+          <SortableContext items={pageRows.map(row => row.id)} strategy={rectSortingStrategy}>
+            <ul className="market-card-grid" aria-label={t("模型卡片")}>
+              {pageRows.map(row => <MarketCard key={row.id} model={row} services={linkedServices(row)} groups={supplyGroups(row, linkedUpstreams(row))} position={positions.get(row.id)}
+                canReorder={ops.can && pageRows.length > 1} savingOrder={busy} actions={actions(row)} openSupplies={openSupplies}/>)}
+            </ul>
+          </SortableContext>
+        </DndContext>
+        <AdminPagination className="market-card-pagination" total={rows.length} pageSize={pageSize} currentPage={currentPage} onPageChange={changePage}/>
+      </> : <Empty description={t(emptyMessage)}/> : <Table className="market-model-table" size="small" rowKey="id" dataSource={pageRows}
+        scroll={{ x: 'max(100%, 1128px)' }} pagination={{ pageSize, currentPage, total: rows.length, onPageChange: changePage }} empty={emptyMessage}
+        onRow={row => ({
+          className: dropTarget === row.id ? 'market-order-target' : undefined,
+          onDragOver: event => {
+            if (!drag || drag.id === row.id) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            setDropTarget(row.id);
+          },
+          onDrop: event => {
+            if (!drag || drag.id === row.id) return;
+            event.preventDefault();
+            endDrag();
+            void saveOrder(drag.id, positions.get(row.id), drag.revision);
+          },
+        })} columns={[
+        { title: '序号', width: 68, render: (_, row) => orderButton(row) },
+        { title: '模型', width: 250, render: (_, row) => <Typography.Text className="market-list-identity" strong ellipsis={{ showTooltip: true }}>{row.name}</Typography.Text> },
+        { title: '类型', width: 100, render: (_, row) => t(MODEL_CATALOGUE_TYPES[modelCategory(row.type)] || row.type) },
+        { title: '关联服务', width: 135, render: (_, row) => row.card.linked.length
+          ? <Button size="small" theme="borderless" onClick={event => openCard('link', row.cardId, event.currentTarget)}>{t(row.card.linked.length === 1 ? '1 个服务' : '{count} 个服务').replace('{count}', row.card.linked.length)}</Button>
+          : t('未关联') },
+        { title: '可见范围', width: 145, render: (_, row) => scopeLabel(row.card, t) },
+        { title: '可见性', width: 110, render: (_, row) => <CardVisibility card={row.card}/> },
+        { title: '操作', width: 320, render: (_, row) => actions(row, true) },
+      ]}/>}
+    </Card>
     {cardDialog && (cardDialog.kind === 'create' || cardRow) && <MarketCardDialogs
       key={cardDialog.kind + ':' + cardDialog.cardId} kind={cardDialog.kind} row={cardRow} state={props.state}
       materials={materials} internal={props.internal} ops={ops} close={closeCard} open={openCard}/>}

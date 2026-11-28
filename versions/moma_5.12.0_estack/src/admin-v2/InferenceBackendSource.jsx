@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { Banner, Button, Collapse, Form, Input, InputNumber, Radio, RadioGroup, Switch, Tabs, Tag, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconRefresh } from '@douyinfe/semi-icons';
+import { Banner, Button, Form, Input, InputNumber, Radio, RadioGroup, Switch, Tabs, Tag, Toast, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { Collapse } from './xa24/HaloUI.jsx';
+import { IconRefresh } from './xa24/HaloIcons.jsx';
 import { AdminSideSheet } from './AdminOverlay';
 import { serviceOperationsUi } from './ServiceUI';
 import { useChannelText } from './channel-language';

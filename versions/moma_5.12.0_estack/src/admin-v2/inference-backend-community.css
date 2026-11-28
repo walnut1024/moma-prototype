@@ -19,17 +19,17 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--semi-color-bg-2);
+  background: var(--xa24-page-bg);
   padding-bottom: 4px;
 }
 
-.inference-backend-community .semi-radioGroup {
+.inference-backend-community .haloe-radio-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.inference-backend-community .semi-radioGroup .semi-radio {
+.inference-backend-community .haloe-radio-group .haloe-radio-wrapper {
   margin: 0;
 }
 
@@ -57,7 +57,7 @@
 
 .inference-backend-community-detail {
   padding-inline-start: 20px;
-  border-inline-start: 1px solid var(--semi-color-border);
+  border-inline-start: 1px solid var(--xa24-divider);
   overflow-wrap: anywhere;
 }
 
@@ -70,7 +70,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--semi-color-bg-2);
+  background: var(--xa24-page-bg);
   padding-block-end: 8px;
 }
 
@@ -86,8 +86,8 @@
 
 .inference-backend-community-description code {
   padding: 1px 4px;
-  border-radius: var(--semi-border-radius-small);
-  background: var(--semi-color-fill-0);
+  border-radius: var(--xa24-control-radius);
+  background: var(--xa24-page-bg);
   font-family: ui-monospace, monospace;
 }
 
@@ -101,7 +101,7 @@
   .inference-backend-community-detail {
     max-height: none;
     border-inline-start: 0;
-    border-block-start: 1px solid var(--semi-color-border);
+    border-block-start: 1px solid var(--xa24-divider);
     padding: 16px 4px 4px;
   }
 }

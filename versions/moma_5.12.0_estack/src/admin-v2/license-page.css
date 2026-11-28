@@ -14,8 +14,8 @@
 .license-dialog { top:128px; }
 .license-form { display:grid; gap:8px; }
 .license-form label { font-weight:600; }
-.license-form label span { color:var(--semi-color-danger); }
-.license-form .semi-input-textarea-wrapper { border:1px solid #e1e5ec; background:#f8f9fb; }
+.license-form label span { color:var(--xa24-danger); }
+.license-form :is(.haloe-input-wrapper:has(textarea), span:has(> .haloe-input-wrapper textarea)) { border:1px solid #e1e5ec; background:#f8f9fb; }
 @media(max-width:1000px) {
   .license-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }

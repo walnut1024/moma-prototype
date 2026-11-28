@@ -1,8 +1,9 @@
 import { useChannelText } from './channel-language';
 import { cloneElement, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Banner, Button, DatePicker, Form, Input, InputNumber, Select, Space, TagInput, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
-import { IconUpload } from '@douyinfe/semi-icons';
+import { Banner, Button, DatePicker, Form, Input, InputNumber, Select, Space, TextArea, Typography } from './xa24/HaloUI.jsx';
+import { TagInput, Upload } from './xa24/HaloUI.jsx';
+import { IconUpload } from './xa24/HaloIcons.jsx';
 import { modelMetadataDraft } from './model-metadata-draft';
 import { MODEL_TYPE_LABELS, modelCategory } from '../model-types.mjs';
 import { INPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS, TASK_OPTIONS } from './model-profile';

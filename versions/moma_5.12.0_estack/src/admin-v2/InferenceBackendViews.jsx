@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Collapse, Empty, Input, Select, Space, Tabs, Tag, TextArea, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconCopy, IconGlobe, IconMinus, IconPlus, IconServerStroked, IconUpload } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Empty, Input, Select, Space, Tabs, Tag, TextArea, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { Collapse } from './xa24/HaloUI.jsx';
+import { IconCopy, IconGlobe, IconMinus, IconPlus, IconServerStroked, IconUpload } from './xa24/HaloIcons.jsx';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import AdminDescriptions from './AdminDescriptions';
 import { AdminSideSheet } from './AdminOverlay';

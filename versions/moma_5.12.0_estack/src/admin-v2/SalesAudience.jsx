@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Select, Typography } from '@douyinfe/semi-ui';
+import { Button, Select, Typography } from './xa24/HaloUI.jsx';
 import { Field, Modal, Notice } from './ServiceUI';
 import { offerSalesScope } from './service-sales';
 import { scopeTenants } from './service-commercial';

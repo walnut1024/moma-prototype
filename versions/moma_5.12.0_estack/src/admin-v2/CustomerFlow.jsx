@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useRef } from 'react';
-import { Button, Progress, Tag, Typography } from '@douyinfe/semi-ui';
+import { Button, Progress, Tag, Typography } from './xa24/HaloUI.jsx';
 import { flowAmount, flowPercent, ratio } from './customer-flow-demo';
 
 const { Text } = Typography;

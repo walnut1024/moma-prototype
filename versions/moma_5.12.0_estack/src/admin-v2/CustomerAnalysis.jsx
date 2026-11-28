@@ -1,10 +1,14 @@
 import { useChannelText } from './channel-language';
 
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { EMessage } from '@cmss-bfs/haloe/dist/es/index.js';
 import {
-  Button, Card, DatePicker, Empty, Input, Modal, Select, Space, Table, Tabs, Tag, Toast, Typography,
-} from '@douyinfe/semi-ui';
-import { IconChevronLeft, IconDownloadStroked, IconUser } from '@douyinfe/semi-icons';
+  XaButton as Button, XaCard as Card, XaEmpty as Empty, XaInput as Input, XaModal as Modal,
+  XaSelect as Select, XaSpace as Space, XaTabs as Tabs, XaTag as Tag, XaTypography as Typography,
+} from './xa24/HaloComponents.jsx';
+import { XaDatePicker as DatePicker } from './xa24/HaloDatePicker.jsx';
+import Table from './xa24/HaloTable.jsx';
+import { ChevronLeft, Download, User } from 'lucide-react';
 import AdminPageHeading from './AdminPageHeading';
 import { DonutChart, HorizontalBarChart, TimeSeriesChart } from '../components/AnalyticsCharts';
 import { analysisCsv } from './operations-analysis';
@@ -55,14 +59,14 @@ function exportCsv(filename, headings, rows) {
 }
 
 function CopyTitle({ children, note }) {
-  return <div className="ca-title"><Title heading={5} component="h2">{children}</Title>
+  return <div className="ca-title"><Title heading={5} component="h2" className="xa24-card-title">{children}</Title>
     {note && <Text type="tertiary" size="small">{note}</Text>}</div>;
 }
 function Section({ title, note, children, className = '' }) {
-  return <Card className={'ca-card ' + className}>{title && <CopyTitle note={note}>{title}</CopyTitle>}{children}</Card>;
+  return <Card className={'ca-card xa24-page-card ' + className}>{title && <CopyTitle note={note}>{title}</CopyTitle>}{children}</Card>;
 }
 function ExportButton({ onClick, disabled, children = '数据导出' }) {
-  return <Button theme="light" type="tertiary" icon={<IconDownloadStroked/>} onClick={onClick} disabled={disabled}>{children}</Button>;
+  return <Button theme="light" type="tertiary" icon={<Download size={16} aria-hidden="true"/>} onClick={onClick} disabled={disabled}>{children}</Button>;
 }
 function DateFields({ draft, onChange, single = false }) {
   const update = (start, end) => onChange({ ...draft, start, end });
@@ -75,7 +79,7 @@ function DateFields({ draft, onChange, single = false }) {
     }}/>;
 }
 function Metrics({ rows }) {
-  return <div className="ca-metrics">{rows.map(([label, value, unit]) => <div className="ca-metric" key={label}>
+  return <div className="ca-metrics">{rows.map(([label, value, unit]) => <div className="ca-metric xa24-metric-card" key={label}>
     <span className="ca-dot" aria-hidden="true"/><div><Text type="secondary" size="small">{label}</Text>
       <div className="ca-reading"><strong>{value}</strong>{unit && <Text type="tertiary" size="small">{unit}</Text>}</div>
     </div>
@@ -93,7 +97,7 @@ function Ring({ title, data, number, center, reverse = false, available = true }
 function Rankings({ title, range, rows, direction, onOpen }) {
   return <Section title={title + '（亿 Token）'} note={direction && '当日 vs 前日'} className="ca-rank-panel">
     {rows.length ? <ol className="ca-ranks">{rows.map(([name, description, amount, change], index) => <li key={name}>
-      <span>{index + 1}.</span><IconUser className={'ca-rank-icon ca-rank-' + (index + 1)} aria-hidden="true"/>
+      <span>{index + 1}.</span><User size={14} className={'ca-rank-icon ca-rank-' + (index + 1)} aria-hidden="true"/>
       <div className="ca-rank-copy">
         <a href={detailHref(name, range, 'history')} onClick={onOpen} title={name}>{name}</a>
         <small title={description}>{description}</small>
@@ -145,7 +149,7 @@ function Overview({ params }) {
     location.hash = homeHref(draft);
   }
   return <>
-    <AdminPageHeading title={titleHome}><Space><Text type="tertiary" size="small">演示数据</Text><ExportButton onClick={download}/></Space></AdminPageHeading>
+    <AdminPageHeading title={titleHome} className="xa24-entry-header"><Space><Text type="tertiary" size="small">演示数据</Text><ExportButton onClick={download}/></Space></AdminPageHeading>
     <Section title="租户 Token 总调用量" note="今日实时">
       <div className="ca-live">{sample.liveCustomers.map(([code, name, value], index) => <a
         href={detailHref(name, range, 'live')} onClick={openCustomer} className={'ca-live-customer ca-top-' + (index + 1)} key={code}>
@@ -160,7 +164,7 @@ function Overview({ params }) {
         <Button theme={dayMode ? 'light' : 'borderless'} aria-pressed={!dayMode} onClick={() => setDraft({ ...draft, mode: 'range' })}>按时间范围</Button>
       </div>
       <DateFields draft={draft} onChange={setDraft} single={dayMode}/>
-      <Button className="ca-query-right" theme="solid" htmlType="submit">查询</Button>
+      <span className="ca-query-right"><Button theme="solid" htmlType="submit">查询</Button></span>
     </form></Section>
     <Section title="数据概览"><Metrics rows={metrics}/></Section>
     <div className="ca-two">
@@ -209,7 +213,7 @@ function Traffic({ initialCustomer }) {
   return <div className="ca-detail-stack">
     <form id="ca-flow-export" hidden onSubmit={event => {
       event.preventDefault();
-      if (!observed || view !== 'current' || !snapshot.edges.length) { Toast.info('暂无可导出的流量样本'); return; }
+      if (!observed || view !== 'current' || !snapshot.edges.length) { EMessage.info('暂无可导出的流量样本'); return; }
       exportCsv('租户流量拓扑', ['起点', '去向', '模型', '实时 TPM', '占上游流量'],
         snapshot.edges.map(edge => [edge.fromName, edge.toName, edge.model, edge.tpm, flowPercent(edge.tpm, edge.total)]));
     }}/>
@@ -229,7 +233,7 @@ function Traffic({ initialCustomer }) {
     <div className="ca-rate-columns">
       <Section className="ca-rate">
         <div className="ca-title ca-spread"><Title heading={5} component="h2">实时调用速率</Title>
-          <Button theme="borderless" size="small" href="#/admin-2/traffic-limits">{translateLabel("限流配置")}</Button>
+          <a className="ca-action-link" href="#/admin-2/traffic-limits">{translateLabel("限流配置")}</a>
         </div>
         <Metrics rows={[[ 'RPM', observed ? fmt(snapshot.calls / observationMinutes) : '—'], ['TPM', observed ? flowAmount(snapshot.tpm) : '—']]}/>
       </Section>
@@ -246,7 +250,7 @@ function Traffic({ initialCustomer }) {
       </Section>
     </div>
     <Section>
-      <Tabs type="card" activeKey={view} onChange={setView}>
+      <Tabs type="button" activeKey={view} onChange={setView}>
         <Tabs.TabPane tab="当前观测" itemKey="current">
           <div className="ca-flow">
             <div className="ca-spread ca-flow-heading">
@@ -264,7 +268,7 @@ function Traffic({ initialCustomer }) {
         </Tabs.TabPane>
         <Tabs.TabPane tab="历史流量" itemKey="history">{empty('暂无历史流量样本')}</Tabs.TabPane>
       </Tabs>
-      <Modal title={node?.name} visible={Boolean(node)} footer={null} onCancel={() => setNodeId(null)}>
+      {node && <Modal title={node.name} visible footer={null} onCancel={() => setNodeId(null)}>
         {node && <dl className="ca-node-modal">
           <div><dt>网关</dt><dd>{node.gateway || '—'}</dd></div><div><dt>请求数</dt><dd>{fmt(node.requests)}</dd></div>
           <div><dt>实时 TPM</dt><dd>{flowAmount(node.tpm)}</dd></div><div><dt>{translateLabel("模型")}</dt><dd>{node.model || '—'}</dd></div>
@@ -273,7 +277,7 @@ function Traffic({ initialCustomer }) {
           <div><dt>负载</dt><dd>{node.capacity ? flowPercent(node.tpm, node.capacity) : '—'}</dd></div>
           <div><dt>实例数</dt><dd>{node.registered ? node.instances.length : '—'}</dd></div>
         </dl>}
-      </Modal>
+      </Modal>}
     </Section>
   </div>;
 }
@@ -312,7 +316,7 @@ function CustomerInfo({ customer, initial }) {
     <form id="ca-info-export" hidden onSubmit={event => {
       event.preventDefault();
       if (canExport) downloads[section]();
-      else Toast.info('所选条件暂无可导出的样本');
+      else EMessage.info('所选条件暂无可导出的样本');
     }}/>
     <Section className="ca-filter"><form onSubmit={event => { event.preventDefault(); setQuery(draft); }}>
       <label>{translateLabel("模型")}<Input aria-label={translateLabel("模型展示名称")} placeholder="输入模型展示名称" value={draft.model}
@@ -335,7 +339,7 @@ function CustomerInfo({ customer, initial }) {
       {hasSummary ? <HorizontalBarChart label="客户端分布" unit="%" rows={sample.clientMix.map(([name, value, color]) => ({ name, value, color }))}
         height={248}/> : empty('所选条件暂无客户端样本')}
     </Section>
-    <div className="ca-lower"><Tabs type="card" activeKey={section} onChange={setSection}>
+    <div className="ca-lower"><Tabs type="button" activeKey={section} onChange={setSection}>
       <Tabs.TabPane itemKey="models" tab="模型使用概览"><Section>
         <Table size="small" pagination={false} rowKey="model" scroll={{ x: 'max(100%, 1060px)' }}
           columns={modelColumns} dataSource={models.map(row => Object.fromEntries(modelColumns.map((column, index) => [column.dataIndex, row[index]])))}
@@ -356,7 +360,7 @@ function CustomerInfo({ customer, initial }) {
 export default function CustomerAnalysis({ detail, params }) {
   const [tab, setTab] = useState(params.get('tab') === 'flow' ? 'flow' : 'info');
   useEffect(() => { if (detail) window.scrollTo({ top: 0, behavior: 'instant' }); }, [detail]);
-  if (!detail) return <div className="admin-page-stack ca-page"><Overview params={params}/></div>;
+  if (!detail) return <div className="admin-page-stack xa24-page ca-page"><Overview params={params}/></div>;
   const customer = customers.find(item => item.id === params.get('customer'));
   const sourceRange = { start: date(params.get('start'), historicalDay), end: date(params.get('end'), historicalDay), mode: params.get('mode') || 'day' };
   const initial = params.get('source') === 'live' || sourceRange.start === sourceRange.end && sourceRange.end === historicalDay
@@ -370,11 +374,11 @@ export default function CustomerAnalysis({ detail, params }) {
     location.hash = homeHref(sourceRange);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
-  return <div className="admin-page-stack ca-page">
-    <div className="ca-detail-heading"><Button icon={<IconChevronLeft/>} aria-label="返回租户数据" theme="borderless" onClick={returnToList}/>
+  return <div className="admin-page-stack xa24-page ca-page">
+    <div className="ca-detail-heading xa24-detail-header"><Button icon={<ChevronLeft size={16} aria-hidden="true"/>} aria-label="返回租户数据" theme="borderless" onClick={returnToList}/>
       <AdminPageHeading title="租户详情"><Space><Text type="tertiary" size="small">演示数据</Text>
         <Button htmlType="submit" form={tab === 'flow' ? 'ca-flow-export' : 'ca-info-export'} theme="light" type="tertiary"
-          icon={<IconDownloadStroked/>} disabled={!customer}>数据导出</Button></Space></AdminPageHeading></div>
+          icon={<Download size={16} aria-hidden="true"/>} disabled={!customer}>数据导出</Button></Space></AdminPageHeading></div>
     {customer ? <Tabs activeKey={tab} onChange={setTab}>
       <Tabs.TabPane itemKey="info" tab={titleInfo}><CustomerInfo key={customer.id} customer={customer} initial={initial}/></Tabs.TabPane>
       <Tabs.TabPane itemKey="flow" tab={titleFlow}><Traffic key={customer.id} initialCustomer={customer}/></Tabs.TabPane>

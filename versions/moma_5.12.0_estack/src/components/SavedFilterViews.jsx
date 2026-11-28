@@ -1,11 +1,20 @@
 import { workspaceStoragePrefix } from '../workspace-storage.mjs';
 import { resourceId } from '../resource-id.mjs';
-import { Button as SemiButton, Form, Input as SemiInput, Popover as SemiPopover, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import * as Semi from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from '../admin-v2/AdminOverlay';
 import { IconBookmark, IconChevronDown, IconDelete } from '@douyinfe/semi-icons';
-import { useEffect, useState } from 'react';
+import { Bookmark, ChevronDown, Trash2 } from 'lucide-react';
+import { useCallback, useContext, useEffect, useState } from 'react';
+import { AdminUIContext } from './admin-ui-context';
+import { XaButton, XaInput, XaPopover, XaSpace, XaTag, XaTypography } from '../admin-v2/xa24/HaloComponents.jsx';
+import { Form as HaloForm } from '../admin-v2/xa24/HaloForm.jsx';
 import '../admin-v2/semi-analytics.css';
 import './saved-filter-views.css';
+
+const frontControls = { Button: Semi.Button, Form: Semi.Form, Input: Semi.Input, Space: Semi.Space,
+  Tag: Semi.Tag, Typography: Semi.Typography, BookmarkIcon: IconBookmark, Down: IconChevronDown, Delete: IconDelete };
+const adminControls = { Button: XaButton, Form: HaloForm, Input: XaInput, Space: XaSpace,
+  Tag: XaTag, Typography: XaTypography, BookmarkIcon: Bookmark, Down: ChevronDown, Delete: Trash2 };
 
 const signature = value => {
   const copy = { ...value };
@@ -23,33 +32,56 @@ function groupText(group) {
   return `${group.label}：${group.items.length} 个 · ${group.items[0]} 等`;
 }
 
-function SemiCondition({ group }) {
+function ViewsPopover({ children, position, visible, onVisibleChange, content }) {
+  const admin = useContext(AdminUIContext);
+  const [open, setOpen] = useState(false);
+  const active = visible ?? open;
+  const initialFocusRef = useCallback(node => {
+    if (node && active) node.focus({ preventScroll: true });
+  }, [active]);
+  if (!admin) return <Semi.Popover trigger="click" position={position} visible={visible}
+    onVisibleChange={onVisibleChange} content={content}>{children}</Semi.Popover>;
+  return <XaPopover open={active} placement={position === 'bottomLeft' ? 'bottom-start' : 'bottom-end'}
+    onChange={next => {
+      if (visible == null) setOpen(next);
+      onVisibleChange?.(next);
+    }} content={typeof content === 'function' ? content({ initialFocusRef }) : content}>{children}</XaPopover>;
+}
+
+function FilterCondition({ group }) {
+  const admin = useContext(AdminUIContext);
+  const { Button, Input, Tag, Typography, Down } = admin ? adminControls : frontControls;
   const [query, setQuery] = useState('');
   const label = groupText(group);
   if (!Array.isArray(group.items) || group.items.length < 2) return <Tag title={label}>{label}</Tag>;
   const visible = group.items.filter(item => item.toLowerCase().includes(query.trim().toLowerCase()));
-  return <SemiPopover trigger="click" position="bottomLeft" onVisibleChange={open => { if (open) setQuery(''); }}
+  return <ViewsPopover position="bottomLeft" onVisibleChange={open => { if (open) setQuery(''); }}
     content={<div className="admin-analytics-picker admin-analytics-fields">
       <Typography.Text strong>已选{group.label}（{group.items.length}）</Typography.Text>
-      {group.items.length > 5 && <SemiInput aria-label={`搜索已选${group.label}`} value={query} onChange={setQuery}/>}
+      {group.items.length > 5 && <Input aria-label={`搜索已选${group.label}`} value={query} onChange={setQuery}/>}
       <div className="admin-analytics-options">
         {visible.map((item, index) => <Typography.Text key={`${item}-${index}`}>{item}</Typography.Text>)}
         {!visible.length && <Typography.Text type="secondary">没有匹配项</Typography.Text>}
       </div>
     </div>}>
-    <SemiButton size="small" type="tertiary" icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right"
-      aria-label={`${group.label}已选 ${group.items.length} 个，查看完整清单`} title={label}>{label}</SemiButton>
-  </SemiPopover>;
+    <Button size="small" type="tertiary" icon={<Down {...(admin && { size: 16 })} aria-hidden="true"/>} iconPosition="right"
+      aria-label={`${group.label}已选 ${group.items.length} 个，查看完整清单`} title={label}>{label}</Button>
+  </ViewsPopover>;
 }
 
 export function SelectedConditions({ groups, label = '已选条件' }) {
+  const admin = useContext(AdminUIContext);
+  const { Space, Typography } = admin ? adminControls : frontControls;
   return <Space wrap>
     <Typography.Text type="secondary">{label}</Typography.Text>
-    {groups.map(group => <SemiCondition key={`${group.label}-${group.text}`} group={group}/>)}
+    {groups.map(group => <FilterCondition key={`${group.label}-${group.text}`} group={group}/>)}
   </Space>;
 }
 
 export default function SavedFilterViews({ scope, value, onApply, summary = '', conditions, groups, currentGroups = groups, saveDescription = '核对当前筛选条件并命名，保存后可快速应用。', showCurrent = true, disabled = false, notify }) {
+  const admin = useContext(AdminUIContext);
+  const { Button, Form, Input, Space, Tag, Typography, BookmarkIcon, Down, Delete } = admin ? adminControls : frontControls;
+  const iconSize = admin ? { size: 16 } : {};
   const key = workspaceStoragePrefix + 'filter-views:' + scope;
   const [views, setViews] = useState(() => {
     try {
@@ -82,17 +114,17 @@ export default function SavedFilterViews({ scope, value, onApply, summary = '', 
   return <div className="admin-saved-views">
     {showCurrent && <SelectedConditions groups={activeGroups}/>}
     <Space wrap>
-      <SemiPopover trigger="click" position="bottomRight" visible={open} onVisibleChange={setOpen} content={({ initialFocusRef }) =>
+      <ViewsPopover position="bottomRight" visible={open} onVisibleChange={setOpen} content={({ initialFocusRef }) =>
         <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields">
           <div className="admin-analytics-options">
             {views.map(view => <div className="admin-analytics-picker-footer" key={view.id}>
-              <SemiButton theme="borderless" onClick={() => {
+              <Button theme="borderless" onClick={() => {
                 if (onApply(view.value) === false) return;
                 setOpen(false);
                 setPending({ id: view.id, name: view.name });
                 notify?.success(`已应用视图：${view.name}`);
-              }}>{view.name}</SemiButton>
-              <SemiButton theme="borderless" type="tertiary" icon={<IconDelete aria-hidden="true"/>} aria-label={`删除视图 ${view.name}`}
+              }}>{view.name}</Button>
+              <Button theme="borderless" type="tertiary" icon={<Delete {...iconSize} aria-hidden="true"/>} aria-label={`删除视图 ${view.name}`}
                 onClick={() => {
                   if (!persist(views.filter(item => item.id !== view.id))) return;
                   if (applied?.id === view.id) setApplied(null);
@@ -104,9 +136,9 @@ export default function SavedFilterViews({ scope, value, onApply, summary = '', 
           {error && <Typography.Text type="danger" role="alert">{error}</Typography.Text>}
         </div>
       }>
-        <SemiButton icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right" aria-expanded={open}>视图：{viewLabel}</SemiButton>
-      </SemiPopover>
-      <SemiButton icon={<IconBookmark aria-hidden="true"/>} disabled={disabled} onClick={() => { setError(''); setCreating(true); }}>保存为视图</SemiButton>
+        <Button icon={<Down {...iconSize} aria-hidden="true"/>} iconPosition="right" aria-expanded={open}>视图：{viewLabel}</Button>
+      </ViewsPopover>
+      <Button icon={<BookmarkIcon {...iconSize} aria-hidden="true"/>} disabled={disabled} onClick={() => { setError(''); setCreating(true); }}>保存为视图</Button>
     </Space>
     {creating && <Modal visible title="保存为视图" width="min(480px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
       okText="保存视图" onOk={save} onCancel={() => setCreating(false)}
@@ -119,7 +151,7 @@ export default function SavedFilterViews({ scope, value, onApply, summary = '', 
           : 'items' in group ? group.items === null ? group.all || '全部' : '未选择' : group.text}</dd>
       </div>) : <dd>{currentConditions.join('；')}</dd>}</dl>
       <Form.Slot label={{ text: '视图名称', name: `saved-view-${scope}` }}>
-        <SemiInput id={`saved-view-${scope}`} maxLength={40} placeholder="输入视图名称" value={name} onChange={setName}
+        <Input id={`saved-view-${scope}`} maxLength={40} placeholder="输入视图名称" value={name} onChange={setName}
           onEnterPress={() => { if (!disabled) save(); }}/>
       </Form.Slot>
       {error && <Typography.Text type="danger" role="alert">{error}</Typography.Text>}

@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useId, useRef, useState } from 'react';
-import { IconPlus } from '@douyinfe/semi-icons';
-import { Button, TextArea } from '@douyinfe/semi-ui';
+import { IconPlus } from './xa24/HaloIcons.jsx';
+import { Button, TextArea } from './xa24/HaloUI.jsx';
 import AdminActionMenu from './AdminActionMenu';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { credentialRotationChannels } from './credential-rotation-scope';

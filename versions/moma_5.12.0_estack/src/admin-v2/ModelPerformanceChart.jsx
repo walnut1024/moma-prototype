@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { IconMaximize } from '@douyinfe/semi-icons';
-import { Button } from '@douyinfe/semi-ui';
+import { IconMaximize } from './xa24/HaloIcons.jsx';
+import { Button } from './xa24/HaloUI.jsx';
 import { LegendScrollComponent } from 'echarts/components';
 import { use } from 'echarts/core';
 import { Chart } from '../components/AnalyticsCharts';

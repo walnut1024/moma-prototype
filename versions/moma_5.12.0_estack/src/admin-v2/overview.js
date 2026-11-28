@@ -1,6 +1,9 @@
 import { dayOf } from './analytics.js';
 import { requestOutcome } from './call-observations.mjs';
 import { analysisFilters, operationFacts } from './operations-analysis.js';
+import { usagePreset, usageWindow } from './usage-analysis.js';
+import { userBusinessData } from '../business-facts.mjs';
+import { userMetrics } from './user-analysis.js';
 
 const DAY = 86400000;
 const BEIJING = 8 * 3600000;
@@ -10,6 +13,8 @@ const dateTime = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', d
 export const overviewDateTime = time => dateTime.format(time);
 export const compactCount = new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 }).format;
 export const overviewChange = (value, previous) => value != null && previous > 0 ? (value / previous - 1) * 100 : null;
+export const overviewRange = (period, now) => usagePreset(period, period === '7d' || period === '30d' ? now + DAY : now);
+const HOUR = 3600000;
 const sum = (rows, key) => rows.reduce((total, row) => total + row[key], 0);
 const within = (rows, start, end) => rows.filter(row => row.at >= start && row.at < end);
 const customerIds = rows => new Set(rows.map(row => row.tenantId).filter(Boolean));
@@ -165,4 +170,56 @@ export function overviewMetrics(snapshot) {
     { label: '今日模型请求次数', value: today.calls, unit: '次', change: overviewChange(today.calls, yesterday.calls) },
     { label: '调用成功率', value: today.successRate, unit: '%', change: successChange, changeUnit: '个百分点' },
   ];
+}
+
+export function overviewSummary(state, range, now) {
+  const { start, end, priorStart, priorEnd, hourly } = usageWindow(range, now);
+  const today = usagePreset('today', now);
+  const day = dayStart(today.end);
+  const month = monthStart(day);
+  const facts = operationFacts(state, { start: dayOf(Math.min(priorStart, month)), end: today.end }, analysisFilters(), now);
+  const rows = within(facts, start, end);
+  const prior = within(facts, priorStart, priorEnd);
+  const dayRows = within(facts, day, now);
+  const monthRows = within(facts, month, now);
+  const totals = tokenSummary(rows);
+  const daily = tokenSummary(dayRows);
+  const users = userBusinessData(state, state.requests);
+  const identity = userMetrics(users, today, now);
+  const registered = new Set(users.users.filter(user => user.at < now).map(user => user.id));
+  const certified = new Set(state.users.filter(user => registered.has(user.id) && user.realNameCertification?.status === '已认证')
+    .map(user => user.id));
+  const listed = state.models.filter(model => model.listingStatus === '已上架');
+  const firstListings = state.models.filter(model => {
+    const at = Date.parse(model.firstPublishedAt);
+    return at >= month && at < now;
+  }).length;
+  const confirmedCharges = new Map();
+  for (const row of monthRows) {
+    if (row.settlement === 'internal' || row.billingStatus === 'not_billable') continue;
+    const charge = row.charge;
+    const micros = charge?.micros ?? (charge?.unit === 'micro' ? charge.amount : null);
+    if (Number.isSafeInteger(micros) && micros >= 0 && /^[A-Z]{3}$/.test(charge.currency)) {
+      confirmedCharges.set(charge.currency, (confirmedCharges.get(charge.currency) || 0) + micros);
+    }
+  }
+  const hourlyTokens = [...Map.groupBy(dayRows, row => Math.floor(row.at / HOUR)).values()]
+    .map(tokenSummary).filter(bucket => bucket.metered).map(bucket => bucket.total);
+  const step = hourly ? HOUR : DAY;
+  const buckets = Map.groupBy(rows, row => Math.floor((row.at - start) / step));
+  const trend = Array.from({ length: Math.ceil((end - start) / step) }, (_, index) => {
+    const at = start + index * step;
+    const bucket = buckets.get(index) || [];
+    return { label: hourly ? byDate(at).toISOString().slice(11, 16) : dayOf(at),
+      tokens: tokenSummary(bucket).total, calls: bucket.length };
+  });
+  const priorCustomers = new Map(overviewRanks(prior, 'customer', state, 'total').map(row => [row.id, row.total]));
+  return { start, end, hourly, rows, totals, trend,
+    registered: registered.size, certified: certified.size, listed: listed.length, firstListings,
+    daily, peak: hourlyTokens.length ? Math.max(...hourlyTokens) : daily.total,
+    monthTokens: tokenSummary(monthRows), spend: [...confirmedCharges].map(([currency, micros]) => ({ currency, value: micros / 1e6 })),
+    mau: identity.mau.at(-1) ?? null,
+    customers: overviewRanks(rows, 'customer', state, 'total').map(row => ({ ...row, change: overviewChange(row.total, priorCustomers.get(row.id)) })),
+    models: overviewRanks(rows, 'model', state, 'total'),
+  };
 }

@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Typography } from './xa24/HaloUI.jsx';
 import { Modal, Notice } from './ServiceUI';
 import { offerSalesScope, salesChecks } from './service-sales';
 import { scopeTenants } from './service-commercial';

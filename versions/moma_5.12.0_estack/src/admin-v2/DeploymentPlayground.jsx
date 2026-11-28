@@ -1,6 +1,7 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Checkbox, Empty, Input, InputNumber, Progress, RadioGroup, Select, Slider, Space, Tabs, Tag, TextArea, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconClose, IconPlus } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Checkbox, Empty, Input, InputNumber, Progress, RadioGroup, Select, Space, Tabs, Tag, TextArea, Toast, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { Slider } from './xa24/HaloUI.jsx';
+import { IconClose, IconPlus } from './xa24/HaloIcons.jsx';
 import { use as registerChart } from 'echarts/core';
 import { ScatterChart } from 'echarts/charts';
 import { Chart } from '../components/AnalyticsCharts';
@@ -236,7 +237,7 @@ function EmbeddingOutput({ result, request, busy, t }) {
           tooltip: { formatter: point => `${t('文本')} ${point.dataIndex + 1}`, renderMode: 'richText', confine: true },
           xAxis: { type: 'value', name: 'PC1', scale: true },
           yAxis: { type: 'value', name: 'PC2', scale: true },
-          series: [{ type: 'scatter', symbolSize: 16, data: points, itemStyle: { color: 'var(--semi-color-primary)' },
+          series: [{ type: 'scatter', symbolSize: 16, data: points, itemStyle: { color: 'var(--xa24-primary)' },
             label: { show: true, position: 'top', formatter: point => String(point.dataIndex + 1) } }],
         }}/>
         <details><summary>{t('查看图表数据')}</summary>

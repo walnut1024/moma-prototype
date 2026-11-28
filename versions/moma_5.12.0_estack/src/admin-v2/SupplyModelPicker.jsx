@@ -1,6 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useId, useRef, useState } from 'react';
-import { Button, Select } from '@douyinfe/semi-ui';
+import { Button } from './xa24/HaloUI.jsx';
+import { Select } from './xa24/HaloUI.jsx';
 import { libraryRecord, modelCatalogue } from './model-library';
 import { Modal, Notice } from './ModelOperationsUI';
 import { onboardingModelOptions } from './onboarding-presets';

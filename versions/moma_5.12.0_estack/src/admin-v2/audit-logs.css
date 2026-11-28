@@ -8,13 +8,13 @@
 
 .audit-logs-page .audit-log-filters { margin-bottom: 16px; }
 .audit-logs-page .audit-log-extra-filters { flex-basis: 100%; }
-.audit-logs-page .audit-log-filters > .semi-input-wrapper,
-.audit-logs-page .audit-log-extra-filters > .semi-input-wrapper { width: min(188px, 100%); }
+.audit-logs-page .audit-log-filters > :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)),
+.audit-logs-page .audit-log-extra-filters > :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)) { width: min(188px, 100%); }
 .audit-logs-page .audit-log-pagination { display: flex; justify-content: flex-end; margin-top: 12px; }
 
 .audit-logs-page .audit-log-table table { table-layout: fixed; }
 .audit-logs-page .audit-event-link { max-width: 100%; padding-inline: 0; }
-.audit-logs-page .audit-event-link .semi-button-content,
+.audit-logs-page .audit-event-link .xa24-button-content,
 .audit-logs-page .audit-log-actor > span {
   display: block;
   overflow: hidden;
@@ -24,17 +24,11 @@
 .audit-logs-page .audit-log-time { white-space: nowrap; }
 .audit-log-detail,
 .audit-log-detail .audit-log-changes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
-.audit-log-detail .semi-descriptions table { table-layout: fixed; width: 100%; }
-.audit-log-detail .semi-descriptions-double tbody {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 20px;
-}
-.audit-log-detail .semi-descriptions-double-small .semi-descriptions-item { padding-inline-end: 0; }
-.audit-log-detail .semi-descriptions-double-small .semi-descriptions-value { font-size: 14px; font-weight: 400; }
-.audit-log-detail .semi-tabs-content { padding-top: 12px; }
-.audit-log-detail .semi-tabs-pane > .semi-empty { padding: 20px 0; }
-.audit-log-detail .semi-typography-h6 { margin-bottom: 8px; }
-.audit-log-detail .semi-descriptions,
-.audit-log-detail .semi-table-row-cell,
-.audit-logs-page .semi-table-row-cell { white-space: pre-line; overflow-wrap: anywhere; }
+.audit-log-detail dl { width: 100%; }
+.audit-log-detail dl dd { font-size: 14px; font-weight: 400; }
+.audit-log-detail .haloe-tabs-content { padding-top: 12px; }
+.audit-log-detail :is([role="tabpanel"]) > .xa24-empty { padding: 20px 0; }
+.audit-log-detail h6 { margin-bottom: 8px; }
+.audit-log-detail dl,
+.audit-log-detail td,
+.audit-logs-page td { white-space: pre-line; overflow-wrap: anywhere; }

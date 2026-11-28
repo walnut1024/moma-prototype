@@ -14,6 +14,6 @@
   width: 100%;
   min-height: 24rem;
   flex: 1;
-  border: 1px solid var(--semi-color-border);
-  border-radius: var(--semi-border-radius-medium);
+  border: 1px solid var(--xa24-divider);
+  border-radius: var(--xa24-card-radius);
 }

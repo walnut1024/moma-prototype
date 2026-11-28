@@ -170,7 +170,7 @@ test('section breadcrumbs open a real landing page and current pages remain plai
   assert.equal(allProjects[1].href, '#/admin-2/projects?page=2');
   assert.equal(build('deployments')[0].href, '#/admin-2/clusters');
   assert.deepEqual(labels(build('providers-health')), ['模型运营', '模型接入', '连接健康']);
-  assert.equal(build('limits')[1].href, '#/admin-2/routes');
+  assert.deepEqual(labels(build('routes')), ['网关管理', '模型路由']);
 });
 
 test('retired model operations addresses resolve to the role workspace home', () => {
@@ -216,6 +216,7 @@ test('cluster management is the first model inference entry and shares a navigat
 
 test('retired maintenance pages have neither navigation entries nor direct access', () => {
   for (const id of ['call-analysis', 'monitoring', 'alerts', 'incidents', 'sla',
+    'limits', 'fallback', 'cache', 'releases',
     'ops-model-routes', 'ops-model-providers', 'gpu-ssh-keys', 'ops-cloud-credentials', 'artifacts', 'model-observability',
     'gpu-instances', 'gpu-instance-types', 'gpu-instance-templates', 'gpu-storage', 'gpu-storage-types']) {
     assert.equal(canAccessPage('平台管理员', id), false);

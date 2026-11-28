@@ -1,23 +1,22 @@
 import { useChannelText } from './channel-language';
 import { loadAdminState, prepareModelServiceShowcase, completeModelServiceShowcase } from './CloudModelOperations';
 import { useState } from 'react';
-import { Banner, Button as SemiButton, Tabs as SemiTabs, Typography } from '@douyinfe/semi-ui';
-import { Modal } from './ServiceUI';
-
-function AdminNotesButton({ variant, ...props }) {
-  return <SemiButton theme={variant === 'outline' ? 'light' : 'solid'} type={variant === 'outline' ? 'tertiary' : 'primary'} {...props}/>;
-}
-
-function AdminNotesHeading({ children }) {
-  return <Typography.Title heading={5} component="h3">{children}</Typography.Title>;
-}
+import { Banner as SemiBanner, Button as SemiButton, Tabs as SemiTabs, Typography as SemiTypography } from '@douyinfe/semi-ui';
+import { Modal as FrontNotesModal } from './ServiceUI';
+import { XaBanner, XaButton, XaOperationDialog, XaTabs, XaTypography } from './xa24/HaloComponents.jsx';
 
 const noteAreas = ['前台与服务', '模型接入', '模型资料'];
 
 export default function DevelopmentNotesDialog({ admin, open, close }) {
   const translateLabel = useChannelText();
-  const Button = AdminNotesButton;
-  const Heading = AdminNotesHeading;
+  const Control = admin ? XaButton : SemiButton;
+  const Typography = admin ? XaTypography : SemiTypography;
+  const Banner = admin ? XaBanner : SemiBanner;
+  const Tabs = admin ? XaTabs : SemiTabs;
+  const Modal = admin ? XaOperationDialog : FrontNotesModal;
+  const Button = ({ variant, ...props }) => <Control theme={variant === 'outline' ? 'light' : 'solid'}
+    type={variant === 'outline' ? 'tertiary' : 'primary'} {...props}/>;
+  const Heading = ({ children }) => <Typography.Title heading={5} component="h3">{children}</Typography.Title>;
   const Paragraph = Typography.Paragraph;
   const [area, setArea] = useState('前台与服务');
   const [mockNotice, setMockNotice] = useState('');
@@ -62,11 +61,11 @@ export default function DevelopmentNotesDialog({ admin, open, close }) {
       <Heading>Mock 验收</Heading><Paragraph>新建演示数据包含仅有资料、待配置连接、同模型多服务商、同服务商多连接等状态；连接列表和详情读取实际登记的供给关系。已有浏览器数据保留，不自动重置或补造连接。内置 mock API 覆盖模型发现、异步任务、候选切换、平台试调用与费用试算；模型运营通过 Workers 与 D1 保存配置及模拟任务，图表样例保留静态 JSON；检测与试调用不访问真实模型上游，不构成生产接入证明。</Paragraph>
       </>);
   return <Modal wide maskClosable={!admin} title={translateLabel("研发人员注意")} description="研发专用 · 非产品功能" onClose={close} footer={<Button variant="outline" onClick={close}>关闭说明</Button>}>
-      <div className="development-notes-semi">
+      <div className={admin ? 'development-notes-xa24' : 'development-notes-semi'}>
         <Banner type="warning" closeIcon={null} description="此入口仅用于原型评审与研发对齐，不纳入正式产品功能。"/>
-        <SemiTabs activeKey={area} onChange={setArea} className="development-notes-tabs" aria-label="研发说明分类">
-            {noteAreas.map(label => <SemiTabs.TabPane key={label} itemKey={label} tab={label}>{label === area && <div className="development-notes-content">{content}</div>}</SemiTabs.TabPane>)}
-        </SemiTabs>
+        <Tabs activeKey={area} onChange={setArea} className="development-notes-tabs" aria-label="研发说明分类">
+            {noteAreas.map(label => <Tabs.TabPane key={label} itemKey={label} tab={label}>{label === area && <div className="development-notes-content">{content}</div>}</Tabs.TabPane>)}
+        </Tabs>
       </div>
     </Modal>;
 }

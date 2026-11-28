@@ -12,14 +12,14 @@
 .inference-backend-inline-toolbar { justify-content: space-between; }
 .inference-backend-card-name { margin-block: 8px; }
 .inference-backend-card-name > .semi-button { padding-inline: 0; }
-.inference-backend-icon { color: var(--semi-color-primary); }
+.inference-backend-icon { color: var(--xa24-primary); }
 
 .inference-backend-copy { overflow-wrap: anywhere; }
 .inference-runner-options { margin-block-start: 12px; }
 .inference-runner-image-list,
 .inference-runner-image { display: grid; gap: 6px; min-inline-size: 0; }
 .inference-runner-image + .inference-runner-image {
-  border-block-start: 1px solid var(--semi-color-border);
+  border-block-start: 1px solid var(--xa24-divider);
   padding-block-start: 6px;
 }
 
@@ -36,7 +36,7 @@
 .inference-backend-editor .inference-backend-editor-body { margin-block-start: 16px; }
 .inference-backend-editor .inference-backend-field { gap: 6px; }
 .inference-backend-editor .inference-backend-field > .semi-select { width: 100%; }
-.inference-backend-editor .inference-backend-required { color: var(--semi-color-danger); }
+.inference-backend-editor .inference-backend-required { color: var(--xa24-danger); }
 .inference-backend-editor .inference-backend-list-editor {
   display: grid;
   gap: 8px;
@@ -49,19 +49,12 @@
 .inference-backend-editor .inference-backend-list-editor > .semi-button { justify-self: start; }
 .inference-backend-editor .inference-backend-list-editor legend { padding-block-end: 6px; }
 .inference-backend-editor .inference-backend-list-row { display: flex; align-items: center; gap: 8px; }
-.inference-backend-editor .inference-backend-yaml textarea { font-family: var(--admin-font-mono, monospace); }
-
 .inference-backend-edit-version { position: relative; }
-.inference-backend-edit-version-removable .semi-collapse-header { padding-inline-end: 44px; }
-.inference-backend-edit-version > .semi-button {
+.inference-backend-edit-version-removable .haloe-collapse-header { padding-inline-end: 44px; }
+.inference-backend-edit-version > .xa24-control {
   position: absolute;
   inset-block-start: 6px;
   inset-inline-end: 8px;
-}
-
-.inference-backend-yaml .semi-input-textarea-lineNumber-item {
-  /* YAML uses unwrapped lines. Semi measures the gutter with wrapped heights. */
-  min-height: 0 !important;
 }
 
 .inference-yaml-input {
@@ -70,36 +63,72 @@
   gap: 6px;
   min-inline-size: 0;
 }
-
-.inference-yaml-input-colored .inference-backend-yaml textarea {
-  color: transparent;
-  caret-color: var(--semi-color-text-0);
+.inference-yaml-surface {
+  display: flex;
+  min-inline-size: 0;
+  border: 1px solid var(--xa24-divider);
+  border-radius: var(--xa24-control-radius);
+  overflow: hidden;
 }
-.inference-yaml-input-colored .inference-backend-yaml textarea::selection {
+.inference-yaml-surface:focus-within { border-color: var(--xa24-primary); }
+.inference-yaml-surface:has([aria-invalid="true"]) { border-color: var(--xa24-danger); }
+.inference-yaml-gutter {
+  position: relative;
+  flex: none;
+  inline-size: 42px;
+  overflow: hidden;
+  background: var(--xa24-page-bg);
+  color: var(--xa24-muted);
+}
+.inference-yaml-gutter pre, .inference-backend-yaml {
+  font: 13px/21px var(--admin-font-mono, monospace);
+}
+.inference-yaml-gutter pre {
+  position: absolute;
+  inset: 0 0 auto;
+  padding: 8px;
+  margin: 0;
+  text-align: end;
+}
+.inference-backend-yaml {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 8px;
+  background: var(--xa24-surface);
+  border: 0;
+  outline: none;
+  resize: vertical;
+  tab-size: 2;
+}
+.inference-yaml-input-colored .inference-backend-yaml {
   color: transparent;
-  background: var(--semi-color-primary-light-active);
+  caret-color: var(--xa24-title);
+}
+.inference-yaml-input-colored .inference-backend-yaml::selection {
+  color: transparent;
+  background: var(--xa24-nav-selected);
 }
 .inference-yaml-syntax {
   position: absolute;
   overflow: hidden;
   pointer-events: none;
-  color: var(--semi-color-text-0);
+  color: var(--xa24-title);
 }
 .inference-yaml-syntax pre {
   box-sizing: border-box;
   margin: 0;
   white-space: pre;
 }
-.inference-yaml-syntax [data-yaml-tone='key'] { color: var(--semi-color-primary); }
-.inference-yaml-syntax [data-yaml-tone='comment'] { color: var(--semi-color-text-2); }
-.inference-yaml-syntax [data-yaml-tone='string'] { color: var(--semi-color-success); }
+.inference-yaml-syntax [data-yaml-tone='key'] { color: var(--xa24-primary); }
+.inference-yaml-syntax [data-yaml-tone='comment'] { color: var(--xa24-muted); }
+.inference-yaml-syntax [data-yaml-tone='string'] { color: var(--xa24-success); }
 .inference-yaml-syntax [data-yaml-tone='number'],
-.inference-yaml-syntax [data-yaml-tone='keyword'] { color: var(--semi-color-warning); }
-.inference-yaml-syntax [data-yaml-tone='marker'] { color: var(--semi-color-info); }
+.inference-yaml-syntax [data-yaml-tone='keyword'] { color: var(--xa24-warning); }
+.inference-yaml-syntax [data-yaml-tone='marker'] { color: var(--xa24-primary); }
 @media (forced-colors: active) {
   .inference-yaml-syntax { display: none; }
-  .inference-yaml-input-colored .inference-backend-yaml textarea { color: CanvasText; caret-color: CanvasText; }
-  .inference-yaml-input-colored .inference-backend-yaml textarea::selection { color: HighlightText; background: Highlight; }
+  .inference-yaml-input-colored .inference-backend-yaml { color: CanvasText; caret-color: CanvasText; }
+  .inference-yaml-input-colored .inference-backend-yaml::selection { color: HighlightText; background: Highlight; }
 }
 
 .inference-yaml-suggestions {
@@ -111,10 +140,10 @@
   padding: 4px;
   overflow: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--semi-color-border);
-  border-radius: var(--semi-border-radius-medium);
-  background: var(--semi-color-bg-3);
-  box-shadow: var(--semi-shadow-elevated);
+  border: 1px solid var(--xa24-divider);
+  border-radius: var(--xa24-card-radius);
+  background: var(--xa24-surface);
+  box-shadow: var(--xa24-popup-shadow);
   list-style: none;
 }
 
@@ -124,11 +153,11 @@
   justify-content: space-between;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: var(--semi-border-radius-small);
+  border-radius: var(--xa24-control-radius);
   cursor: pointer;
 }
 
-.inference-yaml-suggestions [aria-selected='true'] { background: var(--semi-color-primary-light-default); }
+.inference-yaml-suggestions [aria-selected='true'] { background: var(--xa24-primary-soft); }
 
 .inference-yaml-field-list {
   display: grid;

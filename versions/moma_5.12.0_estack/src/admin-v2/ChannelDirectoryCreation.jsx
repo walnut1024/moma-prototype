@@ -1,11 +1,15 @@
 import { useChannelText } from './channel-language';
 import { workbenchProtocolLabel } from './workbench-protocol';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Input, Select, Space, TabPane, Table, Tabs, TextArea, Typography } from '@douyinfe/semi-ui';
+import {
+  XaButton as Button, XaCheckbox as Checkbox, XaInput as Input, XaSelect as Select, XaSpace as Space,
+  XaTabs as Tabs, XaTextArea as TextArea, XaTypography as Typography, XaChoice as Choice, XaField as Field,
+  XaOperationDialog as Modal,
+} from './xa24/HaloComponents.jsx';
+import Table from './xa24/HaloTable.jsx';
 import ChannelAdvancedFields from './ChannelAdvancedFields';
 import ChannelProtocolFields, { ReadOnlyChannelProtocolFields } from './ChannelProtocolFields';
-import { Modal, Notice } from './ModelOperationsUI';
-import { Choice, Field } from './ServiceUI';
+import { Notice } from './ModelOperationsUI';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import SupplierApiKeyField from './SupplierApiKeyField';
 import { CHANNEL_LIST_TYPES, CHANNEL_SOURCE_TYPES, channelSourceTypeLabel, prepareListedChannelInterface } from './channel-connection-directory';
@@ -16,6 +20,7 @@ import { adapterDraftTypes, normalizeAdapterDraft } from './channel-adapter-cata
 import { channelMaterialOptions } from './channel-material-import';
 
 const keyInput = () => ({ id: crypto.randomUUID(), raw: '', name: '' });
+const TabPane = Tabs.TabPane;
 const adapters = [...CHANNEL_INTERFACES.map(row => ({ ...row, label: workbenchProtocolLabel(row.label) })), { id: 'custom', label: '自定义任务 API', protocol: '其他' }];
 const emptyInterface = { interfaceType: '', baseUrl: '' };
 

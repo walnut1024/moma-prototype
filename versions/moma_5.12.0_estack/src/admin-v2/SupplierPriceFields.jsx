@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useState } from 'react';
-import { Button, Checkbox, Empty, Input, RadioGroup, Select, Space, Typography } from '@douyinfe/semi-ui';
-import { IconDelete, IconPlus, IconExternalOpenStroked } from '@douyinfe/semi-icons';
+import { Button, Checkbox, Empty, Input, RadioGroup, Select, Space, Typography } from './xa24/HaloUI.jsx';
+import { IconDelete, IconPlus, IconExternalOpenStroked } from './xa24/HaloIcons.jsx';
 import { Choice } from './ServiceUI';
 import { GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';
 import { tariffOptions, tariffScenarioUnit, tariffScenarioUnits, tariffDictionaryEntries, appendCommonTariffScenarios, commonTariffNames } from './tariff-dictionary';

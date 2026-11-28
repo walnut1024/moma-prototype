@@ -1,12 +1,14 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Button, Input, TextArea } from '@douyinfe/semi-ui';
+import {
+  XaButton as Button, XaInput as Input, XaTextArea as TextArea, XaField as Field,
+  XaChoice as Choice, XaCopyId as CopyId, XaOperationDialog as Modal,
+} from './xa24/HaloComponents.jsx';
 import AdminStatus from './AdminStatus';
 import CandidateProbePanel from './CandidateProbePanel';
 import { ChannelKeySummary } from './ChannelCredentials';
 import ChannelProtocolFields, { ReadOnlyChannelProtocolFields } from './ChannelProtocolFields';
-import { Cell, CopyId, GridTable, Modal, Notice, Row } from './ModelOperationsUI';
-import { Choice, Field } from './ServiceUI';
+import { Cell, GridTable, Notice, Row } from './ModelOperationsUI';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { channelCandidateStatus, channelChangeImpact } from './channel-change-management';
 import { workbenchProtocolLabel } from './workbench-protocol';

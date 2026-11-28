@@ -1,4 +1,4 @@
-import { Card, Tabs } from '@douyinfe/semi-ui';
+import { Card, Tabs } from './xa24/HaloUI.jsx';
 import AdminPageHeading from './AdminPageHeading';
 import Table from './AdminTable';
 

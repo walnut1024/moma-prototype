@@ -1,0 +1,559 @@
+@import "@cmss-bfs/haloe/dist/styles/haloe.css";
+
+.xa24-admin {
+  --xa24-primary: #1a6aff;
+  --xa24-primary-hover: #4787ff;
+  --xa24-primary-active: #1458d7;
+  --xa24-primary-soft: #edf4ff;
+  --xa24-page-bg: #f6f7fb;
+  --xa24-surface: #fff;
+  --xa24-divider: #e7e9ef;
+  --xa24-title: #031129;
+  --xa24-text: #1f1f21;
+  --xa24-muted: #646673;
+  --xa24-icon-muted: #6b7280;
+  --xa24-nav-icon: #5c6a87;
+  --xa24-nav-selected: #dce9ff;
+  --xa24-secondary: #eff1f7;
+  --xa24-success: #0bb231;
+  --xa24-danger: #e63a2e;
+  --xa24-warning: #b54708;
+  --xa24-overlay-mask: rgb(31 31 33 / 40%);
+  --xa24-popup-shadow: 0 4px 14px rgb(3 17 41 / 12%);
+  --xa24-control-radius: 4px;
+  --xa24-card-radius: 8px;
+  --xa24-page-radius: 12px;
+  --xa24-page-gap: 20px;
+  --xa24-top-height: 50px;
+  --xa24-nav-width: 180px;
+  --xa24-control-height: 32px;
+  --xa24-table-head-height: 42px;
+  --xa24-table-row-height: 48px;
+  font-family: PingFangSC, "苹方-简", sans-serif;
+  color: var(--xa24-text);
+}
+
+.app-shell.xa24-admin > .admin-main {
+  padding-block-start: var(--xa24-top-height);
+  background: var(--xa24-page-bg);
+}
+.xa24-admin .admin-v2.xa24-shell {
+  --v2-layout-gap: var(--xa24-page-gap);
+  --admin-section-gap: var(--xa24-page-gap);
+  min-block-size: calc(100dvh - var(--xa24-top-height));
+  background: var(--xa24-page-bg);
+  color: var(--xa24-text);
+}
+.app-shell.xa24-admin > .xa24-topbar {
+  block-size: var(--xa24-top-height);
+  gap: 16px;
+  padding-inline: var(--xa24-page-gap);
+  border-block-end: 1px solid var(--xa24-divider);
+  background: var(--xa24-surface);
+  color: var(--xa24-title);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.app-shell.xa24-admin > .xa24-topbar .top-actions {
+  overflow: visible;
+}
+.xa24-admin .v2-sidebar-desktop.xa24-sidebar {
+  inset-block-start: var(--xa24-top-height);
+  inline-size: var(--xa24-nav-width);
+  block-size: calc(100dvh - var(--xa24-top-height));
+  min-block-size: 0;
+  padding: 12px 8px;
+  border-inline-end: 1px solid var(--xa24-divider);
+  background: var(--xa24-surface);
+}
+.xa24-admin .v2-sidebar-desktop.xa24-sidebar[data-collapsed="true"] {
+  --xa24-nav-width: 52px;
+  padding-inline: 4px;
+}
+.xa24-admin .v2-sidebar nav .haloe-btn {
+  display: flex;
+  align-items: center;
+  inline-size: 100%;
+  padding-inline: 8px;
+  color: var(--xa24-text);
+  font-size: 14px;
+  line-height: 22px;
+  text-align: start;
+}
+.xa24-admin .v2-sidebar nav .haloe-btn svg {
+  color: var(--xa24-nav-icon);
+}
+.xa24-admin .v2-sidebar nav .haloe-btn[aria-current="page"] {
+  border-color: transparent;
+  background: var(--xa24-nav-selected);
+  color: var(--xa24-primary);
+  font-weight: 600;
+}
+.xa24-admin .v2-sidebar nav .haloe-btn[aria-current="page"] svg {
+  color: currentColor;
+}
+.xa24-admin .xa24-sidebar[data-collapsed="true"] nav .haloe-btn {
+  justify-content: center;
+  padding-inline: 0;
+}
+.xa24-admin .xa24-sidebar[data-collapsed="true"] .v2-sidebar-footer {
+  flex-direction: column;
+  gap: 4px;
+}
+.xa24-admin .xa24-sidebar[data-collapsed="true"] nav section + section {
+  border-color: var(--xa24-divider);
+}
+.xa24-admin .xa24-main {
+  min-inline-size: 0;
+  min-block-size: 0;
+  background: var(--xa24-page-bg);
+}
+.xa24-admin .v2-content.xa24-main > .admin-context-bar {
+  padding-inline: var(--xa24-page-gap);
+  border-color: var(--xa24-divider);
+  background: var(--xa24-surface);
+  color: var(--xa24-muted);
+}
+.xa24-admin .v2-content.xa24-main > main:has(> .xa24-page, > .channel-management-new > .xa24-page) {
+  padding: 0;
+}
+.xa24-admin .xa24-mobile-nav { display: none; }
+.xa24-admin .xa24-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  list-style: none;
+  white-space: nowrap;
+}
+.xa24-admin .xa24-breadcrumbs li + li::before {
+  margin-inline-end: 8px;
+  color: var(--xa24-icon-muted);
+  content: "/" / "";
+}
+.xa24-admin .xa24-breadcrumbs a { color: var(--xa24-primary); }
+.xa24-admin .xa24-alert-count { display: inline-flex; align-items: center; gap: 4px; }
+.xa24-admin .xa24-alert-count > span { color: var(--xa24-primary); font-variant-numeric: tabular-nums; }
+.xa24-admin .xa24-shell-notice { padding: 12px var(--xa24-page-gap) 0; }
+.xa24-admin .xa24-toast {
+  position: fixed;
+  z-index: 1100;
+  inset-block-start: calc(var(--xa24-top-height) + 12px);
+  inset-inline-end: 20px;
+  max-inline-size: min(480px, calc(100vw - 40px));
+}
+.xa24-admin .xa24-tooltip-host { display: inline-flex; min-inline-size: 0; }
+.xa24-admin .haloe-modal-wrap.xa24-modal-centered {
+  display: grid;
+  place-items: center;
+}
+.xa24-admin .haloe-modal-wrap.xa24-modal-centered .haloe-modal { inset-block-start: auto; }
+.xa24-admin .xa24-language { inline-size: 110px; }
+.xa24-admin .xa24-language-collapsed { inline-size: 40px; }
+.xa24-admin .xa24-language-collapsed .haloe-select-selection { padding-inline: 4px; }
+
+.xa24-admin .xa24-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--xa24-page-gap);
+  padding: var(--xa24-page-gap);
+  color: var(--xa24-text);
+  font-size: 14px;
+  line-height: 22px;
+}
+.xa24-admin :is(.xa24-entry-header, [data-admin-layout="entry"] > main .admin-page-heading:not(.xa24-detail-header)),
+.xa24-admin :is(.xa24-page-card, .admin-page-stack > .xa24-card-host > .haloe-card) {
+  border-radius: var(--xa24-page-radius);
+  box-shadow: none;
+}
+.xa24-admin :is(.xa24-entry-header, [data-admin-layout="entry"] > main .admin-page-heading:not(.xa24-detail-header)) {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 20px;
+  background: linear-gradient(108deg, #fff 26%, #f7f9ff 65%, #eef2fd);
+}
+.xa24-admin :is(.xa24-entry-header, [data-admin-layout="entry"] > main .admin-page-heading:not(.xa24-detail-header)) h1 {
+  margin: 0;
+  color: var(--xa24-title);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.xa24-admin :is(.xa24-entry-header, [data-admin-layout="entry"] > main .admin-page-heading:not(.xa24-detail-header)) p {
+  margin: 4px 0 0;
+  color: #626d81;
+  font-size: 12px;
+  line-height: 18px;
+}
+.xa24-admin .xa24-entry-art {
+  flex: 0 0 80px;
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+.xa24-admin :is(.xa24-page-card, .admin-page-stack > .xa24-card-host > .haloe-card) {
+  min-width: 0;
+  border: 0;
+  background: var(--xa24-surface);
+}
+.xa24-admin .xa24-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: 48px;
+}
+.xa24-admin :is(.xa24-detail-header, [data-admin-layout="detail"] > main .admin-page-heading) h1 {
+  margin: 0;
+  color: var(--xa24-title);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.xa24-admin .xa24-card-title {
+  margin: 0;
+  color: var(--xa24-title);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.xa24-admin .xa24-metric-card {
+  padding: 16px;
+  border-radius: var(--xa24-card-radius);
+  background: var(--xa24-page-bg);
+}
+.xa24-admin .xa24-metric-value {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.xa24-admin .xa24-help {
+  color: var(--xa24-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+.xa24-admin .xa24-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-block: 0 var(--xa24-page-gap);
+}
+.xa24-admin .xa24-channel-search { inline-size: min(100%, 284px); }
+.xa24-admin .xa24-channel-search .haloe-input-prefix {
+  display: grid;
+  block-size: 100%;
+  place-items: center;
+  color: var(--xa24-icon-muted);
+}
+.xa24-admin .xa24-toolbar :is(.haloe-input, .haloe-select-selection) { font-size: 13px; line-height: 20px; }
+.xa24-admin .xa24-tabs > .haloe-tabs { overflow: visible; }
+.xa24-admin .xa24-tabs > .haloe-tabs-line > .haloe-tabs-bar {
+  margin-block-end: var(--xa24-page-gap);
+  border-bottom-color: var(--xa24-divider);
+}
+.xa24-admin .xa24-tabs.v2-module-tabs {
+  margin: 0;
+  padding-inline: var(--xa24-page-gap);
+  background: var(--xa24-surface);
+}
+.xa24-admin .xa24-tabs.v2-module-tabs > .haloe-tabs-line > .haloe-tabs-bar {
+  margin-block-end: 0;
+}
+.xa24-admin .xa24-tabs .haloe-tabs-tab {
+  font-size: 14px;
+  line-height: 22px;
+}
+.xa24-admin .xa24-tabs .haloe-tabs-tab:focus-visible {
+  outline: 2px solid var(--xa24-primary);
+  outline-offset: -2px;
+}
+/* React tab labels can arrive after HaloE measures its ink bar. Follow the rendered tab width. */
+.xa24-admin .xa24-tabs > .haloe-tabs-line > .haloe-tabs-bar .haloe-tabs-ink-bar { display: none; }
+.xa24-admin .xa24-tabs > .haloe-tabs-line > .haloe-tabs-bar .haloe-tabs-tab-active::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  block-size: 2px;
+  background: currentColor;
+}
+.xa24-admin .xa24-tab-label { display: inline-flex; align-items: center; vertical-align: middle; }
+.xa24-admin .xa24-outline-icon {
+  width: 16px;
+  height: 16px;
+  margin-inline-end: 8px;
+  vertical-align: -3px;
+  color: var(--xa24-icon-muted);
+}
+.xa24-admin .haloe-tabs-tab-active .xa24-outline-icon {
+  color: inherit;
+}
+.xa24-admin .xa24-tabs > .haloe-tabs-card .haloe-tabs-bar { margin-block-end: 0; }
+.xa24-admin .xa24-sidebar[data-collapsed="true"] .haloe-tabs-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.xa24-admin .xa24-sidebar[data-collapsed="true"] .haloe-tabs-tab { padding-inline: 4px; margin-inline-end: 0; }
+
+.xa24-admin :is(.haloe-btn:not(.haloe-btn-circle, .haloe-btn-circle-outline, .haloe-btn-group .haloe-btn),
+    .haloe-input, .haloe-input-number, .haloe-select-selection, .haloe-page__jump > input) {
+  border-radius: var(--xa24-control-radius);
+}
+.xa24-admin .xa24-form-field :is(.haloe-input, .haloe-select-selection) { font-size: 14px; line-height: 22px; }
+.xa24-admin :is(.haloe-input-group-with-prepend > .haloe-input,
+    .haloe-input-group-append .haloe-select-selection) {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+.xa24-admin :is(.haloe-input-group-with-append > .haloe-input,
+    .haloe-input-group-prepend .haloe-select-selection) {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+.xa24-admin .haloe-btn:not(.haloe-btn-circle, .haloe-btn-circle-outline) {
+  font-size: 13px;
+  line-height: 20px;
+}
+.xa24-admin .haloe-btn.haloe-btn-primary:not(:disabled) {
+  background-color: var(--xa24-primary);
+  border-color: var(--xa24-primary);
+}
+.xa24-admin .haloe-btn.haloe-btn-primary:where(:hover):not(:disabled) {
+  background-color: var(--xa24-primary-hover);
+  border-color: var(--xa24-primary-hover);
+}
+.xa24-admin .haloe-btn.haloe-btn-primary:where(:active):not(:disabled) {
+  background-color: var(--xa24-primary-active);
+  border-color: var(--xa24-primary-active);
+}
+.xa24-admin :is(.haloe-btn-secondary, .haloe-btn-default):not(.haloe-btn-ghost) {
+  background: var(--xa24-secondary);
+  border-color: transparent;
+}
+.xa24-admin :is(.haloe-btn-secondary, .haloe-btn-default):not(:disabled, .disabled, .haloe-btn-ghost):hover {
+  background: #e7ebf4;
+}
+.xa24-admin :is(.haloe-btn-secondary, .haloe-btn-default):not(:disabled, .disabled, .haloe-btn-ghost):active {
+  background: #dfe6f5;
+}
+.xa24-admin .haloe-table {
+  font-size: 13px;
+  line-height: 20px;
+}
+.xa24-admin .haloe-table :is(th, .haloe-table-cell) {
+  font-size: 13px;
+  line-height: 20px;
+}
+.xa24-admin .haloe-table thead th {
+  height: var(--xa24-table-head-height);
+  padding-block: 0;
+  font-weight: 500;
+  background: var(--xa24-page-bg);
+}
+.xa24-admin .haloe-table .haloe-table-row > td {
+  height: var(--xa24-table-row-height);
+  vertical-align: middle;
+}
+.xa24-admin :is(.xa24-table-host, .haloe-table-wrapper) { min-inline-size: 0; max-inline-size: 100%; }
+.xa24-admin .xa24-table-scroll:focus-visible { outline: 2px solid var(--xa24-primary); outline-offset: -2px; }
+.xa24-admin .haloe-table :is(th, .haloe-table-row > td) > .haloe-table-cell {
+  padding: 6px 18px;
+}
+.xa24-admin .haloe-table thead th > .haloe-table-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.xa24-admin .haloe-table .haloe-btn-text { padding-inline: 2px; }
+.xa24-admin .xa24-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: inherit;
+}
+.xa24-admin .xa24-status::before {
+  content: "";
+  display: inline-block;
+  flex: 0 0 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--xa24-status-tone, var(--xa24-icon-muted));
+  transform: translateY(-1px);
+}
+.xa24-admin .xa24-status[data-tone="green"] { --xa24-status-tone: var(--xa24-success); }
+.xa24-admin .xa24-status[data-tone="orange"] { --xa24-status-tone: #e88a12; }
+.xa24-admin .xa24-status[data-tone="red"] { --xa24-status-tone: var(--xa24-danger); }
+.xa24-admin .xa24-status[data-tone="blue"] { --xa24-status-tone: var(--xa24-primary); }
+
+.xa24-admin :is(.haloe-modal-mask, .haloe-drawer-mask) { background: var(--xa24-overlay-mask); }
+.xa24-admin .haloe-modal:not(.xa24-modal-centered .haloe-modal) { inset-block-start: 4dvh; }
+.xa24-admin .haloe-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-block-size: 92dvh;
+  border-radius: 2px;
+  box-shadow: 0 4px 16px rgb(155 168 200 / 50%);
+}
+.xa24-admin :is(.haloe-modal-header, .haloe-drawer-header) { flex: none; padding: 12px 16px; }
+.xa24-admin .haloe-modal-footer { flex: none; padding: 12px 18px; }
+.xa24-admin :is(.haloe-modal-header-inner, .haloe-drawer-header-inner) {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.xa24-admin .haloe-modal-body {
+  min-block-size: 0;
+  overflow: auto;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 22px;
+}
+.xa24-admin .xa24-modal-heading .haloe-btn {
+  min-inline-size: 24px;
+  block-size: 22px;
+  padding-inline: 3px;
+  color: var(--xa24-icon-muted);
+}
+.xa24-admin .haloe-drawer-body { padding: 16px; }
+
+@media (min-width: 901px) {
+  .xa24-admin :is(.haloe-drawer-wrap:not(.haloe-drawer-wrap-inner), .haloe-drawer-mask:not(.haloe-drawer-mask-inner)) {
+    inset-block: var(--xa24-top-height) 0;
+    block-size: auto;
+  }
+  .xa24-admin .haloe-drawer-wrap:not(.haloe-drawer-wrap-inner) > .haloe-drawer { position: absolute; }
+}
+
+.xa24-admin .xa24-control {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.xa24-admin .xa24-control-block { display: flex; inline-size: 100%; }
+.xa24-admin .xa24-button-content { display: inline-flex; align-items: center; gap: 8px; }
+.xa24-admin .xa24-button-content > svg { flex: none; }
+.xa24-admin .xa24-button-selected:not(:disabled) { background: var(--xa24-nav-selected); color: var(--xa24-primary); }
+.xa24-admin .xa24-button-danger { color: var(--xa24-danger); }
+.xa24-admin .haloe-btn-error.xa24-button-danger { color: #fff; }
+.xa24-admin .xa24-card-host { min-inline-size: 0; }
+.xa24-admin .xa24-space { display: flex; min-inline-size: 0; }
+.xa24-admin .xa24-counted-input { display: grid; min-inline-size: 0; gap: 4px; }
+.xa24-admin .xa24-counted-input > :where(:last-child) {
+  justify-self: end;
+  color: var(--xa24-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+.xa24-admin .xa24-select-host { display: inline-block; min-inline-size: 0; max-inline-size: 100%; }
+.xa24-admin .xa24-select-host .haloe-select { min-inline-size: 0; }
+.xa24-admin .xa24-select-host .haloe-select-dropdown { z-index: 50; }
+.xa24-admin .xa24-select-tag-limit .haloe-select-suffix { display: none; }
+.xa24-admin .xa24-select-tag-limit .haloe-select-mutiple-tag {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.xa24-admin .xa24-select-tag-limit .haloe-select-mutiple-tag > .haloe-tag-closable {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.xa24-admin .xa24-select-tag-limit .haloe-select-mutiple-tag > .haloe-tag-closable .haloe-tag-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xa24-admin .xa24-select-tag-limit .haloe-select-mutiple-tag > :is(.haloe-select-input, .haloe-tag:not(.haloe-tag-closable)) {
+  flex: none;
+}
+.xa24-admin :is(.admin-pagination, .xa24-pagination) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-block-start: 16px;
+  color: var(--xa24-muted);
+  font-size: 12px;
+}
+.xa24-admin :is(.admin-pagination, .xa24-pagination) .haloe-select-selection { min-block-size: 28px; }
+.xa24-admin .xa24-page-number { inline-size: 64px; }
+.xa24-admin .xa24-ellipsis {
+  display: inline-block;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.xa24-admin .xa24-copy { display: inline-flex; align-items: center; gap: 4px; min-inline-size: 0; max-inline-size: 100%; }
+.xa24-admin .xa24-help-anchor { display: inline-flex; position: relative; align-items: center; }
+.xa24-admin .xa24-help-bubble {
+  position: absolute;
+  z-index: 40;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  inline-size: min(320px, 70vw);
+  padding: 8px 12px;
+  border-radius: var(--xa24-control-radius);
+  background: var(--xa24-title);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: start;
+}
+.xa24-admin .xa24-modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.xa24-admin :is(.haloe-modal, .haloe-drawer) { max-inline-size: 100%; }
+.xa24-admin .xa24-drawer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-block-start: 1px solid var(--xa24-divider);
+}
+.xa24-admin .xa24-form-field { display: grid; gap: 4px; min-inline-size: 0; }
+.xa24-admin .xa24-field-label { display: flex; align-items: center; gap: 8px; }
+.xa24-admin .xa24-field-label label > span, .xa24-admin .xa24-text-danger { color: var(--xa24-danger); }
+.xa24-admin :is(.xa24-text-secondary, .xa24-text-tertiary) { color: var(--xa24-muted); }
+.xa24-admin .xa24-empty { display: grid; justify-items: center; gap: 12px; padding: 24px; color: var(--xa24-muted); }
+.xa24-admin .channel-name-link.haloe-btn { block-size: auto; min-block-size: 32px; padding-inline: 0; text-align: start; }
+.xa24-admin .channel-management-facts > div { border-color: var(--xa24-divider); }
+.xa24-admin .channel-management-facts dt { color: var(--xa24-muted); }
+
+@media (max-width: 900px) {
+  .app-shell.xa24-admin > .xa24-topbar { block-size: auto; min-block-size: var(--xa24-top-height); gap: 8px; }
+  .app-shell.xa24-admin > .xa24-topbar > .xa24-control:has(.admin-banner-return) { grid-row: 1; grid-column: 2; }
+  .app-shell.xa24-admin > .xa24-topbar + .admin-main { padding-block-start: 0; }
+  .xa24-admin .xa24-mobile-nav { display: inline-flex; }
+}
+
+@media (max-width: 768px) {
+  .xa24-admin :is(.xa24-entry-header, [data-admin-layout="entry"] > main .admin-page-heading:not(.xa24-detail-header)) {
+    min-height: 84px;
+    gap: 12px;
+    padding: 10px 16px;
+  }
+  .xa24-admin .xa24-entry-art {
+    flex-basis: 56px;
+    width: 56px;
+    height: 56px;
+  }
+}

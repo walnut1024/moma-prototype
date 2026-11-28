@@ -1,6 +1,6 @@
 import TableFieldHelp from '../components/TableFieldHelp';
 import { useChannelText } from './channel-language';
-import { Popover, Button, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Popover, Button, Tooltip, Typography } from './xa24/HaloUI.jsx';
 import { Chart } from '../components/AnalyticsCharts';
 import { DEFAULT_PAGE_SIZE } from '../components/FilterControls';
 import Table from './AdminTable';

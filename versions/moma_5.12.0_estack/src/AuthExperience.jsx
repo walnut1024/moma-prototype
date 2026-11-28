@@ -1,10 +1,8 @@
-import { useChannelText } from './admin-v2/channel-language';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Clock3, LogOut, UserRound } from 'lucide-react';
 import { Button, Checkbox, Input, Popover, RadioGroup, Select, Steps, Toast } from '@douyinfe/semi-ui';
 import { AuthBrand, LoginPage, PasswordLoginForm } from './components/LoginPage';
 import { LOGIN_BASE, loginReturn, loginDestination, openLogin } from './login-navigation.mjs';
-import { ADMIN_ROLE_LABELS } from './admin-v2/admin-accounts';
 import { cloudAdminRequest } from './admin-v2/admin-client.mjs';
 import SiteAgreementLinks from './components/SiteAgreementLinks';
 import { PRIVATE_SITE } from './site-config.mjs';
@@ -16,6 +14,7 @@ import { marketRequest } from './CloudMarket';
 import './auth.css';
 
 const AccountCenter = lazy(() => import('./AccountCenter'));
+const AdminAccountBanner = lazy(() => import('./admin-v2/AdminAccountBanner.jsx'));
 
 const isPublicAuthRoute = route => ['login','password','invite'].includes(route);
 export function useAuthNavigation() {
@@ -70,17 +69,9 @@ export function CustomerSessionGate({auth,market}) {
 
 export function AuthBanner({ auth, market, onSwitchSpace, demoHref, admin = false }) {
   const [open,setOpen]=useState(false), [switching,setSwitching]=useState(false);
-  const translateLabel = useChannelText();
-  if(admin)return auth.adminAccount ? <Popover trigger="click" position="bottomRight" showArrow={false}
-    content={<div className="auth-account-menu"><div className="auth-menu-profile"><b>{auth.adminAccount.name}</b><span>{translateLabel(ADMIN_ROLE_LABELS[auth.adminAccount.role] || auth.adminAccount.role)}</span></div>
-    <Button theme="borderless" icon={<LogOut size={16}/>} onClick={async()=>{
-      try {
-        await market.logout();
-        openLogin(LOGIN_BASE);
-      } catch(error) {Toast.error(error.message);}
-    }}>{translateLabel('退出登录', 'Sign Out')}</Button></div>}>
-    <Button theme="borderless" className="auth-banner-user" aria-label="账号菜单" icon={<UserRound size={16}/>}>{auth.adminAccount.name}<ChevronDown size={14}/></Button>
-  </Popover> : null;
+  if (admin) return auth.adminAccount ? <Suspense fallback={null}>
+    <AdminAccountBanner account={auth.adminAccount} logout={() => market.logout()}/>
+  </Suspense> : null;
   async function switchSpace(id) {
     if (switching || id===market.tenant.id) return;
     setSwitching(true);

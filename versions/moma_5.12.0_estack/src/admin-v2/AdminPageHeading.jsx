@@ -1,4 +1,4 @@
-import { Typography } from '@douyinfe/semi-ui';
+import { Typography } from './xa24/HaloUI.jsx';
 
 export default function AdminPageHeading({ title, description, children, className }) {
   return (

@@ -1,5 +1,7 @@
 import { useId, useRef, useState } from 'react';
-import { ArrayField, Banner, Button, Collapse, Form, Space, Steps, Toast, Typography, Upload, useFieldState, useFormApi, useFormState } from '@douyinfe/semi-ui';
+import { ArrayField, Banner, Button, Form, Space, Toast, Typography, useFieldState, useFormApi, useFormState } from './xa24/HaloUI.jsx';
+import { Steps, Upload } from './xa24/HaloUI.jsx';
+import { Collapse } from './xa24/HaloUI.jsx';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import { CLUSTER_PROVIDERS, clusterLabels, isCloudCluster, nodeSelectorIssues, validateClusterYaml } from './ops-cluster-domain';

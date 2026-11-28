@@ -1,6 +1,6 @@
 
 import { useMemo, useState } from 'react';
-import { Button, Empty, Progress, Select, Table, Tag, Typography } from '@douyinfe/semi-ui';
+import { Button, Empty, Progress, Select, Table, Tag, Typography } from './xa24/HaloUI.jsx';
 import { DataZoomComponent } from 'echarts/components';
 import { use as useChartComponents } from 'echarts/core';
 import { Chart } from '../components/AnalyticsCharts';

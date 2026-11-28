@@ -1,9 +1,9 @@
 import { useChannelText } from './channel-language';
 import Table from './AdminTable';
 import { useMemo, useRef, useState } from 'react';
-import { Banner, Button, Input, Select, Space, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Input, Select, Space, Tooltip, Typography } from './xa24/HaloUI.jsx';
 import { AdminModal as Modal } from './AdminOverlay';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { libraryRemovalIssue, modelCatalogue, modelReleaseOrder, MODEL_CATALOGUE_TYPES } from './model-library';
 import { MODEL_TYPES, modelCategory } from './model-management';
 import { materialDrawerSide } from './model-material-drawer';

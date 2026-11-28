@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Button, Card, Checkbox, Input, Popover, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Checkbox, Input, Popover, Space, Toast, Typography } from './xa24/HaloUI.jsx';
 import { AdminModal as Modal } from './AdminOverlay';
-import { IconMaximize } from '@douyinfe/semi-icons';
+import { IconMaximize } from './xa24/HaloIcons.jsx';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { chartColor } from '../components/chart-style.mjs';
 import { AnalysisHelp } from './AnalysisMetric';

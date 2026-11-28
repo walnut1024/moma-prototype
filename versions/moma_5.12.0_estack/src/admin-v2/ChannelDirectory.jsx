@@ -15,7 +15,7 @@ import { supplierDirectory } from './moma-provider.js';
 import './channel-directory.css';
 
 export function ChannelManagementNew(props) {
-  const { state } = props;
+  const { state, workspaceTabs } = props;
   const ops = useOperations(props, 'providers-reference');
   const [operation, setOperation] = useState(null);
   const routeConnection = ops.params.get('connection');
@@ -59,7 +59,8 @@ export function ChannelManagementNew(props) {
     setOperation({ type: 'add', connectionId, initialRows, back: { ...operation, activeId: connectionId, selection } });
   });
   return <div className="admin-page-stack supplier-workbench channel-management-new">
-    <ChannelManagementView state={state} connections={connections} ops={ops} open={open} focusTarget={focusTarget}/>
+    <ChannelManagementView state={state} connections={connections} ops={ops} open={open}
+      focusTarget={focusTarget} workspaceTabs={workspaceTabs}/>
     {operation?.type === 'create' && <ChannelDirectoryCreation state={state} providers={providers} connections={connections} ops={ops} close={close} locate={locate} reference/>}
     {connection && operation.type === 'edit' && <ChannelConnectionEditor key={connection.id} state={state} connection={connection} ops={ops} close={close}/>}
     {connection && operation.type === 'discovery' && <ChannelDirectoryDiscovery state={state} connections={[connection]} ops={ops} close={close}

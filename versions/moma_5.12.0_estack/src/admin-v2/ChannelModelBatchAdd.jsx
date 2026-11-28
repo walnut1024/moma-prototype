@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, Space, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Space, Toast, Tooltip, Typography } from './xa24/HaloUI.jsx';
 import AdminTable from './AdminTable';
 import { Modal, Notice, SearchBox } from './ModelOperationsUI';
 import { channelModelCandidates, matchesChannelModel } from './channel-model-candidates';

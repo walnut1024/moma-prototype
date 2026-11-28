@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useState } from 'react';
-import { Button, Typography } from '@douyinfe/semi-ui';
+import { Button, Typography } from './xa24/HaloUI.jsx';
 import { AdminModal } from './AdminOverlay';
 import { Choice, Field, Notice } from './ServiceUI';
 import SupplierModelMultiSelect from './SupplierModelMultiSelect';

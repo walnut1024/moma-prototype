@@ -1,4 +1,4 @@
-import { Input } from '@douyinfe/semi-ui';
+import { Input } from './xa24/HaloUI.jsx';
 import { GridTable, Row, Cell } from './ModelOperationsUI';
 import { billingItemKey, catalogueMoneyDisplay, saleChange } from './provider-catalogue-pricing';
 

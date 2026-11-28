@@ -1,5 +1,5 @@
-.admin-request-log-sheet.admin-call-log-detail .semi-sidesheet-header { padding: 16px 20px; }
-.admin-request-log-sheet.admin-call-log-detail .semi-sidesheet-body { padding: 14px 20px 22px; }
+.admin-request-log-sheet.admin-call-log-detail .haloe-drawer-header { padding: 16px 20px; }
+.admin-request-log-sheet.admin-call-log-detail .haloe-drawer-body { padding: 14px 20px 22px; }
 
 .admin-call-log-detail-heading {
   display: flex;
@@ -29,22 +29,17 @@
   padding-inline-start: 8px;
 }
 
-.admin-call-log-detail .semi-descriptions table { width: 100%; }
-.admin-call-log-detail .semi-descriptions-double tbody {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.admin-call-log-detail dl {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 10px 20px;
 }
-.admin-call-log-detail .semi-descriptions-double tr {
-  display: grid;
-  grid-template-columns: minmax(88px, 1fr) minmax(0, 2fr);
-  align-items: start;
-  gap: 6px;
+.admin-call-log-detail dl > div {
+  grid-template-columns: minmax(88px, 1fr) minmax(0, 2fr) !important;
 }
-.admin-call-log-detail .semi-descriptions-double .semi-descriptions-item { padding: 0; }
-.admin-call-log-detail .semi-descriptions-double .semi-descriptions-value { font-size: 14px; font-weight: 400; }
+.admin-call-log-detail dl dd { font-size: 14px; font-weight: 400; }
 
-.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-node.semi-button {
+.admin-request-log-sheet.admin-call-log-detail .admin-request-trace-node.haloe-btn {
   min-height: 34px;
   border: 0;
   border-radius: 4px;
@@ -73,5 +68,5 @@
 .admin-request-log-sheet.admin-call-log-detail .admin-request-trace-point { width: 5px; border-radius: 3px; transform: translateX(-50%); }
 
 @media (max-width: 600px) {
-  .admin-call-log-detail .semi-descriptions-double tbody { grid-template-columns: minmax(0, 1fr); }
+  .admin-call-log-detail dl { grid-template-columns: minmax(0, 1fr) !important; }
 }

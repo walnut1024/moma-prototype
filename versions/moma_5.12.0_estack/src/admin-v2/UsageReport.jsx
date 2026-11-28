@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useMemo } from 'react';
-import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Typography } from './xa24/HaloUI.jsx';
 import { DonutChart, HorizontalBarChart, TimeSeriesChart } from '../components/AnalyticsCharts';
 import { adminChartColor, chartPalette } from '../components/chart-style.mjs';
 import { AnalysisHelp } from './AnalysisMetric';

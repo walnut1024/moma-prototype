@@ -1,18 +1,17 @@
 .supplier-workbench .channel-capacity-cell{display:grid;justify-items:start;gap:4px;font-variant-numeric:tabular-nums}
-.supplier-workbench .channel-capacity-label{display:inline-block;margin-inline-end:8px;color:var(--semi-color-text-1)}
-.supplier-workbench .channel-capacity-missing{color:var(--semi-color-text-2)}
-.supplier-workbench .channel-capacity-cell>.semi-button{padding-inline:0}
-.channel-capacity-popover .channel-capacity-details{padding:20px;width:min(350px,calc(100vw - 32px));box-sizing:border-box;color:var(--semi-color-text-0);font-size:14px}
-.channel-capacity-popover .semi-popover-content{padding:0}
+.supplier-workbench .channel-capacity-label{display:inline-block;margin-inline-end:8px;color:var(--xa24-text)}
+.supplier-workbench .channel-capacity-missing{color:var(--xa24-muted)}
+.supplier-workbench .channel-capacity-cell>.xa24-control>.haloe-btn{padding-inline:0}
+.channel-capacity-popover .channel-capacity-details{padding:20px;width:min(350px,calc(100vw - 32px));box-sizing:border-box;color:var(--xa24-title);font-size:14px}
 .channel-capacity-popover .channel-capacity-details>h3{margin:0 0 4px}
-.channel-capacity-popover .channel-capacity-details>.semi-typography{overflow-wrap:anywhere}
+.channel-capacity-popover .channel-capacity-details>:is(p,span){overflow-wrap:anywhere}
 .channel-capacity-popover .channel-capacity-details dl{display:grid;gap:12px;margin:18px 0 0}
 .channel-capacity-popover .channel-capacity-details dl>div{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
-.channel-capacity-popover .channel-capacity-details dt{color:var(--semi-color-text-1)}
+.channel-capacity-popover .channel-capacity-details dt{color:var(--xa24-text)}
 .channel-capacity-popover .channel-capacity-details dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
-.channel-capacity-popover .channel-capacity-details>.semi-button{padding-inline:0}
+.channel-capacity-popover .channel-capacity-details>.xa24-control>.haloe-btn{padding-inline:0}
 .channel-capacity-sheet .channel-capacity-form{display:grid;gap:16px;margin-top:24px}
 .channel-capacity-sheet .channel-capacity-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .channel-capacity-sheet .channel-capacity-heading>h3{flex:none;white-space:nowrap;margin:0}
-.channel-capacity-sheet .semi-table-row-cell{overflow-wrap:anywhere}
-@media(max-width:600px){.channel-capacity-sheet .channel-capacity-form .semi-table-container{overflow-x:auto}.channel-capacity-sheet .channel-capacity-form table{min-width:560px}}
+.channel-capacity-sheet td{overflow-wrap:anywhere}
+@media(max-width:600px){.channel-capacity-sheet .channel-capacity-form .haloe-table-body{overflow-x:auto}.channel-capacity-sheet .channel-capacity-form table{min-width:560px}}

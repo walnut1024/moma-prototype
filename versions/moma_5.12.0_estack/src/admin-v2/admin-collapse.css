@@ -1,8 +1,64 @@
-.admin-collapse-panel > .semi-collapse-header:focus-visible {
-  outline: 2px solid var(--semi-color-primary);
+.xa24-admin .admin-collapse-panel > .haloe-collapse-header {
+  height: auto;
+  padding: 0;
+  line-height: inherit;
+}
+
+.xa24-admin .xa24-collapse-heading {
+  position: relative;
+  display: flex;
+  min-height: var(--xa24-control-height);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+}
+
+.xa24-admin .xa24-collapse-heading > svg {
+  flex: none;
+  color: var(--xa24-nav-icon);
+}
+
+.xa24-admin .xa24-collapse-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.xa24-admin .xa24-collapse-trigger {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.xa24-admin .xa24-collapse-trigger:disabled { cursor: default; }
+.xa24-admin .xa24-collapse-trigger:focus-visible {
+  outline: 2px solid var(--xa24-primary);
   outline-offset: -2px;
 }
 
-.admin-collapse-panel > .semi-collapsible-wrapper > div > .semi-collapse-content[aria-hidden="true"] {
-  visibility: hidden;
+.xa24-admin .xa24-action-menu {
+  min-width: 140px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+}
+
+.xa24-admin .xa24-action-menu .xa24-menu-item {
+  justify-content: flex-start;
+  width: 100%;
+  text-align: start;
+}
+
+.xa24-admin .xa24-menu-item:focus-visible {
+  outline: 2px solid var(--xa24-primary);
+  outline-offset: -2px;
+}
+
+.xa24-admin .xa24-action-menu-title {
+  padding: 4px 8px;
+  color: var(--xa24-muted);
+  font-size: 12px;
 }

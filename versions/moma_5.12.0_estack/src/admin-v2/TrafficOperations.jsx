@@ -3,8 +3,8 @@ import TableFieldHelp from '../components/TableFieldHelp';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Form, Input, Select, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconPlus } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Form, Input, Select, Space, Tabs, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconPlus } from './xa24/HaloIcons.jsx';
 import { AdminModal as Modal, AdminSideSheet } from './AdminOverlay';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { openLogin } from '../login-navigation.mjs';
@@ -377,9 +377,9 @@ export default function TrafficOperations({ state, dirtyRef }) {
   const accountRows = accounts.filter(row => match(accountQuery, row.name, row.id, ...row.tenants.map(tenant => tenant.name)) &&
     (type === 'all' || row.tenants.some(tenant => (tenant.type === '个人' ? '个人' : '政企') === type)));
   const accountColumns = [
-    { title: '账号名称', dataIndex: 'name' },
-    { title: '用户 ID', dataIndex: 'id' },
-    { title: '所属租户', render: (_, row) => row.tenants.map(tenant => tenant.name + '（' + (tenant.type === '个人' ? '个人' : '政企') + '）').join('、') || '—' },
+    { title: '账号名称', dataIndex: 'name', width: 110 },
+    { title: '用户 ID', dataIndex: 'id', width: 140 },
+    { title: '所属租户', width: 185, render: (_, row) => row.tenants.map(tenant => tenant.name + '（' + (tenant.type === '个人' ? '个人' : '政企') + '）').join('、') || '—' },
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={global}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={accountRule(row)?.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => accountRule(row)?.name || '—' },
@@ -410,7 +410,7 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ...row, ...modelTraffic(settings, row.id),
   }));
   const modelColumns = [
-    { title: '模型服务名称', dataIndex: 'name' }, { title: '模型 ID', dataIndex: 'modelId' },
+    { title: '模型服务名称', dataIndex: 'name', width: 180 }, { title: '模型 ID', dataIndex: 'modelId', width: 170 },
     { title: '默认值', width: ratePairWidth, render: () => <RatePair limit={modelDefault}/> },
     { title: '生效值', width: ratePairWidth, render: (_, row) => <RatePair limit={row.limit} strong/> },
     { title: '规则来源', width: 98, render: (_, row) => row.custom ? '模型自定义' : '模型默认' },
@@ -450,59 +450,62 @@ export default function TrafficOperations({ state, dirtyRef }) {
     ? '编辑模型限流 · ' + modelById.get(draft.id)?.name : '编辑账号限流 · ' + account?.name;
 
   return <section className="traffic-page admin-page-stack">
-    <AdminPageHeading title={translateLabel("限流配置")}>
-      <Button disabled={Boolean(draft || saving)} onClick={() => setHistoryOpen(true)}>{translateLabel("变更历史")}</Button>
-    </AdminPageHeading>
-    <Tabs type="line" activeKey={tab} onChange={value => {
-      if (value !== tab) discard(() => { finish(false); clearSelection(); setTab(value); });
-    }} aria-label={translateLabel("限流配置")}>
-      <Tabs.TabPane tab={translateLabel("用户限流")} itemKey="users">
-        {tab === 'users' && <div className="traffic-tab">
-          <Card className="traffic-list">
-            <div className="admin-list-toolbar">
-              <Input className="admin-list-search" showClear value={accountQuery} aria-label="搜索账号" placeholder="搜索账号名称、用户 ID 或所属租户"
-                onChange={value => { setAccountQuery(value); clearSelection(); }} disabled={Boolean(draft)}/>
-              <Choice translateOptions label="筛选所属租户类型" options={[[ 'all', '全部租户类型' ], ['个人', '个人'], ['政企', '政企']]} value={type}
-                onSelect={value => { setType(value); clearSelection(); }} disabled={Boolean(draft)}/>
-              <DefaultInline title={translateLabel("全局默认")} description={userDefaultHelp}>
-                {global ? <>
-                  <RatePair limit={global} strong/>
-                  {editButton('编辑全局默认', event => begin(event, 'defaults', '', [global]))}
-                </> : loadStatus}
-              </DefaultInline>
-            </div>
-            <div className="admin-list-toolbar">
-              <Text aria-live="polite">已选 {selectedIds.length} 个账号</Text>
-              <Space wrap>
-                <Button disabled={batchDisabled} onClick={event => begin(event, 'batchAccounts', '', [{}])}>{translateLabel("批量修改额度")}</Button>
-                <Button disabled={batchDisabled} onClick={event => restoreDefaults(event)}>{translateLabel("恢复默认")}</Button>
-              </Space>
+    <AdminPageHeading title={translateLabel("限流配置")} className="xa24-entry-header"
+      description={translateLabel('配置账号和模型的调用速率及 Token 额度', 'Configure account and model request rates and token limits')}/>
+    <Card padding={16} className="traffic-list xa24-page-card">
+      <Tabs type="line" activeKey={tab} onChange={value => {
+        if (value !== tab) discard(() => { finish(false); clearSelection(); setTab(value); });
+      }} aria-label={translateLabel("限流配置")}>
+        <Tabs.TabPane tab={translateLabel("用户限流")} itemKey="users">
+          {tab === 'users' && <div className="traffic-tab">
+            <div className="traffic-account-controls">
+              <div className="admin-list-toolbar traffic-batch-toolbar">
+                <Text aria-live="polite">已选 {selectedIds.length} 个账号</Text>
+                <Space wrap>
+                  <Button disabled={batchDisabled} onClick={event => begin(event, 'batchAccounts', '', [{}])}>{translateLabel("批量修改额度")}</Button>
+                  <Button disabled={batchDisabled} onClick={event => restoreDefaults(event)}>{translateLabel("恢复默认")}</Button>
+                </Space>
+              </div>
+              <div className="admin-list-toolbar traffic-filter-toolbar">
+                <Input className="admin-list-search" showClear value={accountQuery} aria-label="搜索账号" placeholder="搜索账号名称、用户 ID 或所属租户"
+                  onChange={value => { setAccountQuery(value); clearSelection(); }} disabled={Boolean(draft)}/>
+                <Choice translateOptions label="筛选所属租户类型" options={[[ 'all', '全部租户类型' ], ['个人', '个人'], ['政企', '政企']]} value={type}
+                  onSelect={value => { setType(value); clearSelection(); }} disabled={Boolean(draft)}/>
+                <DefaultInline title={translateLabel("全局默认")} description={userDefaultHelp}>
+                  {global ? <>
+                    <RatePair limit={global} strong/>
+                    {editButton('编辑全局默认', event => begin(event, 'defaults', '', [global]))}
+                  </> : loadStatus}
+                </DefaultInline>
+                <Button disabled={Boolean(draft || saving)} onClick={() => setHistoryOpen(true)}>{translateLabel("变更历史")}</Button>
+              </div>
             </div>
             {!draft && errorBanner}
             <Table key={accountQuery + ':' + type} rowKey="id" empty="暂无账号"
-              scroll={{ x: 'max(100%, 1200px)' }} dataSource={accountRows} columns={accountColumns} pagination={pagination} rowSelection={rowSelection}/>
-          </Card>
-        </div>}
-      </Tabs.TabPane>
-      <Tabs.TabPane tab={translateLabel("模型限流")} itemKey="models">
-        {tab === 'models' && <div className="traffic-tab"><Card className="traffic-list">
-          <div className="admin-list-toolbar">
-            <Input className="admin-list-search" showClear value={modelQuery} aria-label={serviceSearch} placeholder={serviceSearch}
-              onChange={setModelQuery} disabled={Boolean(draft)}/>
-            <DefaultInline title="模型默认" description={modelDefaultHelp}>
-              {modelDefault ? <>
-                <RatePair limit={modelDefault} strong/>
-                {editButton('编辑模型默认', event => begin(event, 'modelDefaults', '', [modelDefault]))}
-              </> : loadStatus}
-            </DefaultInline>
-          </div>
-          {!draft && errorBanner}
-          <Table key={modelQuery} rowKey="id" scroll={{ x: 'max(100%, 880px)' }}
-            empty={settings ? '暂无模型服务' : remote?.error ? '模型限流暂不可用' : '正在读取模型限流…'}
-            dataSource={modelRows} columns={modelColumns} pagination={pagination}/>
-        </Card></div>}
-      </Tabs.TabPane>
-    </Tabs>
+              scroll={{ x: 'max(100%, 1292px)' }} dataSource={accountRows} columns={accountColumns} pagination={pagination} rowSelection={rowSelection}/>
+          </div>}
+        </Tabs.TabPane>
+        <Tabs.TabPane tab={translateLabel("模型限流")} itemKey="models">
+          {tab === 'models' && <div className="traffic-tab">
+            <div className="admin-list-toolbar">
+              <Input className="admin-list-search" showClear value={modelQuery} aria-label={serviceSearch} placeholder={serviceSearch}
+                onChange={setModelQuery} disabled={Boolean(draft)}/>
+              <DefaultInline title="模型默认" description={modelDefaultHelp}>
+                {modelDefault ? <>
+                  <RatePair limit={modelDefault} strong/>
+                  {editButton('编辑模型默认', event => begin(event, 'modelDefaults', '', [modelDefault]))}
+                </> : loadStatus}
+              </DefaultInline>
+              <Button disabled={Boolean(draft || saving)} onClick={() => setHistoryOpen(true)}>{translateLabel("变更历史")}</Button>
+            </div>
+            {!draft && errorBanner}
+            <Table key={modelQuery} rowKey="id" scroll={{ x: 'max(100%, 928px)' }}
+              empty={settings ? '暂无模型服务' : remote?.error ? '模型限流暂不可用' : '正在读取模型限流…'}
+              dataSource={modelRows} columns={modelColumns} pagination={pagination}/>
+          </div>}
+        </Tabs.TabPane>
+      </Tabs>
+    </Card>
     {draft && !drawer && <Modal visible title={dialogTitle} okText="保存" onOk={save} onCancel={() => discard()}
       closeOnEsc={!confirmation} cancelButtonProps={{ disabled: saving }}
       okButtonProps={{ loading: saving, disabled: saveBlocked }}>

@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useRef, useState } from 'react';
-import { Banner, Button, Input, Select, Space, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Input, Select, Space, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconSearch } from './xa24/HaloIcons.jsx';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
 import { activeCustomer } from '../service-access.mjs';
 import { internalSpace } from '../operating-space.mjs';

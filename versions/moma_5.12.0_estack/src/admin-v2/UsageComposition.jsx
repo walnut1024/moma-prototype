@@ -1,7 +1,7 @@
 import TableFieldHelp from '../components/TableFieldHelp';
 import Table from './AdminTable';
 import { useState } from 'react';
-import { Button, Card, Space, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Typography } from './xa24/HaloUI.jsx';
 import { AdminModal as Modal } from './AdminOverlay';
 import { DonutChart, TimeSeriesChart } from '../components/AnalyticsCharts';
 import { adminChartColor, chartColor, chartPalette } from '../components/chart-style.mjs';

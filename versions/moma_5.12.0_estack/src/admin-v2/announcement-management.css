@@ -1,19 +1,19 @@
-.announcement-management-modal .semi-modal {
+.announcement-management-modal .haloe-modal {
   --announcement-modal-margin: clamp(12px, 4dvh, 32px);
   margin-block: var(--announcement-modal-margin);
 }
 
-.announcement-management-modal .semi-modal-content {
+.announcement-management-modal .haloe-modal-content {
   max-block-size: calc(100dvh - 2 * var(--announcement-modal-margin));
 }
 
-.announcement-management-modal .semi-modal-body {
+.announcement-management-modal .haloe-modal-body {
   min-block-size: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-.announcement-management-modal :is(.semi-modal-header, .semi-modal-footer) {
+.announcement-management-modal :is(.haloe-modal-header, .haloe-modal-footer) {
   flex-shrink: 0;
 }
 

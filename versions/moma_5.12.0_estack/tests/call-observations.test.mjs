@@ -164,11 +164,11 @@ test('channel health simulation compares upstream channels and covers all four h
   assert.equal(createCallLogSimulation(now).channelTrendCatalogue, undefined);
 });
 
-test('independent maintenance navigation keeps the gateway configuration tabs', () => {
+test('maintenance navigation keeps model routes and global routing settings', () => {
   const { items } = sections.find(section => section.id === 'gateway');
   assert.deepEqual(items.map(item => item.id), ['gateway', 'global-routing']);
   assert.equal(pages.logs.groupId, 'runtime');
-  assert.deepEqual(items[0].children.map(([id]) => id), ['routes', 'limits', 'fallback', 'cache', 'releases']);
+  assert.deepEqual(items.flatMap(item => item.children.map(([id]) => id)), ['routes', 'global-routing']);
   assert.equal(canAccessPage('运维人员', 'logs'), true);
   assert.equal(canAccessPage('运营人员', 'logs'), false);
   for (const id of ['monitoring', 'alerts', 'incidents', 'sla']) {

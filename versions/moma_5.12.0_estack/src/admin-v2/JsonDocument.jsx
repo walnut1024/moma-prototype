@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
-import { Button, Space } from '@douyinfe/semi-ui';
-import { IconChevronDown, IconChevronRight } from '@douyinfe/semi-icons';
+import { Button, Space } from './xa24/HaloUI.jsx';
+import { IconChevronDown, IconChevronRight } from './xa24/HaloIcons.jsx';
 import { jsonDocument } from './json-document.mjs';
 import './json-document.css';
 

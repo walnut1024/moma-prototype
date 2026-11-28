@@ -1,12 +1,12 @@
-.procurement-cost-sheet .procurement-cost-scope{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid var(--semi-color-border)}
+.procurement-cost-sheet .procurement-cost-scope{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid var(--xa24-divider)}
 .procurement-cost-sheet .procurement-cost-scope dl{display:flex;flex-wrap:wrap;gap:12px 28px;margin:0}
-.procurement-cost-sheet .procurement-cost-scope dt{font-size:12px;color:var(--semi-color-text-2);margin-bottom:4px}
+.procurement-cost-sheet .procurement-cost-scope dt{font-size:12px;color:var(--xa24-muted);margin-bottom:4px}
 .procurement-cost-sheet .procurement-cost-scope dd{margin:0;font-weight:600;overflow-wrap:anywhere}
 .procurement-cost-sheet .procurement-cost-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .procurement-cost-sheet .procurement-cost-price{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px}
-.procurement-cost-sheet .procurement-cost-fields .semi-input-wrapper,.procurement-cost-sheet .procurement-cost-fields .semi-select{width:100%}
+.procurement-cost-sheet .procurement-cost-fields :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)),.procurement-cost-sheet .procurement-cost-fields :is(.haloe-select, .xa24-select-host){width:100%}
 .procurement-cost-sheet .procurement-cost-fields td{vertical-align:top}
 .procurement-cost-sheet .procurement-cost-tools{margin-top:14px}
-.procurement-cost-sheet .procurement-cost-empty{display:grid;justify-items:center;align-content:center;gap:14px;min-height:184px;padding:20px;border:1px dashed var(--semi-color-border);border-radius:6px}
+.procurement-cost-sheet .procurement-cost-empty{display:grid;justify-items:center;align-content:center;gap:14px;min-height:184px;padding:20px;border:1px dashed var(--xa24-divider);border-radius:6px}
 .procurement-cost-sheet .procurement-cost-dates{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:600px){.procurement-cost-sheet .procurement-cost-dates{grid-template-columns:1fr}.procurement-cost-sheet .procurement-cost-scope{align-items:flex-start}}

@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useState } from 'react';
-import { IconShield } from '@douyinfe/semi-icons';
-import { Banner, Button, Card, Tag, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
+import { IconShield } from './xa24/HaloIcons.jsx';
+import { Banner, Button, Card, Tag, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
 import { cacheLicense, LICENSE_NAMES } from '../deployment-license.mjs';
 import AdminPageHeading from './AdminPageHeading';
 import AdminStatus from './AdminStatus';

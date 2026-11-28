@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
-import { Button, Input, Typography } from '@douyinfe/semi-ui';
+import { Button, Input, Typography } from './xa24/HaloUI.jsx';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { AdminSideSheet } from './AdminOverlay';

@@ -38,7 +38,7 @@
 }
 
 .deployment-schedule-rule + .deployment-schedule-rule {
-  border-block-start: 1px dashed var(--semi-color-border);
+  border-block-start: 1px dashed var(--xa24-divider);
 }
 
 .deployment-schedule-rule > button {
@@ -70,8 +70,8 @@
 .deployment-schedule-preview {
   gap: 2px;
   padding: 8px 12px;
-  border-radius: var(--semi-border-radius-small);
-  background: var(--semi-color-fill-0);
+  border-radius: var(--xa24-control-radius);
+  background: var(--xa24-page-bg);
 }
 
 .deployment-schedule .deployment-schedule-add {

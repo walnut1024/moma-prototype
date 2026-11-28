@@ -1,7 +1,8 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
-import { IconUpload } from '@douyinfe/semi-icons';
-import { Banner, Button, Card, Form, Image, Input, Space, Toast } from '@douyinfe/semi-ui';
+import { IconUpload } from './xa24/HaloIcons.jsx';
+import { Banner, Button, Card, Form, Input, Space, Toast } from './xa24/HaloUI.jsx';
+import { Image } from './xa24/HaloUI.jsx';
 import AdminPageHeading from './AdminPageHeading';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { PORTAL_HOME_ENDPOINT, portalHomeUrl } from '../portal-home.mjs';

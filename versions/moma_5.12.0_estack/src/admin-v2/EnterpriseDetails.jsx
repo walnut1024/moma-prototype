@@ -1,5 +1,5 @@
 import { useChannelText } from './channel-language';
-import { Button, Card, Tabs, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Tabs, Typography } from './xa24/HaloUI.jsx';
 import { EnterpriseFacts, EnterpriseStatus, EnterpriseTable } from './EnterpriseUI';
 import { enterpriseAdmins, enterpriseDisplayValue, enterpriseMetadataFields } from './enterprise';
 import { TenantServiceSettings } from './TenantServiceSettings';

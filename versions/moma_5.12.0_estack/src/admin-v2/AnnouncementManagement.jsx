@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, DatePicker, Form, Input, Select, Space, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, DatePicker, Form, Input, Select, Space, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { DEFAULT_PAGE_SIZE, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import { cloudAdminRequest } from './admin-client.mjs';
 import { useChannelText } from './channel-language';

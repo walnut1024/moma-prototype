@@ -1,2 +1,2 @@
 .admin-individual-dialog { overflow-wrap: anywhere; }
-.admin-individual-page .semi-descriptions-item-td, .admin-individual-dialog .semi-descriptions-item-td { overflow-wrap: anywhere; }
+.admin-individual-page dl dd, .admin-individual-dialog dl dd { overflow-wrap: anywhere; }

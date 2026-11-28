@@ -1,8 +1,9 @@
 import { useChannelText } from './channel-language';
 import { resourceId } from '../resource-id.mjs';
 import { useId, useEffect, useRef, useState } from 'react';
-import { Avatar, Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Avatar } from './xa24/HaloUI.jsx';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice, serviceOperationsUi } from './ServiceUI';

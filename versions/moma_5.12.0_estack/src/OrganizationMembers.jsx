@@ -1,9 +1,16 @@
 import { resourceId } from './resource-id.mjs';
-import { DEFAULT_PAGE_SIZE, FilterPagination } from "./components/FilterControls";
+import { DEFAULT_PAGE_SIZE, FilterPagination, PAGE_SIZES } from "./components/FilterControls";
 import { displayBusinessCopy } from './display-copy.mjs';
 import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderPlus, Layers3, MoreHorizontal, Network, Search, ShieldCheck, UserPlus, Users, UsersRound } from "lucide-react";
-import { Button, Checkbox, Dropdown, Input, Select, Table, Tabs, Tag, TextArea } from '@douyinfe/semi-ui';
+import {
+  Button as FrontButton, Checkbox as FrontCheckbox, Dropdown, Input as FrontInput, Select as FrontSelect,
+  Table as FrontTable, Tabs as FrontTabs, Tag as FrontTag, TextArea as FrontTextArea,
+} from '@douyinfe/semi-ui';
+import {
+  Button as AdminButton, Checkbox as AdminCheckbox, Input as AdminInput, Select as AdminSelect,
+  Pagination as AdminPagination, Table as AdminTable, Tabs as AdminTabs, Tag as AdminTag, TextArea as AdminTextArea,
+} from './admin-v2/xa24/HaloUI.jsx';
 import { AdminModal, AdminSideSheet } from './admin-v2/AdminOverlay';
 import AdminActionMenu from './admin-v2/AdminActionMenu';
 import { changeOrganization, departmentPath, descendantIds, roles, statuses } from "./organization-data.mjs";
@@ -12,19 +19,21 @@ import { applyMemberBatch } from "./organization-import.mjs";
 import OrganizationMemberBatch from "./OrganizationMemberBatch";
 import "./organization-members.css";
 
-function Choice({ label, value, onChange, options, disabled = false }) {
+function Choice({ admin, label, value, onChange, options, disabled = false }) {
+  const Select = admin ? AdminSelect : FrontSelect;
   const labelId = useId();
   return <div className="org-field"><span id={labelId}>{label}</span>
     <Select aria-labelledby={labelId} value={value} onChange={onChange} optionList={options} disabled={disabled} />
   </div>;
 }
 
-function RoleFields({ form, setForm, departments }) {
+function RoleFields({ admin, form, setForm, departments }) {
+  const Checkbox = admin ? AdminCheckbox : FrontCheckbox;
   return <>
-    <Choice label="管理角色" value={form.role} onChange={role => setForm({ ...form, role, scopeId: form.scopeId || (form.departmentId !== "unassigned" ? form.departmentId : "root") })} options={roles.map(role => ({ value: role, label: role }))} />
+    <Choice admin={admin} label="管理角色" value={form.role} onChange={role => setForm({ ...form, role, scopeId: form.scopeId || (form.departmentId !== "unassigned" ? form.departmentId : "root") })} options={roles.map(role => ({ value: role, label: role }))} />
     <p className="org-hint">{({ 企业管理员: "管理企业全部部门、成员及平台配置。", 部门管理员: "在指定部门范围内管理组织与成员。", 普通成员: "使用已授权的项目与模型服务。", 财务审计: "查看企业用量与费用，不管理组织及成员。" })[form.role]}</p>
     {form.role === "部门管理员" && <>
-      <Choice label="管理范围" value={form.scopeId || "root"} onChange={scopeId => setForm({ ...form, scopeId })} options={departments.map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))} />
+      <Choice admin={admin} label="管理范围" value={form.scopeId || "root"} onChange={scopeId => setForm({ ...form, scopeId })} options={departments.map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))} />
       <Checkbox className="org-check" checked={!!form.includeChildren} onChange={({target}) => setForm({ ...form, includeChildren: target.checked })}>包含该部门的子部门</Checkbox>
       <p className="org-hint">主部门用于组织归属；管理范围单独配置，移动主部门不会自动改变管理范围。</p>
     </>}
@@ -32,6 +41,13 @@ function RoleFields({ form, setForm, departments }) {
 }
 
 export default function OrganizationMembers({ tenant, admin }) {
+  const Button = admin ? AdminButton : FrontButton;
+  const Checkbox = admin ? AdminCheckbox : FrontCheckbox;
+  const Input = admin ? AdminInput : FrontInput;
+  const Table = admin ? AdminTable : FrontTable;
+  const Tabs = admin ? AdminTabs : FrontTabs;
+  const Tag = admin ? AdminTag : FrontTag;
+  const TextArea = admin ? AdminTextArea : FrontTextArea;
   const canManage = tenant.canManageOrganization ?? tenant.canManage;
   const departmentOnly = canManage && !tenant.canManage;
   const canEditMember = member => canManage && (!departmentOnly || member.role === '普通成员');
@@ -158,20 +174,20 @@ export default function OrganizationMembers({ tenant, admin }) {
       <div className="org-dialog-body">
         {modal?.type === "department" && <form id="org-edit-form" onSubmit={submit} className="org-form">
           <label className="org-field"><span>部门名称 <b>*</b></span><Input aria-label="部门名称" placeholder="输入部门名称" maxLength={30} value={form.name} onChange={value => setForm({ ...form, name: value })} required /></label>
-          <Choice label="上级部门" value={form.parentId} onChange={parentId => setForm({ ...form, parentId })} options={departments.filter(d => !descendantIds(departments, form.id).has(d.id)).map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))} />
-          <Choice label="部门负责人" value={form.ownerId} onChange={ownerId => setForm({ ...form, ownerId, grantAdmin: false })} options={[{ value: "none", label: "暂不设置" }, ...members.filter(m => m.status === "已加入").map(m => ({ value: m.id, label: `${m.name} · ${m.account}` }))]} />
+          <Choice admin={admin} label="上级部门" value={form.parentId} onChange={parentId => setForm({ ...form, parentId })} options={departments.filter(d => !descendantIds(departments, form.id).has(d.id)).map(d => ({ value: d.id, label: departmentPath(departments, d.id) }))} />
+          <Choice admin={admin} label="部门负责人" value={form.ownerId} onChange={ownerId => setForm({ ...form, ownerId, grantAdmin: false })} options={[{ value: "none", label: "暂不设置" }, ...members.filter(m => m.status === "已加入").map(m => ({ value: m.id, label: `${m.name} · ${m.account}` }))]} />
           <Checkbox className="org-check" disabled={form.ownerId === "none"} checked={!!form.grantAdmin} onChange={({target}) => setForm({ ...form, grantAdmin: target.checked })}>同时授权负责人为部门管理员</Checkbox><p className="org-hint">负责人是业务归属；勾选后授予该部门及子部门的管理范围。已有企业管理员保留企业角色。</p>
           <label className="org-field"><span>部门描述</span><TextArea aria-label="部门描述" placeholder="说明部门职责（选填）" maxLength={200} value={form.description} onChange={value => setForm({ ...form, description: value })} /></label>
           {departments.some(d => d.id === form.id) && <div className="org-delete-department"><p>删除部门前，请先迁移成员、调整项目归属并处理子部门和相关管理范围。</p><Button htmlType="button" type="danger" theme="outline" onClick={() => confirm("删除部门", `确认删除“${form.name}”？`, { type: "department.remove", id: form.id }, "部门已删除")}>删除部门</Button></div>}
         </form>}
         {modal?.type === "member" && <form id="org-edit-form" onSubmit={submit} className="org-form">
           {modal.isNew && <Tabs activeKey={inviteMode} onChange={value => { setInviteMode(value); setForm({ ...form, name: "", phone: "", account: "" }); setError(""); }} tabList={[{ itemKey: 'existing', tab: '已有平台账号' }, { itemKey: 'invite', tab: '邀请新成员' }]}/>}
-          {modal.isNew && inviteMode === "existing" ? <><Choice label="选择平台账号" value={form.account || "none"} onChange={account => { const identity = platformAccounts.find(a => a.account === account); if (identity) setForm({ ...form, ...identity, phone: identity.phone || "" }); }} options={[{ value: "none", label: "请选择已有平台账号" }, ...platformAccounts.filter(a => !members.some(m => m.account === a.account)).map(a => ({ value: a.account, label: `${a.name} · ${a.account}` }))]} /><p className="org-hint">选择已有平台账号，加入当前企业。</p></> : <><label className="org-field"><span>成员姓名 <b>*</b></span><Input aria-label="成员姓名" value={form.name} maxLength={30} required onChange={value => setForm({ ...form, name: value })} placeholder="输入成员姓名" /></label><label className="org-field"><span>{modal.isNew ? "邮箱（选填）" : "登录账号"}</span><Input aria-label={modal.isNew ? "成员邮箱" : "登录账号"} type={modal.isNew ? "email" : "text"} value={form.account} readonly={!modal.isNew} onChange={value => setForm({ ...form, account: value })} placeholder="选填，不填写时使用手机号作为账号" /></label>{modal.isNew && <p className="org-hint">创建后为“待加入”，可在列表中确认加入。</p>}</>}
+          {modal.isNew && inviteMode === "existing" ? <><Choice admin={admin} label="选择平台账号" value={form.account || "none"} onChange={account => { const identity = platformAccounts.find(a => a.account === account); if (identity) setForm({ ...form, ...identity, phone: identity.phone || "" }); }} options={[{ value: "none", label: "请选择已有平台账号" }, ...platformAccounts.filter(a => !members.some(m => m.account === a.account)).map(a => ({ value: a.account, label: `${a.name} · ${a.account}` }))]} /><p className="org-hint">选择已有平台账号，加入当前企业。</p></> : <><label className="org-field"><span>成员姓名 <b>*</b></span><Input aria-label="成员姓名" value={form.name} maxLength={30} required onChange={value => setForm({ ...form, name: value })} placeholder="输入成员姓名" /></label><label className="org-field"><span>{modal.isNew ? "邮箱（选填）" : "登录账号"}</span><Input aria-label={modal.isNew ? "成员邮箱" : "登录账号"} type={modal.isNew ? "email" : "text"} value={form.account} readonly={!modal.isNew} onChange={value => setForm({ ...form, account: value })} placeholder="选填，不填写时使用手机号作为账号" /></label>{modal.isNew && <p className="org-hint">创建后为“待加入”，可在列表中确认加入。</p>}</>}
           <label className="org-field"><span>手机号 <b>*</b></span><Input aria-label="手机号" type="tel" autoComplete="tel" required value={form.phone || ""} onChange={value => setForm({ ...form, phone: value })} placeholder="11 位大陆手机号或 +国家区号号码" /></label><p className="org-hint">手机号用于识别成员，必须填写；列表和详情中脱敏展示。</p>
-          <Choice label="主部门" value={form.departmentId} onChange={departmentId => setForm({ ...form, departmentId })} options={departmentOptions} />
-          {!departmentOnly && <RoleFields form={form} setForm={setForm} departments={departments} />}
+          <Choice admin={admin} label="主部门" value={form.departmentId} onChange={departmentId => setForm({ ...form, departmentId })} options={departmentOptions} />
+          {!departmentOnly && <RoleFields admin={admin} form={form} setForm={setForm} departments={departments} />}
         </form>}
-        {modal?.type === "move" && <form id="org-edit-form" onSubmit={submit} className="org-form"><p>将 {members.filter(m => modal.ids.includes(m.id)).map(m => m.name).join("、")} 的主部门调整为：</p><Choice label="目标部门" value={form.departmentId} onChange={departmentId => setForm({ ...form, departmentId })} options={departmentOptions} /><p className="org-hint">管理角色与管理范围保持不变。此操作会保留操作记录。</p></form>}
+        {modal?.type === "move" && <form id="org-edit-form" onSubmit={submit} className="org-form"><p>将 {members.filter(m => modal.ids.includes(m.id)).map(m => m.name).join("、")} 的主部门调整为：</p><Choice admin={admin} label="目标部门" value={form.departmentId} onChange={departmentId => setForm({ ...form, departmentId })} options={departmentOptions} /><p className="org-hint">管理角色与管理范围保持不变。此操作会保留操作记录。</p></form>}
         {modal?.type === "detail" && <><div className="org-profile"><span className="org-avatar">{modal.member.name.slice(-2)}</span><div><strong>{modal.member.name}</strong><p>{displayMemberAccount(modal.member.account)}</p></div></div><dl className="org-detail">{[["手机号", maskMemberPhone(modal.member.phone)], ["成员 ID", modal.member.id], ["主部门", departmentPath(departments, modal.member.departmentId)], ["管理角色", modal.member.role], ["管理范围", roleScope(modal.member)], ["成员状态", modal.member.status], ["成员来源", modal.member.source], ["邀请时间", modal.member.invitedAt], ["加入时间", modal.member.joinedAt || "尚未加入"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{memberProjects.length>0 && <section aria-label="项目归属"><h3>项目归属</h3><ul>{memberProjects.map(row=><li key={row.id}>{row.name} · {row.role}</li>)}</ul></section>}</>}
 
       </div>
@@ -179,6 +195,7 @@ export default function OrganizationMembers({ tenant, admin }) {
   </>;
   const centerModal = modal?.type === 'confirm' || modal?.isNew;
   const batchAdd = () => { setDraftRevision(tenant.revision); setBatchOpen(true); };
+  const changePageSize = size => { setPageSize(size); setPage(1); setSelectedMembers([]); };
 
   return <div className={`org-page front-members-workspace${admin ? ' admin-members-workspace' : ''}`}>
     {!canManage&&!tenant.error&&<p className="org-demo-note">当前身份可查看组织；成员和部门由企业管理员维护。</p>}
@@ -213,8 +230,8 @@ export default function OrganizationMembers({ tenant, admin }) {
         </div>
         <form className="org-filters" onSubmit={e => { e.preventDefault(); setApplied(filters); setPage(1); setSelectedMembers([]); }}>
           <div className="org-search"><Input prefix={<Search size={14}/>} aria-label="搜索成员" placeholder="姓名、手机号或登录账号" value={filters.query} onChange={value => setFilters({ ...filters, query: value })} /></div>
-          <Choice label="成员状态" value={filters.status} onChange={status => setFilters({ ...filters, status })} options={[{ value: "all", label: "全部状态" }, ...statuses.map(s => ({ value: s, label: s }))]} />
-          <Choice label="管理角色筛选" value={filters.role} onChange={role => setFilters({ ...filters, role })} options={[{ value: "all", label: "全部角色" }, ...roles.map(r => ({ value: r, label: r }))]} />
+          <Choice admin={admin} label="成员状态" value={filters.status} onChange={status => setFilters({ ...filters, status })} options={[{ value: "all", label: "全部状态" }, ...statuses.map(s => ({ value: s, label: s }))]} />
+          <Choice admin={admin} label="管理角色筛选" value={filters.role} onChange={role => setFilters({ ...filters, role })} options={[{ value: "all", label: "全部角色" }, ...roles.map(r => ({ value: r, label: r }))]} />
           {department && <Checkbox className="org-check" checked={includeChildren} onChange={({target}) => { setIncludeChildren(target.checked); setSelectedMembers([]); setPage(1); }}>包含子部门</Checkbox>}
           <Button htmlType="submit" theme="outline">查询</Button><Button htmlType="button" theme="borderless" type="tertiary" onClick={() => { const reset = { query: "", status: "all", role: "all" }; setFilters(reset); setApplied(reset); setPage(1); setSelectedMembers([]); }}>重置</Button>
           <small className="org-filter-count">共 {filtered.length} 人</small>
@@ -222,6 +239,7 @@ export default function OrganizationMembers({ tenant, admin }) {
         {checked.length > 0 && <div className="org-member-tools"><div><small>已选择 {checked.length} 人</small><Button theme="outline" onClick={() => move(selectedMembers)}>移动部门</Button><Button theme="outline" disabled={checked.some(m => m.status !== "已加入")} onClick={() => confirm("批量停用成员", `停用所选 ${checked.length} 位成员？成员归属与历史操作记录会保留。`, { type: "member.status", ids: selectedMembers, status: "已停用" }, "所选成员已停用")}>批量停用</Button><Button theme="borderless" type="tertiary" onClick={() => setSelectedMembers([])}>取消选择</Button></div></div>}
         <div className="org-member-scroll">
           <Table className="org-member-table" rowKey="id" size="small" pagination={false} dataSource={visible}
+            scroll={admin ? { x: 'max(100%, 1060px)' } : undefined} aria-label={admin ? '成员列表' : undefined}
             empty={<div className="org-empty"><Users /><strong>{members.length ? "当前范围内没有匹配成员" : "企业暂无成员"}</strong><p>调整筛选条件，或添加成员到当前部门。</p><Button theme="outline" disabled={!canManage} onClick={addMember}>添加成员</Button></div>}
             columns={[
               { key: 'selection', width: 46, title: <Checkbox aria-label="选择当前页全部成员"
@@ -232,14 +250,14 @@ export default function OrganizationMembers({ tenant, admin }) {
                   : selectedMembers.filter(id => !visible.some(m => m.id === id)))}/>,
               render: (_, m) => <Checkbox aria-label={'选择' + m.name} disabled={!canEditMember(m)} checked={selectedMembers.includes(m.id)}
                 onChange={({target}) => setSelectedMembers(target.checked ? [...selectedMembers, m.id] : selectedMembers.filter(id => id !== m.id))}/> },
-              { title: '成员', key: 'member', render: (_, m) => <Button className="org-member-name" size="small" theme="borderless" type="tertiary"
+              { title: '成员', key: 'member', width: admin ? 172 : undefined, render: (_, m) => <Button className="org-member-name" size="small" theme="borderless" type="tertiary"
                 onClick={() => open({ type: 'detail', title: '成员详情', member: m })}><span className="org-avatar">{m.name.slice(-2)}</span><span>{m.name}{m.userId === tenant.backendUserId && <small>当前账号</small>}</span></Button> },
-              { title: '手机号', dataIndex: 'phone', className: 'org-phone', render: maskMemberPhone },
-              { title: '登录账号', dataIndex: 'account', className: 'org-account', render: displayMemberAccount },
-              { title: '主部门', dataIndex: 'departmentId', render: id => <span title={departmentPath(departments, id)}>{departments.find(d => d.id === id)?.name || '未分配部门'}</span> },
-              { title: '管理角色', dataIndex: 'role', render: (role, m) => <><span className="org-role">{role !== '普通成员' && <ShieldCheck/>}{role}</span>
+              { title: '手机号', dataIndex: 'phone', width: admin ? 112 : undefined, className: 'org-phone', render: maskMemberPhone },
+              { title: '登录账号', dataIndex: 'account', width: admin ? 122 : undefined, className: 'org-account', render: displayMemberAccount },
+              { title: '主部门', dataIndex: 'departmentId', width: admin ? 126 : undefined, render: id => <span title={departmentPath(departments, id)}>{departments.find(d => d.id === id)?.name || '未分配部门'}</span> },
+              { title: '管理角色', dataIndex: 'role', width: admin ? 125 : undefined, render: (role, m) => <><span className="org-role">{role !== '普通成员' && <ShieldCheck/>}{role}</span>
                 {role === '部门管理员' && <small className="org-cell-sub" title={roleScope(m)}>{departments.find(d => d.id === m.scopeId)?.name}{m.includeChildren ? ' · 含子部门' : ' · 仅本部门'}</small>}</> },
-              { title: '状态', dataIndex: 'status', render: status => <Tag color={status === '已加入' ? 'green' : status === '待加入' ? 'amber' : 'grey'}>{status}</Tag> },
+              { title: '状态', dataIndex: 'status', width: admin ? 86 : undefined, render: status => <Tag color={status === '已加入' ? 'green' : status === '待加入' ? 'amber' : 'grey'}>{status}</Tag> },
               { title: '操作', key: 'actions', width: admin ? 270 : undefined, render: (_, m) => {
                 const items = [
                   { node: 'item', name: '成员详情', onClick: () => open({ type: 'detail', title: '成员详情', member: m }) },
@@ -267,8 +285,13 @@ export default function OrganizationMembers({ tenant, admin }) {
               } },
             ]}/>
         </div>
-        <div className="org-pagination"><FilterPagination total={filtered.length} page={currentPage} size={pageSize}
-          onPageChange={setPage} onSizeChange={size => { setPageSize(size); setPage(1); setSelectedMembers([]); }}/></div>
+        <div className="org-pagination">
+          {admin ? <AdminPagination total={filtered.length} currentPage={currentPage} pageSize={pageSize}
+            pageSizeOpts={PAGE_SIZES} showSizeChanger={filtered.length > 0} hideOnSinglePage
+            onPageChange={setPage} onPageSizeChange={changePageSize}/>
+            : <FilterPagination total={filtered.length} page={currentPage} size={pageSize}
+              onPageChange={setPage} onSizeChange={changePageSize}/>}
+        </div>
       </section>
     </div>
     {inviteError && !inviteLink && <p className="org-form-error" role="alert">{inviteError}</p>}
@@ -277,7 +300,7 @@ export default function OrganizationMembers({ tenant, admin }) {
       <Input aria-label="成员邀请链接" value={inviteLink} readonly onFocus={event => event.currentTarget.select()}/>
       {inviteError && <p className="org-form-error" role="alert">{inviteError}</p>}
     </AdminModal>}
-    {batchOpen && <OrganizationMemberBatch data={data} initialDepartment={defaultDepartment} scoped={departmentOnly} onClose={() => setBatchOpen(false)} onApply={async (rows, mode, defaultDepartment) => {
+    {batchOpen && <OrganizationMemberBatch admin={admin} data={data} initialDepartment={defaultDepartment} scoped={departmentOnly} onClose={() => setBatchOpen(false)} onApply={async (rows, mode, defaultDepartment) => {
       const outcome = applyMemberBatch(data, rows, mode, defaultDepartment, () => resourceId('membership'));
       try { await tenant.command('organization',outcome.state,draftRevision ?? tenant.revision); }
       catch (error) { throw new Error(error.message); }

@@ -1,8 +1,11 @@
 import { useChannelText } from './channel-language';
-import { Children, cloneElement, isValidElement, useId } from 'react';
-import { Banner, Button, Form, Input, InputNumber, Select, TextArea, Space, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconCopy, IconHelpCircle, IconTick } from '@douyinfe/semi-icons';
+import { Children, cloneElement, isValidElement, useContext, useId } from 'react';
+import { Typography as FrontTypography } from '@douyinfe/semi-ui';
+import { Banner, Button, Form, Input, InputNumber, Select, TextArea, Space, Toast, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { IconCopy, IconHelpCircle, IconTick } from './xa24/HaloIcons.jsx';
+import { AdminUIContext } from '../components/admin-ui-context.js';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
+import { XaButton, XaOperationDialog } from './xa24/HaloComponents.jsx';
 import { modelFieldDescriptions } from './model-field-descriptions';
 import './semi-services.css';
 
@@ -96,8 +99,9 @@ export function FieldLabel({ name, description }) {
 }
 export function Modal({ title, description, children, onClose, wide, centered, drawer = false, drawerSide = 'right', footer, className = '', maskClosable }) {
   const t = useChannelText();
+  const Text = useContext(AdminUIContext) ? Typography : FrontTypography;
   const content = <div className="ss-dialog-content">
-    {description && <Typography.Paragraph type="tertiary">{description}</Typography.Paragraph>}{children}
+    {description && <Text.Paragraph type="tertiary">{description}</Text.Paragraph>}{children}
   </div>;
   return drawer
     ? <AdminSideSheet visible className={`semi-services ${className}`} title={t(title)} placement={drawerSide}
@@ -107,5 +111,8 @@ export function Modal({ title, description, children, onClose, wide, centered, d
 }
 export const serviceOperationsUi = {
   notify: message => Toast.success(message),
-  renderLeaveDialog: ({ cancel, discard }) => <Modal title="有未保存的配置" onClose={cancel} footer={<><Button onClick={cancel}>继续编辑</Button><Button type="danger" onClick={discard}>放弃本次修改</Button></>}>放弃修改后继续离开，当前生效配置保留。</Modal>,
+  renderLeaveDialog: ({ cancel, discard }) => <XaOperationDialog title="有未保存的配置" onClose={cancel}
+    footer={<><XaButton onClick={cancel}>继续编辑</XaButton><XaButton theme="solid" type="danger" onClick={discard}>放弃本次修改</XaButton></>}>
+    放弃修改后继续离开，当前生效配置保留。
+  </XaOperationDialog>,
 };

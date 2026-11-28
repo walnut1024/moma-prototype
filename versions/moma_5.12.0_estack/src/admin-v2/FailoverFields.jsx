@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useId } from 'react';
-import { InputNumber, Table, Tag } from '@douyinfe/semi-ui';
+import { InputNumber, Table, Tag } from './xa24/HaloUI.jsx';
 import { failoverFields, initialRoutingParameters, retryTypes, savedRetryPolicy } from './global-routing-parameters.mjs';
 
 import './failover-fields.css';
@@ -67,10 +67,11 @@ export default function FailoverFields({ values, change, disabled, showRetryInte
     <h3 className="fp-title">{t('异常重试规则')} <code>retry_policy</code></h3>
     <p>{t('清空某个异常的次数会移除该项设置，填 0 会保存 0 次。',
       'Clearing the retry count removes that setting. Entering zero saves a retry count of zero.')}</p>
-    <Table className="fp-retry-table" size="small" rowKey="key" pagination={false} dataSource={rows} columns={[
+    <Table className="fp-retry-table" size="small" rowKey="key" pagination={false} dataSource={rows}
+      scroll={{ x: 'max(100%, 840px)' }} columns={[
       {title:t('异常类型'), width:284, render:(_,row) => <div>{row.label}<code>{row.key}</code></div>},
       {title:t('典型 HTTP 状态码'), width:144, render:(_,row) => <Tag>{row.status}</Tag>},
-      {title:t('判断依据'), render:(_,row) => row.detail},
+      {title:t('判断依据'), width:292, render:(_,row) => row.detail},
       {title:t('重试次数'), width:120, render:(_,row) => disabled
         ? <span aria-label={row.key}>{policy[row.key] == null ? t('未指定') : policy[row.key] + ' ' + t('次')}</span>
         : <InputNumber aria-label={row.key} min={0} step={1} value={policy[row.key] ?? ''} placeholder={t('未指定')}

@@ -1,9 +1,10 @@
 import { resourceId } from '../resource-id.mjs';
 import AdminStatus from './AdminStatus';
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Descriptions, Input, Space, Table, Tabs, Tag, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Input, Space, Table, Tabs, Tag, Toast, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { Descriptions } from './xa24/HaloUI.jsx';
 import { AdminModal } from './AdminOverlay';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { FilterReset } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
 import AdminActionMenu from './AdminActionMenu';
@@ -377,7 +378,7 @@ export function ClusterManagement({
           </Button>
         </div>
         <Table columns={columns} dataSource={rows} rowKey="id" scroll={{ x: 'max(100%, 1080px)' }} expandedRowRender={poolRows}
-          rowExpandable={canExpandPools} expandedRowKeys={expanded} onExpandedRowsChange={setExpanded}
+          rowExpandable={canExpandPools} expandedRowKeys={expanded} onExpandedRowsChange={rows => setExpanded(rows.map(row => row.id))}
           rowSelection={readOnlyDemo ? undefined : { selectedRowKeys: rowSelection, onChange: setSelected }}
           pagination={{ pageSize: 10, size: 'small', showTotal: true, showSizeChanger: true }} empty="没有符合条件的集群"/>
       </Card>

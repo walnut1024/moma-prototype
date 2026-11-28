@@ -1,15 +1,16 @@
 import { useChannelText } from './channel-language';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { IconHelpCircle, IconPlus } from '@douyinfe/semi-icons';
-import { Button, Card, Empty, Space, Tabs, Tag, Tooltip, Typography } from '@douyinfe/semi-ui';
-import AdminPageHeading from './AdminPageHeading';
+import { List, KeyRound, Info, Plus, Search, Coins } from 'lucide-react';
+import {
+  XaButton as Button, XaCard as Card, XaCopyId as CopyId, XaEmpty as Empty, XaHelp as Help, XaInput,
+  XaPagination as AdminPagination, XaSpace as Space, XaTabs as Tabs, XaTag as Tag, XaTypography as Typography,
+} from './xa24/HaloComponents.jsx';
 import AdminStatus from './AdminStatus';
-import AdminTable, { AdminPagination } from './AdminTable';
+import AdminTable from './xa24/HaloTable.jsx';
 import { ChannelCapacityCell } from './ChannelCapacity';
 import ChannelCostCell from './ChannelCostCell';
 import BatchProcurementEditor from './BatchProcurementEditor';
 import ReferenceProviderApiKeys from './ReferenceProviderApiKeys';
-import { CopyId, SearchBox } from './ModelOperationsUI';
 import { workbenchProtocolLabel } from './workbench-protocol';
 import { channelRequestUrls, channelListPaths, channelListType, channelSourceTypeLabel } from './channel-connection-directory';
 import { demoConnectionDeploymentId } from './inference-demo-data.js';
@@ -18,7 +19,20 @@ import { connectionKeys } from './connection-state';
 import { CHANNEL_PROCUREMENT_BATCH_LIMIT } from './channel-change-management';
 import { modelTypeLabel } from '../model-types.mjs';
 import { operationsReturn } from './model-pricing-workspace';
-import { pages } from './navigation.mjs';
+
+function SearchBox({ placeholder, ...props }) {
+  return <XaInput {...props} className="xa24-channel-search" aria-label={placeholder} placeholder={placeholder}
+    prefix={<Search size={16} aria-hidden="true"/>}/>;
+}
+
+function DetailTabLabel({ icon: Icon, children }) {
+  return <span className="xa24-tab-label"><Icon size={16} aria-hidden="true" className="xa24-outline-icon"/>{children}</span>;
+}
+
+function scrollOwner(element) {
+  const content = element?.closest('.xa24-main');
+  return content && content.scrollHeight > content.clientHeight ? content : window;
+}
 
 function ChannelModels({ channel, ops, open }) {
   const t = useChannelText();
@@ -29,7 +43,7 @@ function ChannelModels({ channel, ops, open }) {
   const canAdd = ops.can && !channel.endpoint.candidateConfiguration && !channel.endpoint.adapterDraft;
   const showDiscovery = (channel.endpoint.channelSourceType ?? channel.provider.sourceType) !== 'selfHosted';
   return <>
-    <div className="channel-management-toolbar">
+    <div className="channel-management-toolbar xa24-toolbar">
       <SearchBox placeholder={t('搜索上游模型 ID、模型展示名称')} value={query}
         onChange={value => ops.go({ modelQ: value || null }, { replace: true })}/>
       <Space wrap spacing={8}>
@@ -78,7 +92,7 @@ function ChannelModelCosts({ state, channel, ops, open }) {
     requestAnimationFrame(() => trigger.current?.focus());
   };
   return <>
-    <div className="channel-management-toolbar">
+    <div className="channel-management-toolbar xa24-toolbar">
       <Typography.Text type="tertiary" aria-live="polite">{tooMany
         ? `每批最多设置 ${CHANNEL_PROCUREMENT_BATCH_LIMIT} 款模型` : `已选 ${selected.length} 款模型`}</Typography.Text>
       {associatedModelId && <Button theme="borderless" onClick={() => ops.go({ modelCost: null }, { replace: true })}>{t('显示全部模型')}</Button>}
@@ -136,31 +150,31 @@ export function ChannelDetails({ state, channel, creation, ops, open, modelList,
     ['连接状态', <AdminStatus value={status}/>], ['连接检测', <AdminStatus value={channel.testStatus}/>],
     ...(endpoint.directoryNote ? [['内部备注', endpoint.directoryNote]] : []),
   ];
-  return <>
-    <AdminPageHeading title={name}>
-      {tab === 'overview' && <Button disabled={!ops.can} onClick={event => open(event, 'edit', id)}>{t('编辑信息')}</Button>}
-      {returnTo && <Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>{t('返回来源页面')}</Button>}
-    </AdminPageHeading>
-    <Card className="channel-management-card">
-      <Tabs type="line" activeKey={tab} lazyRender keepDOM={false} tabPaneMotion={false} aria-label={t('连接详情')}
-        onChange={selectTab}>
-        <Tabs.TabPane tab={t('基本信息')} itemKey="overview">
-          <dl className="channel-management-facts">
-            {(modelList ? connectionFields : fields).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}
-          </dl>
-        </Tabs.TabPane>
-        <Tabs.TabPane tab={t('模型列表')} itemKey="models">
-          {modelList || <ChannelModels channel={channel} ops={ops} open={open}/>}
-        </Tabs.TabPane>
-        {modelCosts && <Tabs.TabPane tab={t('模型成本')} itemKey="model-costs">
-          {tab === 'model-costs' && <ChannelModelCosts key={id} state={state} channel={channel} ops={ops} open={open}/>}
-        </Tabs.TabPane>}
-        {keyPool && <Tabs.TabPane tab={t('上游 API 密钥池')} itemKey="api-keys">
-          {tab === 'api-keys' && keyPool}
-        </Tabs.TabPane>}
-      </Tabs>
-    </Card>
-  </>;
+  return <Card className="channel-management-card channel-management-detail-card xa24-page-card">
+    <Tabs type="line" activeKey={tab} lazyRender keepDOM={false} tabPaneMotion={false} aria-label={t('连接详情')}
+      onChange={selectTab}>
+      <Tabs.TabPane tab={<DetailTabLabel icon={Info}>{t('基本信息')}</DetailTabLabel>} itemKey="overview">
+        <div className="channel-management-detail-actions">
+          <Button theme="solid" disabled={!ops.can}
+            onClick={event => open(event, 'edit', id)}>{t('编辑信息')}</Button>
+        </div>
+        <dl className="channel-management-facts">
+          {(modelList ? connectionFields : fields).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}
+        </dl>
+      </Tabs.TabPane>
+      <Tabs.TabPane tab={<DetailTabLabel icon={List}>{t('模型列表')}</DetailTabLabel>} itemKey="models">
+        {modelList || <ChannelModels channel={channel} ops={ops} open={open}/>}
+      </Tabs.TabPane>
+      {modelCosts && <Tabs.TabPane tab={<DetailTabLabel icon={Coins}>{t('模型成本')}</DetailTabLabel>} itemKey="model-costs">
+        {returnTo && <div className="channel-management-detail-actions"><Button theme="borderless"
+          onClick={() => ops.proceed(() => { location.hash = returnTo; })}>{t('返回来源页面')}</Button></div>}
+        {tab === 'model-costs' && <ChannelModelCosts key={id} state={state} channel={channel} ops={ops} open={open}/>}
+      </Tabs.TabPane>}
+      {keyPool && <Tabs.TabPane tab={<DetailTabLabel icon={KeyRound}>{t('上游 API 密钥池')}</DetailTabLabel>} itemKey="api-keys">
+        {tab === 'api-keys' && keyPool}
+      </Tabs.TabPane>}
+    </Tabs>
+  </Card>;
 }
 
 function CreationInfo({ creation }) {
@@ -172,7 +186,7 @@ function CreationInfo({ creation }) {
   </div>;
 }
 
-export default function ChannelManagementView({ state, connections, ops, open, focusTarget }) {
+export default function ChannelManagementView({ state, connections, ops, open, focusTarget, workspaceTabs }) {
   const t = useChannelText();
   const { params, go } = ops;
   const connectionId = params.get('connection');
@@ -182,13 +196,17 @@ export default function ChannelManagementView({ state, connections, ops, open, f
     if (!connectionId && !openedChannel.current) return;
     if (connectionId) focusTarget.current?.focus({ preventScroll: true });
     else {
-      const { id, tab, top, left } = listPosition.current || {};
-      window.scrollTo(0, top || 0);
-      const tableBody = focusTarget.current?.querySelector('.semi-table-body');
-      if (tableBody) tableBody.scrollLeft = left || 0;
-      const attribute = tab === 'models' ? 'data-channel-models-id' : 'data-channel-id';
-      const link = id && focusTarget.current?.querySelector(`[${attribute}="${CSS.escape(id)}"]`);
-      (link || focusTarget.current?.querySelector('input'))?.focus({ preventScroll: true });
+      const frame = requestAnimationFrame(() => {
+        const { id, tab, top, left } = listPosition.current || {};
+        scrollOwner(focusTarget.current).scrollTo(0, top || 0);
+        const tableBody = focusTarget.current?.querySelector('.xa24-table-scroll');
+        if (tableBody) tableBody.scrollLeft = left || 0;
+        const attribute = tab === 'models' ? 'data-channel-models-id' : 'data-channel-id';
+        const link = id && focusTarget.current?.querySelector(`[${attribute}="${CSS.escape(id)}"]`);
+        (link || focusTarget.current?.querySelector('input'))?.focus({ preventScroll: true });
+      });
+      openedChannel.current = '';
+      return () => cancelAnimationFrame(frame);
     }
     openedChannel.current = connectionId || '';
   }, [connectionId, focusTarget]);
@@ -204,7 +222,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   };
   if (connectionId) {
     const channel = connections.find(row => row.id === connectionId);
-    return <div className="admin-page-stack" ref={focusTarget} tabIndex={-1} aria-label={channel?.name || '连接详情'}>
+    return <div className="admin-page-stack xa24-page xa24-channel-page" ref={focusTarget} tabIndex={-1} aria-label={channel?.name || '连接详情'}>
       {channel ? <ChannelDetails state={state} channel={channel} creation={creationFor(channel)} ops={ops} open={open} modelCosts
         keyPool={<ReferenceProviderApiKeys key={channel.id} state={state} connection={channel}
           ops={ops}/>}/>
@@ -233,28 +251,36 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   const page = Math.min(Math.max(1, Number.parseInt(params.get('page'), 10) || 1), Math.ceil(matches.length / pageSize) || 1);
   const rows = matches.slice((page - 1) * pageSize, page * pageSize);
   const view = (id, tab = null) => {
-    listPosition.current = { id, tab, top: window.scrollY, left: focusTarget.current?.querySelector('.semi-table-body')?.scrollLeft };
+    const content = scrollOwner(focusTarget.current);
+    listPosition.current = { id, tab, top: content === window ? window.scrollY : content.scrollTop,
+      left: focusTarget.current?.querySelector('.xa24-table-scroll')?.scrollLeft };
     go({ connection: id, tab, modelQ: null, modelCost: null, keyGroup: null });
   };
-  return <div className="admin-page-stack" ref={focusTarget}>
-    <Space spacing={6} align="center">
-      <AdminPageHeading title={t(pages['providers-reference'].label)}/>
-      <Tooltip closeOnEsc content={<>{t('模型连接是平台访问上游模型服务的一套配置，由')}<strong>{t('服务商、服务地址、接口格式、接口端点和上游 API 密钥')}</strong>{t('共同决定。一个连接只对应一种接口格式和一个接口端点，可接入多个上游模型；任一配置不同时，需创建独立的连接。')}</>}>
-        <Button size="small" theme="borderless" type="tertiary" aria-label={t('连接定义')} icon={<IconHelpCircle aria-hidden="true"/>}/>
-      </Tooltip>
-    </Space>
-    <Card className="channel-management-card">
-      <div className="channel-management-toolbar">
-        <SearchBox placeholder={t('按连接名称搜索')} value={query}
-          onChange={value => go({ q: value || null, page: null }, { replace: true })}/>
-        {filtered && <Button theme="borderless" onClick={() => go({ channelProvider: null, channelModel: null, page: null })}>{t('清除来源筛选')}</Button>}
-        {returnTo && <Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>{t('返回来源页面')}</Button>}
-        <Button theme="solid" icon={<IconPlus aria-hidden="true"/>} disabled={!ops.can}
+  return <div className="admin-page-stack xa24-page xa24-channel-page" ref={focusTarget}>
+    <section className="xa24-entry-header" aria-labelledby="xa24-connection-list-title">
+      <div>
+        <Space spacing={6}>
+          <h1 id="xa24-connection-list-title">{t('模型接入')}</h1>
+          <Help label={t('连接定义')}>{t('模型连接是平台访问上游模型服务的一套配置，由')}<strong>{t('服务商、服务地址、接口格式、接口端点和上游 API 密钥')}</strong>{t('共同决定。一个连接只对应一种接口格式和一个接口端点，可接入多个上游模型；任一配置不同时，需创建独立的连接。')}</Help>
+        </Space>
+        <p>{t('管理上游连接、模型列表和连接健康', 'Manage upstream connections, model lists and connection health')}</p>
+      </div>
+    </section>
+    <Card padding={16} className="channel-management-card channel-management-list-card xa24-page-card">
+      {workspaceTabs}
+      <div className="channel-management-toolbar xa24-toolbar">
+        <Button theme="solid" icon={<Plus size={16} aria-hidden="true"/>} disabled={!ops.can}
           onClick={event => open(event, 'create')}>{t('新建连接')}</Button>
+        <div className="channel-management-toolbar-filters">
+          <SearchBox placeholder={t('按连接名称搜索')} value={query}
+            onChange={value => go({ q: value || null, page: null }, { replace: true })}/>
+          {filtered && <Button theme="borderless" onClick={() => go({ channelProvider: null, channelModel: null, page: null })}>{t('清除来源筛选')}</Button>}
+          {returnTo && <Button theme="borderless" onClick={() => ops.proceed(() => { location.hash = returnTo; })}>{t('返回来源页面')}</Button>}
+        </div>
       </div>
       <AdminTable aria-label={t('连接列表')} rowKey="id" pagination={false} dataSource={rows}
         empty={t(query.trim() || filtered ? '没有匹配的连接' : '暂无连接')}
-        scroll={{ x: 'max(100%, 1432px)' }} columns={[
+        scroll={{ x: 'max(100%, 1120px)' }} columns={[
           { title: t('连接名称 / ID'), width: 196, render: (_, row) => <div className="channel-identity">
             <Button size="small" theme="borderless" className="channel-name-link" data-channel-id={row.id}
               onClick={() => view(row.id)}>
@@ -265,11 +291,12 @@ export default function ChannelManagementView({ state, connections, ops, open, f
             </Button>
           </div> },
           { title: t('连接类型'), width: 148, render: (_, { provider, endpoint }) => t(channelSourceTypeLabel(endpoint.channelSourceType ?? provider.sourceType)) },
-          { title: t('接口格式'), width: 200, render: (_, row) =>
-            <Typography.Text ellipsis={{ showTooltip: true }}>{workbenchProtocolLabel(channelListType(row))}</Typography.Text> },
-          { title: t('接口端点'), width: 184, render: (_, row) =>
-            <Typography.Text code ellipsis={{ showTooltip: true }}>{channelListPaths(row).join('、') || '—'}</Typography.Text> },
-          { title: t('服务地址'), width: 186, render: (_, { endpoint }) => <CopyId copyAtStart ellipsis value={endpoint.baseUrl} label={t('服务地址')}/> },
+          { title: [t('接口格式'), t('接口端点'), t('服务地址')].join(' / '), width: 270, render: (_, row) =>
+            <span className="channel-management-endpoint">
+              <Typography.Text>{workbenchProtocolLabel(channelListType(row))}</Typography.Text>
+              <Typography.Text code>{channelListPaths(row).join('、') || '—'}</Typography.Text>
+              <CopyId copyAtStart value={row.endpoint.baseUrl} label={t('服务地址')}/>
+            </span> },
           { title: t('服务商'), width: 126, render: (_, { provider }) =>
             <Typography.Text ellipsis={{ showTooltip: true }}>{provider.name}</Typography.Text> },
           { title: t('状态'), width: 128, render: (_, row) => <AdminStatus value={row.status}/> },
@@ -282,15 +309,16 @@ export default function ChannelManagementView({ state, connections, ops, open, f
               style={hasModels ? undefined : { pointerEvents: 'none' }} aria-label={t('测试连接') + ' ' + row.name}
               onClick={event => open(event, 'testConnection', row.id)}>{t('测试连接')}</Button>;
             return <Space spacing={2}>
-              {hasModels ? testButton : <Tooltip closeOnEsc content={t('当前模型连接下暂未配置上游模型')}>
-                <span tabIndex={0} style={{ display: 'inline-flex' }}>{testButton}</span>
-              </Tooltip>}
+              {hasModels ? testButton : <span tabIndex={0} className="xa24-help-anchor"
+                aria-label={t('当前模型连接下暂未配置上游模型')}>
+                {testButton}<span role="tooltip" className="xa24-help-bubble">{t('当前模型连接下暂未配置上游模型')}</span>
+              </span>}
               <Button size="small" theme="borderless" type="danger" disabled={!ops.can} aria-label={t('删除连接') + ' ' + row.name}
                 onClick={event => open(event, 'remove', row.id)}>{t('删除')}</Button>
             </Space>;
           } },
         ]}/>
-      <AdminPagination total={matches.length} currentPage={page} pageSize={pageSize} pageSizeOpts={allowedSizes} showSizeChanger
+      <AdminPagination total={matches.length} currentPage={page} pageSize={pageSize} pageSizeOpts={allowedSizes}
         onPageChange={page => go({ page }, { replace: true })}
         onPageSizeChange={size => go({ size, page: null }, { replace: true })}/>
     </Card>

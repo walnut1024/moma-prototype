@@ -12,7 +12,7 @@
 .package-factor-history-entry { gap: 8px; }
 .package-preview-content { overflow-wrap: anywhere; }
 .package-sections fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
-.package-sections legend { padding: 0; margin: 0 0 8px; color: var(--semi-color-text-0); font-weight: var(--semi-font-weight-bold); }
+.package-sections legend { padding: 0; margin: 0 0 8px; color: var(--xa24-title); font-weight: 700; }
 .package-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .package-field { display: grid; gap: 6px; align-content: start; min-width: 0; }
 .package-span { grid-column: 1 / -1; }

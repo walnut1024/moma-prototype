@@ -1,11 +1,11 @@
-.admin-enterprise-dialog, .admin-enterprise-page .semi-descriptions-item-td { overflow-wrap: anywhere; }
+.admin-enterprise-dialog, .admin-enterprise-page dl dd { overflow-wrap: anywhere; }
 .admin-enterprise-page .admin-analytics-fields, .admin-enterprise-dialog.admin-analytics-fields,
 .admin-enterprise-dialog .admin-analytics-fields { grid-template-columns: minmax(0, 1fr); }
 .admin-enterprise-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--admin-control-gap, 12px); }
 .admin-enterprise-fields > * { min-width: 0; }
 .admin-enterprise-wide { grid-column: 1 / -1; }
-.admin-enterprise-form .semi-form-slot { padding-block: 0; }
-.admin-enterprise-form .semi-select { width: 100%; }
+.admin-enterprise-form .xa24-form-field { padding-block: 0; }
+.admin-enterprise-form :is(.haloe-select, .xa24-select-host) { width: 100%; }
 .admin-enterprise-form-section { display: grid; min-width: 0; gap: 12px; }
 .admin-enterprise-accounts { max-height: 240px; overflow: auto; }
 .admin-enterprise-members { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 3fr); gap: var(--admin-section-gap); align-items: start; }
@@ -13,10 +13,10 @@
 .admin-enterprise-tree { max-height: 520px; overflow: auto; }
 .admin-enterprise-tree-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .admin-enterprise-member-scope { display: grid; gap: 4px; }
-.admin-enterprise-member-scope .semi-button-content { width: 100%; }
+.admin-enterprise-member-scope .xa24-button-content { width: 100%; }
 .admin-tenant-project-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 315px), 1fr)); gap: var(--admin-section-gap); }
-.admin-tenant-project-facts .semi-descriptions-item-td { overflow-wrap: anywhere; }
-.admin-tenant-project-tabs .semi-tabs-content { padding-top: var(--admin-section-gap); }
+.admin-tenant-project-facts dl dd { overflow-wrap: anywhere; }
+.admin-tenant-project-tabs .haloe-tabs-content { padding-top: var(--admin-section-gap); }
 .admin-tenant-project-tabs .admin-analytics-fields { grid-template-columns: minmax(0,1fr); }
 .admin-tenant-project-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-bottom: 8px; }
 .admin-tenant-project-tabs .project-panel { min-width: 0; }

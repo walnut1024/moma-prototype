@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
-import { Banner, Button, Card, Input, Spin, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Input, Spin, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { FilterToolbar, normalizePageSize, PAGE_SIZES } from '../components/FilterControls';
 import { ProjectFields } from '../components/ProjectConfiguration';
 import { activeProjectMembers } from '../project-access.mjs';

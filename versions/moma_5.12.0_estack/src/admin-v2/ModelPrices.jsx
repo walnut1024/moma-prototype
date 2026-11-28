@@ -9,7 +9,7 @@ import AdminStatus from './AdminStatus';
 import Table, { AdminPagination } from './AdminTable';
 import ModelModuleHeading from './ModelModuleHeading';
 import Descriptions from './AdminDescriptions';
-import { Button, Card, Space, Spin, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, Space, Spin, Tabs, Toast, Typography } from './xa24/HaloUI.jsx';
 import { Notice, serviceOperationsUi } from './ServiceUI';
 import { useOperations } from './ModelOperationsUI';
 import { CommercialDialog } from './ServiceWorkspaceDialogs';

@@ -3,23 +3,22 @@ import { modelIdentity } from '../model-identities.mjs';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { workspaceStoragePrefix } from "../workspace-storage.mjs";
 import Table from './AdminTable';
-import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Banner, Button, Card, DatePicker, Input, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconArrowUp, IconCalendar, IconChevronLeft, IconChevronRight, IconDownload, IconHandle, IconRefresh, IconSave, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Input, Space, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconArrowUp, IconChevronLeft, IconChevronRight, IconDownload, IconHandle, IconRefresh, IconSave, IconSearch } from './xa24/HaloIcons.jsx';
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { DEFAULT_PAGE_SIZE, PAGE_SIZES, FilterPresets, FilterReset, FilterToolbar } from '../components/FilterControls';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from '../components/FilterControls';
 import SavedFilterViews from '../components/SavedFilterViews';
-import { SemiDateRange as DateRange } from './SemiAnalyticsFilters';
 import { Choice } from './ServiceUI';
 import UsageTrend from './UsageTrend';
 import UsageReport from './UsageReport';
-import { dayOf } from './analytics';
+import UsageStatisticsFilters from './UsageStatisticsFilters';
+import UsageStatisticsOverview from './UsageStatisticsOverview';
 import { UsageShare, UsageDistribution } from './UsageComposition';
 import { defaultTrend, validTrendView, trendDimensions, tokenMetrics, usageDimensions, supplySummary } from './usage-trends';
-import { formatUsageNumber, usageFacts, usageGroups, usageModelTypes, usagePreset, usagePresets, operationsPeriod, operationsPeriodFromQuery, usageFilterOptions } from './usage-analysis';
+import { formatUsageNumber, usageCategory, usageFacts, usageGroups, usageModelTypes, usagePreset, usagePresets, operationsPeriod, operationsPeriodFromQuery, usageFilterOptions } from './usage-analysis';
 import { logCsv } from './call-observations.mjs';
 import { analysisProjects, unassignedProject } from './analysis-projects.mjs';
 import { latestRequests } from '../request-identity.mjs';
@@ -32,9 +31,9 @@ const percent = (value, total) => total > 0 ? `${(value / total * 100).toFixed(2
 const amount = value => formatUsageNumber(value).replace('w', '万');
 const labelFor = (collection, id) => collection.find(item => item.id === id)?.name || (id === '__unknown__' ? '未归属' : id);
 const presets = usagePresets;
-const calendarDay = new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit' });
 const otherUsage = row => Object.entries(row.units).filter(([, value]) => value > 0).map(([unit, value]) => `${amount(value)} ${unit}`).join(' · ') || '—';
 const cardOrderKey = workspaceStoragePrefix + 'usage-analysis:card-order';
+const artwork = import.meta.env.BASE_URL + 'assets/xa-call-statistics.png';
 const navLabels = Object.fromEntries([
   ['usage-token-trend', 'Token 调用量趋势'], ['usage-call-trend', '模型调用次数趋势'],
   ['usage-model-share', '模型调用次数占比'], ['usage-volume-share', '模型调用量占比'],
@@ -67,6 +66,10 @@ function SortableNavItem({ id, label, active, onSelect, onMove }) {
 }
 
 const emptyFilters = () => ({ types: null, tenant: null, model: null, providers: [], channels: null, user: null });
+const emptyFacets = () => ({ types: [], providers: [], models: [], million: false });
+const restoreFacets = value => value && Array.isArray(value.types) && Array.isArray(value.providers) && Array.isArray(value.models)
+  ? { types: value.types, providers: value.providers, models: value.models.slice(0, 5), million: value.million === true }
+  : emptyFacets();
 
 export default function UsageAnalysisPage({ state }) {
   const translateLabel = useChannelText();
@@ -78,6 +81,31 @@ export default function UsageAnalysisPage({ state }) {
   const initial = operationsPeriodFromQuery(route, clock);
   const [period, setPeriod] = useState(initial.period);
   const [historyRange, setRange] = useState(initial.range);
+  const [facets, setFacets] = useState(emptyFacets);
+  const selection = useMemo(() => ({ period, range: historyRange, scope, ...facets }), [period, historyRange, scope, facets]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [rankingOrigin, setRankingOrigin] = useState(null);
+  const pendingRankReturn = useRef(null);
+  useEffect(() => {
+    if (detailsOpen || !pendingRankReturn.current) return;
+    const rank = document.getElementById(pendingRankReturn.current);
+    pendingRankReturn.current = null;
+    if (!rank) return;
+    let frame;
+    const reveal = () => {
+      if (!rank.querySelector('.ua-statistics-card-heading')) return;
+      observer.disconnect();
+      // HaloE mounts the card contents after React renders the section.
+      frame = requestAnimationFrame(() => {
+        rank.focus({ preventScroll: true });
+        rank.scrollIntoView({ block: 'start' });
+      });
+    };
+    const observer = new MutationObserver(reveal);
+    observer.observe(rank, { childList: true, subtree: true });
+    reveal();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [detailsOpen]);
   const [tab, setTab] = useState('history'), [provider, setProvider] = useState(null);
   const live = tab === 'live';
   const range = useMemo(() => live ? usagePreset('today', clock) : historyRange, [live, clock, historyRange]);
@@ -102,6 +130,7 @@ export default function UsageAnalysisPage({ state }) {
       setClock(now);
       setPeriod(selected.period);
       setRange(selected.range);
+      setFacets(emptyFacets());
       setPage(0);
     };
     addEventListener('hashchange', restore);
@@ -129,18 +158,34 @@ export default function UsageAnalysisPage({ state }) {
   };
   const setPanelFilter = (id, value) => setPanelFilters(previous => ({ ...previous, [id]: value }));
   const changeTab = value => { setTab(value); setClock(Date.now()); setProvider(null); setPage(0); };
-  const choosePeriod = value => {
-    const now = Date.now(), nextRange = usagePreset(value, now);
+  const applyStatistics = next => {
+    const now = Date.now(), selected = operationsPeriod(next.period, next.range, now);
     setClock(now);
-    setPeriod(value);
-    setRange(nextRange);
+    setPeriod(selected.period);
+    setRange(selected.range);
+    setScope(next.scope);
+    setFacets(restoreFacets(next));
     setProvider(null);
     setPage(0);
-    writeRoute({ period: value, ...nextRange });
+    writeRoute({ ...next.scope, period: selected.period, ...selected.range });
+  };
+  const resetStatistics = () => {
+    const next = { period: 'yesterday', range: usagePreset('yesterday'), scope: { tenant: '', project: '' }, ...emptyFacets() };
+    applyStatistics(next);
+    return next;
   };
   const projects = useMemo(() => analysisProjects(state, scope.tenant), [state, scope.tenant]);
-  const scopedState = useMemo(() => ({ ...state, requests: latestRequests(state.requests).filter(row =>
-    (!scope.tenant || row.tenantId === scope.tenant) && (!scope.project || (row.projectId || unassignedProject) === scope.project)) }), [state, scope]);
+  const scopedState = useMemo(() => {
+    const types = new Map(state.models.map(model => [model.id, model.type]));
+    const providers = new Map(state.endpoints.map(endpoint => [endpoint.id, endpoint.providerId]));
+    const requests = latestRequests(state.requests).filter(row =>
+      (!scope.tenant || row.tenantId === scope.tenant) &&
+      (!scope.project || (row.projectId || unassignedProject) === scope.project) &&
+      (!facets.types.length || facets.types.includes(usageCategory(types.get(row.modelId) ?? row.modelType))) &&
+      (!facets.providers.length || facets.providers.includes(row.providerId || providers.get(row.endpointId) || '__unknown__')) &&
+      (!facets.models.length || facets.models.includes(row.modelId)));
+    return { ...state, requests };
+  }, [state, scope, facets]);
   const result = useMemo(() => usageFacts(scopedState, range, baseFilters, clock), [scopedState, range, baseFilters, clock]);
   const current = result?.current || [], usageWindow = result?.window;
   const totalTokens = useMemo(() => usageShare(current, 'modelId', 'total').total, [current]);
@@ -171,12 +216,6 @@ export default function UsageAnalysisPage({ state }) {
     }
     history.replaceState(history.state, '', '#/admin-2/usage-analysis' + (params.size ? '?' + params : ''));
   };
-  const changeScope = next => {
-    writeRoute(next);
-    setScope(next);
-    setProvider(null);
-    setPage(0);
-  };
   const detailPages = Math.max(1, Math.ceil(detailRows.length / size));
   const detailPage = Math.min(page, detailPages - 1);
   const periodName = period === 'custom' ? `${range.start}—${range.end}` : presets.find(([id]) => id === period)?.[1];
@@ -199,16 +238,6 @@ export default function UsageAnalysisPage({ state }) {
     const link = document.createElement('a'); link.href = url; link.download = `用量明细-${range.start}-${range.end}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0); Toast.success("已开始下载用量明细");
     } catch { Toast.error("导出失败，请重试"); }
   };
-  const applyDate = value => {
-    const current = Date.now();
-    const selected = operationsPeriod('custom', value, current);
-    setClock(current);
-    setPeriod(selected.period);
-    setRange(selected.range);
-    setProvider(null);
-    setPage(0);
-    writeRoute({ period: selected.period, ...selected.range });
-  };
   const applyView = view => {
     if (!validTrendView(view, filterPanelIds, trendIds, shareIds)) {
       Toast.error('视图配置无效，请重新保存');
@@ -226,6 +255,7 @@ export default function UsageAnalysisPage({ state }) {
     setPanelFilters(Object.fromEntries(filterPanelIds.map(id => [id, view.panelFilters[id]])));
     setTrends(view.trends);
     setShares(view.shares);
+    setFacets(restoreFacets(view.facets));
     setProvider(null);
     setPage(0);
   };
@@ -256,43 +286,58 @@ export default function UsageAnalysisPage({ state }) {
         setTrends(previous => ({ ...previous, [target]: { ...previous[target], curves: null } }));
       }}/>;
   };
+  const openRank = (dimension, id, cardId) => {
+    setDetailMode(dimension);
+    setQuery(id);
+    setPage(0);
+    setRankingOrigin(cardId);
+    setDetailsOpen(true);
+    requestAnimationFrame(() => {
+      const detail = document.getElementById('usage-detail');
+      detail?.focus({ preventScroll: true });
+      detail?.scrollIntoView({ block: 'start' });
+    });
+  };
+  const closeDetails = () => {
+    pendingRankReturn.current = rankingOrigin;
+    setRankingOrigin(null);
+    setDetailsOpen(false);
+  };
   return <div className="admin-page-stack ua-native-usage">
-    <AdminPageHeading title={translateLabel("用量数据")}><Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出用量明细</Button></AdminPageHeading>
-    <Tabs type="line" activeKey={tab} onChange={changeTab} aria-label="用量数据视图" tabList={[{ itemKey: 'history', tab: '历史数据' }, { itemKey: 'live', tab: '今日实时预测' }]}/>
-    <Card className="ua-native-time">
-      <div className="admin-analysis-filter-row">
-        {live ? <Space wrap>
-          <Text>数据截至 {new Date(clock).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}（北京时间）</Text>
-          <Button size="small" icon={<IconRefresh aria-hidden="true"/>} onClick={() => setClock(Date.now())}>刷新</Button>
-        </Space> : <><FilterToolbar>
-          <div className="admin-time-presets" role="group" aria-label="统计方式">
-            <Button size="small" theme={single ? 'solid' : 'light'} aria-pressed={single} onClick={() => !single && applyDate({ start: range.end, end: range.end })}>按日</Button>
-            <Button size="small" theme={single ? 'light' : 'solid'} aria-pressed={!single} onClick={() => single && choosePeriod('7d')}>按时间范围</Button>
-          </div>
-          {single ? <DatePicker aria-label="统计日期" type="date" format="yyyy-MM-dd" value={range.end} showClear={false}
-            onChangeWithDateFirst={false} disabledDate={date => calendarDay.format(date) > dayOf(Date.now())}
-            onChange={date => { if (typeof date === 'string' && date) applyDate({ start: date, end: date }); }}/> :
-            <DateRange presets={presets} start={range.start} end={range.end} granularity={usageWindow?.weekly ? 'week' : 'day'}
-              trigger={<Button icon={<IconCalendar aria-hidden="true"/>} aria-label={translateLabel("日期范围")}>{range.start} — {range.end}</Button>} allowLongRange onChange={applyDate}/>}
-          <FilterPresets label="统计时间范围" value={period} onChange={choosePeriod} items={presets}/>
-          <Text type="secondary" title="时间范围作用于全部图表与明细">{translateLabel("北京时间")}</Text>
-          <Choice label="租户" value={scope.tenant} options={[[ '', '全部租户' ], ...state.tenants.map(row => [row.id, row.name])]}
-            onSelect={tenant => changeScope({ tenant, project: '' })}/>
-          <Choice label="项目" value={scope.project} options={[[ '', '全部项目' ], ...projects.map(row => [row.id, row.id === unassignedProject ? row.name : row.name + ' · ' + row.id]),
-            ...(scope.project && !projects.some(row => row.id === scope.project) ? [[scope.project, scope.project]] : [])]}
-            onSelect={project => changeScope({ ...scope, project })}/>
-          <FilterReset onClick={() => { choosePeriod('yesterday'); changeScope({ tenant: '', project: '' }); }}/>
-        </FilterToolbar>
-        <SavedFilterViews notify={Toast} scope="admin-usage-analysis-composition" showCurrent={false}
-          saveDescription="保存时间、各图筛选、趋势展示方式、Token 口径及占比统计维度。"
-          value={{ period, range, scope, panelFilters, trends, shares }} onApply={applyView} groups={savedGroups} currentGroups={viewGroups} disabled={!usageWindow}/></>}
+    <div className="ua-statistics-hero xa24-entry-header">
+      <div>
+        <h1>{translateLabel('用量数据')}</h1>
+        <p>{translateLabel('按时间、服务商和模型查看 Token 用量及调用趋势。')}</p>
       </div>
-    </Card>
+      <img className="xa24-entry-art" src={artwork} width="80" height="80" alt=""/>
+    </div>
+    <UsageStatisticsFilters selection={selection} state={state} live={live} clock={clock} onRefresh={() => setClock(Date.now())}
+      onApply={applyStatistics} onReset={resetStatistics}
+      views={<div className="ua-statistics-pills" role="group" aria-label="用量数据视图">
+        {[['history', '历史数据'], ['live', '今日实时预测']].map(([value, label]) => (
+          <Button key={value} size="small" theme={tab === value ? 'light' : 'borderless'}
+            aria-pressed={tab === value} onClick={() => changeTab(value)}>{translateLabel(label)}</Button>
+        ))}
+      </div>}
+      details={<Button size="small" theme="borderless" aria-expanded={detailsOpen} aria-controls="usage-analysis-details"
+        onClick={() => detailsOpen ? closeDetails() : setDetailsOpen(true)}>{translateLabel('深入分析')}</Button>}/>
+    {!usageWindow && <Banner type="danger" closeIcon={null} description="请选择有效日期范围：不超过 365 天，且不能晚于今日。"/>}
+    {result && !detailsOpen && live && <UsageReport state={scopedState} range={range} result={result} filters={baseFilters}
+      clock={clock} live provider={provider} onProvider={setProvider}/>}
+    {result && !detailsOpen && !live && <UsageStatisticsOverview result={result} state={scopedState} million={facets.million} onChoose={openRank}/>}
+    {detailsOpen && <section id="usage-analysis-details" aria-label="深入分析" className="ua-statistics-details">
+      <div className="ua-statistics-details-actions">
+        {!live && <SavedFilterViews notify={Toast} scope="admin-usage-analysis-composition" showCurrent={false}
+          saveDescription="保存时间、各图筛选、趋势展示方式、Token 口径及占比统计维度。"
+          value={{ period, range, scope, panelFilters, trends, shares, facets }} onApply={applyView}
+          groups={savedGroups} currentGroups={viewGroups} disabled={!usageWindow}/>}
+        <Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出用量明细</Button>
+      </div>
     {result && <UsageReport state={scopedState} range={range} result={result} filters={baseFilters} clock={clock} live={live} provider={provider} onProvider={setProvider}/>}
     {usageWindow && !live && <section className="ua-report-distribution" id="usage-distribution">
       <UsageDistribution facts={current} single={single}/>
     </section>}
-    {!usageWindow ? <Banner type="danger" closeIcon={null} description="请选择有效日期范围：不超过 365 天，且不能晚于今日。"/> : (
+    {usageWindow && (
       <div className="ua-native-layout" data-nav-open={navOpen}>
         <aside className="ua-native-nav" aria-label="图表导航">
           <Card bodyStyle={navOpen ? undefined : { padding: 12 }}>
@@ -332,9 +377,12 @@ export default function UsageAnalysisPage({ state }) {
         </aside>
         <div className="ua-native-sections">
           {cardOrder.overview.map(id => <section key={id} id={id}>{renderCard(id)}</section>)}
-          <section id="usage-detail">
+          <section id="usage-detail" tabIndex={-1}>
             <Card title={<Space wrap><Title heading={5} component="h2">用量明细</Title><Text type="secondary">{range.start}—{range.end}</Text></Space>}
-              headerExtraContent={<Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出</Button>}>
+              headerExtraContent={<Space wrap>
+                {rankingOrigin && <Button icon={<IconChevronLeft aria-hidden="true"/>} onClick={closeDetails}>{translateLabel('返回排行')}</Button>}
+                <Button icon={<IconDownload aria-hidden="true"/>} disabled={!detailRows.length} onClick={exportCsv}>导出</Button>
+              </Space>}>
               <div className="admin-list-toolbar">
                 <div className="admin-time-presets" role="group" aria-label="明细汇总维度">
                   {[[ 'tenantId', '按租户' ], [ 'modelId', '按模型' ], [ 'projectId', '按项目' ]].map(([value, label]) => (
@@ -357,5 +405,6 @@ export default function UsageAnalysisPage({ state }) {
         </div>
       </div>
     )}
+    </section>}
   </div>;
 }

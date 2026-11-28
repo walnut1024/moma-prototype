@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useRef, useState } from 'react';
-import { Button, Space, Table, Typography } from '@douyinfe/semi-ui';
+import { Button, Space, Table, Typography } from './xa24/HaloUI.jsx';
 import { Modal, Notice } from './ModelOperationsUI';
 import { connectionFingerprint } from './connection-state';
 import { onboardingApi, prepareServerChannel } from './onboarding-client';

@@ -1,9 +1,10 @@
 import { useChannelText } from './channel-language';
 import Table from './AdminTable';
 import Descriptions from './AdminDescriptions';
-import { Banner, Button, Checkbox, Space, Steps, Toast, Typography, Upload } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, Space, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Steps, Upload } from './xa24/HaloUI.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { IconDownload, IconUpload } from '@douyinfe/semi-icons';
+import { IconDownload, IconUpload } from './xa24/HaloIcons.jsx';
 import { IMPORT_REPORT_HEADERS, MODEL_IMPORT_LIMIT, downloadModelCsv } from './model-import';
 import { parseDelimitedCells } from '../tabular-import.mjs';
 import { materialImportHeaders, materialImportRows, previewMaterialRows, submitMaterialRows } from './material-batch-import';

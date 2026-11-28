@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useState } from 'react';
-import { Banner, Button, Card, Input, Space, Typography } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Input, Space, Typography } from './xa24/HaloUI.jsx';
+import { IconSearch } from './xa24/HaloIcons.jsx';
 import { PAGE_SIZES, normalizePageSize, FilterReset, FilterToolbar } from '../components/FilterControls';
 import AdminPageHeading from './AdminPageHeading';
 import { Choice } from './ServiceUI';

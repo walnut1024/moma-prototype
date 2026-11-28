@@ -2,19 +2,19 @@
 .admin-deployment-editor-remote { grid-template-columns: minmax(180px, .8fr) minmax(0, 2fr) minmax(180px, .8fr); }
 .deployment-repository-panel { display: grid; gap: 10px; }
 .deployment-repository-results { max-height: 320px; overflow: auto; }
-.deployment-repository-results .semi-button { justify-content: flex-start; text-align: left; overflow-wrap: anywhere; min-height: 34px; height: auto; }
+.deployment-repository-results .haloe-btn { justify-content: flex-start; text-align: left; overflow-wrap: anywhere; min-height: 34px; height: auto; }
 .admin-deployment-drawer .admin-deployment-editor { gap: 16px; }
 .admin-deployment-editor > *, .admin-deployment-fields > * { min-width: 0; }
 .admin-deployment-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--admin-control-gap); }
-:is(.admin-deployment-page,.admin-deployment-drawer) .semi-form-slot { padding-block: 0; }
-:is(.admin-deployment-page,.admin-deployment-drawer) .semi-form-slot .semi-select { width: 100%; }
+:is(.admin-deployment-page,.admin-deployment-drawer) .xa24-form-field { padding-block: 0; }
+:is(.admin-deployment-page,.admin-deployment-drawer) .xa24-form-field :is(.haloe-select, .xa24-select-host) { width: 100%; }
 .admin-deployment-drawer .admin-deployment-fields { gap: 12px; }
 .deployment-pd-role { display: grid; min-width: 0; gap: var(--admin-control-gap); padding-block: 8px; }
 .deployment-pd-pair, .deployment-pd-input-action { display: grid; align-items: center; gap: 8px; }
 .deployment-pd-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; }
 .deployment-pd-input-action { grid-template-columns: minmax(0, 1fr) auto; }
 .deployment-pd-role code, .deployment-pd-template { overflow-wrap: anywhere; }
-.deployment-pd-template { white-space: pre-wrap; padding: 12px; margin: 0; background: var(--semi-color-fill-0); }
+.deployment-pd-template { white-space: pre-wrap; padding: 12px; margin: 0; background: var(--xa24-page-bg); }
 @media (max-width: 630px) {
   .deployment-pd-pair { grid-template-columns: minmax(0, 1fr); justify-items: start; }
 }

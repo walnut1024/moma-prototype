@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useRef, useState } from 'react';
-import { Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, Tabs, TextArea, Toast } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Form, Input, Radio, RadioGroup, Space, Tabs, TextArea, Toast } from './xa24/HaloUI.jsx';
 import { AdminModal } from './AdminOverlay';
 import AdminPageHeading from './AdminPageHeading';
 import { openLogin } from '../login-navigation.mjs';

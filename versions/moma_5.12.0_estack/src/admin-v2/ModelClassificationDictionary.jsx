@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useState } from 'react';
-import { Button, Input, Select, TextArea, Typography } from '@douyinfe/semi-ui';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { Button, Input, Select, TextArea, Typography } from './xa24/HaloUI.jsx';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { AdminModal as Modal } from './AdminOverlay';
 import Table from './AdminTable';
 import { CLASSIFICATION_KINDS, classificationIndex, modelClassification } from './model-classification';

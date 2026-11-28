@@ -1,7 +1,7 @@
 import AdminStatus from './AdminStatus';
 import ChannelTestProgress from './ChannelTestProgress';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Typography } from '@douyinfe/semi-ui';
+import { Button, Checkbox, Typography } from './xa24/HaloUI.jsx';
 import { Choice, Field } from './ServiceUI';
 import { GridTable, Row, Cell, Notice } from './ModelOperationsUI';
 import { candidateTestPlan } from './channel-change-management';

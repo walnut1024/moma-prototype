@@ -1,6 +1,6 @@
 import Table from './AdminTable';
 import { useRef, useState } from 'react';
-import { Banner, Button } from '@douyinfe/semi-ui';
+import { Banner, Button } from './xa24/HaloUI.jsx';
 import { AdminModal as Modal } from './AdminOverlay';
 import MaterialMetadataForm from './MaterialMetadataForm';
 

@@ -1,5 +1,7 @@
 import { useChannelText } from './channel-language';
-import { Tag } from '@douyinfe/semi-ui';
+import { useContext } from 'react';
+import { Tag as FrontTag } from '@douyinfe/semi-ui';
+import { AdminUIContext } from '../components/admin-ui-context.js';
 
 const statusColors = new Map([
   ['green', ['正常', '有效', '可用', '可运行', '运行中', '已启用', '已启动', '已配置', '当前生效', '生效中',
@@ -16,6 +18,9 @@ const statusColors = new Map([
 
 export default function AdminStatus({ value, label = value, prefix, color = statusColors.get(value) ?? 'grey' }) {
   const t = useChannelText();
+  const admin = useContext(AdminUIContext);
   if (value == null || value === '' || value === '—') return '—';
-  return <Tag size="small" color={color}>{prefix ? `${prefix}：${t(label)}` : t(label)}</Tag>;
+  const content = prefix ? `${prefix}：${t(label)}` : t(label);
+  return admin ? <span className="xa24-status" data-tone={color}>{content}</span>
+    : <FrontTag size="small" color={color}>{content}</FrontTag>;
 }

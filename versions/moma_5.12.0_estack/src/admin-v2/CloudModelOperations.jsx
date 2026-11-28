@@ -1,6 +1,6 @@
 import AdminPageLoading from './AdminPageLoading';
 import {useEffect,useRef,useState} from 'react';
-import {Banner, Button, Toast} from '@douyinfe/semi-ui';
+import { Banner, Button, Toast } from './xa24/HaloUI.jsx';
 import { cloudAdminRequest as api } from './admin-client.mjs';
 import './cloud-model-login.css';
 

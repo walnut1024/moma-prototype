@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useState } from 'react';
-import { Input } from '@douyinfe/semi-ui';
+import { Input } from './xa24/HaloUI.jsx';
 import { Choice, Field, MultiChoice } from './ServiceUI';
 import { MODEL_TYPES } from './model-management';
 import { TASK_OPTIONS, INPUT_MODALITY_OPTIONS, OUTPUT_MODALITY_OPTIONS, RESULT_TYPE_OPTIONS } from './model-profile';

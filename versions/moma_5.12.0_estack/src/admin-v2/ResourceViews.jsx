@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Descriptions, Input, Popover, Select, Space, Table, Tabs, Tag, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconChevronDown, IconChevronRight, IconDelete, IconPlus } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Input, Popover, Select, Space, Table, Tabs, Tag, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Descriptions } from './xa24/HaloUI.jsx';
+import { IconChevronDown, IconChevronRight, IconDelete, IconPlus } from './xa24/HaloIcons.jsx';
 import AdminStatus from './AdminStatus';
 import { AdminModal } from './AdminOverlay';
 import { ClusterRegistration, CodePreview, ResourceField, ResourceMetrics, VramDetailCell, WorkerLabelFilterCell } from './ClusterResourcePanels';

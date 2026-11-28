@@ -1,7 +1,9 @@
 import { useChannelText } from './channel-language';
 import { useId, useMemo, useState } from 'react';
-import { Button, Card, Cascader, Select, Space, Tag, Typography } from '@douyinfe/semi-ui';
-import { IconCalendar, IconFilter } from '@douyinfe/semi-icons';
+import { Button, Card, Space, Tag, Typography } from './xa24/HaloUI.jsx';
+import { Cascader } from './xa24/HaloUI.jsx';
+import { Select } from './xa24/HaloUI.jsx';
+import { IconCalendar, IconFilter } from './xa24/HaloIcons.jsx';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import { FilterPresets, FilterToolbar } from '../components/FilterControls';
 import { dayOf } from './analytics';

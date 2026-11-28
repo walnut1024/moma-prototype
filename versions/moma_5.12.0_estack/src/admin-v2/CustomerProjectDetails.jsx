@@ -1,8 +1,8 @@
 import { useChannelText } from './channel-language';
 import { useRef, useState } from 'react';
 import { internalSpace } from '../operating-space.mjs';
-import { Banner, Button, Card, Input, Space, Tabs, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconArrowLeft, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Input, Space, Tabs, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconArrowLeft, IconSearch } from './xa24/HaloIcons.jsx';
 import { maskApiKey } from '../api-key-utils.mjs';
 import { DEFAULT_PAGE_SIZE, FilterToolbar, PAGE_SIZES } from '../components/FilterControls';
 import { PROJECT_ADMIN, projectModelEnabled, projectRole, projectRoleLabel } from '../project-access.mjs';

@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
-import { Button, Checkbox, Input, Popover, Space, Typography } from '@douyinfe/semi-ui';
-import { IconChevronDown, IconChevronRight } from '@douyinfe/semi-icons';
+import { Button, Checkbox, Input, Popover, Space, Typography } from './xa24/HaloUI.jsx';
+import { IconChevronDown, IconChevronRight } from './xa24/HaloIcons.jsx';
 import { supplySummary, toggleSupplyGroup, toggleSupplyChannel } from './usage-trends';
 import { supplyPickerGroups, supplyPickerName, supplyPickerSelectionSummary } from './usage-supply-picker';
 

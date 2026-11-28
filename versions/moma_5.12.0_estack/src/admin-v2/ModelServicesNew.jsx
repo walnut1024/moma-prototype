@@ -4,10 +4,8 @@ import { callLogFieldHelp } from '../components/call-log-field-help';
 import TableFieldHelp from '../components/TableFieldHelp';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Descriptions from './AdminDescriptions';
-import {
-  Banner, Button, Card, Empty, Input, InputNumber, RadioGroup, Radio, Select,
-  Space, Tabs, Tag, TextArea, Toast, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconPlus, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Empty, Input, InputNumber, RadioGroup, Radio, Select, Space, Tabs, Tag, TextArea, Toast, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { IconPlus, IconSearch } from './xa24/HaloIcons.jsx';
 import { resourceId } from '../resource-id.mjs';
 import { cloudAdminRequest } from './admin-client.mjs';
 import AdminPageHeading from './AdminPageHeading';

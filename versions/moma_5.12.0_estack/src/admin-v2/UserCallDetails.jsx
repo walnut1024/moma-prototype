@@ -3,8 +3,8 @@ import { customerUsageFieldHelp } from './customer-usage-field-help';
 import Table from './AdminTable';
 import { useId, useState } from 'react';
 import Descriptions from './AdminDescriptions';
-import { Button, Card, Popover, Progress, Select, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconChevronDown, IconChevronRight, IconDownload, IconSort } from '@douyinfe/semi-icons';
+import { Button, Card, Popover, Progress, Select, Toast, Typography } from './xa24/HaloUI.jsx';
+import { IconChevronDown, IconChevronRight, IconDownload, IconSort } from './xa24/HaloIcons.jsx';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, FilterToolbar, FilterReset } from '../components/FilterControls';
 import { SelectedConditions } from '../components/SavedFilterViews';
 import { customerModelDetails } from './analytics';
@@ -19,7 +19,7 @@ function SuccessRate({ row }) {
   const titleId = useId();
   const rate = row.success.toFixed(2) + '%';
   return <div className="admin-analysis-status">
-    <div aria-hidden="true"><Progress percent={row.success} size="small" stroke="var(--semi-color-success)"/></div>
+    <div aria-hidden="true"><Progress percent={row.success} size="small" stroke="var(--xa24-success)"/></div>
     <Popover trigger="click" position="bottomRight" motion={false}
       content={({ initialFocusRef }) => <section className="admin-analytics-fields" ref={initialFocusRef} tabIndex={-1} aria-labelledby={titleId}>
         <Typography.Title heading={6} component="h3" id={titleId}>HTTP 状态分布</Typography.Title>

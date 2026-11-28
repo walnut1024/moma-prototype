@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Input, Typography } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Input, Typography } from './xa24/HaloUI.jsx';
+import { IconSearch } from './xa24/HaloIcons.jsx';
 import TableFieldHelp from '../components/TableFieldHelp';
 import Table from './AdminTable';
 import { TARIFF_KINDS, tariffDictionaryEntries } from './tariff-dictionary';
@@ -23,7 +23,7 @@ export default function MaterialDictionary({ state, kind }) {
     ...(kind === 'currency' ? [{ title: '货币代码', dataIndex: 'code', width: 130 }] : []),
     ...(kind === 'scenario' ? [
       { title: '取数指标', dataIndex: 'usageMetric', width: 180, render: value => value || '—' },
-      { title: '计量口径', dataIndex: 'meteringRule', render: value => value || '—' },
+      { title: '计量口径', dataIndex: 'meteringRule', width: 310, render: value => value || '—' },
       { title: '计费说明', dataIndex: 'description', width: 210, render: value => value || '—' },
     ] : []),
     ...(kind === 'unit' ? [
@@ -33,7 +33,7 @@ export default function MaterialDictionary({ state, kind }) {
     ] : []),
     { title: '来源', width: 100, render: () => <Typography.Text type="tertiary">内置</Typography.Text> },
   ];
-  const tableMinWidth = kind === 'scenario' ? 1160 : kind === 'unit' ? 830 : 680;
+  const tableMinWidth = kind === 'scenario' ? 1260 : kind === 'unit' ? 830 : 690;
   return <>
     <div className="materials-toolbar">
       <div className="materials-filters">

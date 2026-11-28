@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
-import { Banner, Button, Checkbox, Descriptions, Input, Popover, Select, Space, Steps, Switch, Table, Tabs, Tag, TextArea, Toast, Tree, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, Input, Popover, Select, Space, Switch, Table, Tabs, Tag, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Descriptions, Steps, Tree } from './xa24/HaloUI.jsx';
 import { AdminModal, AdminSideSheet } from './AdminOverlay';
 import { TimeSeriesChart } from '../components/AnalyticsCharts';
 import TableFieldHelp from '../components/TableFieldHelp';

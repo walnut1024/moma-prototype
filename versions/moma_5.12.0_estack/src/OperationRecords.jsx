@@ -1,8 +1,15 @@
 import { useState } from 'react';
-import { Banner, Button, DatePicker, Empty, Input, Table } from '@douyinfe/semi-ui';
+import {
+  Banner as FrontBanner, Button as FrontButton, DatePicker as FrontDatePicker,
+  Empty as FrontEmpty, Input as FrontInput, Table as FrontTable,
+} from '@douyinfe/semi-ui';
+import {
+  Banner as AdminBanner, Button as AdminButton, DatePicker as AdminDatePicker,
+  Empty as AdminEmpty, Input as AdminInput, Pagination as AdminPagination, Table as AdminTable,
+} from './admin-v2/xa24/HaloUI.jsx';
 import { Download, RefreshCw } from 'lucide-react';
 import { projectTime } from './components/ProjectConfiguration';
-import { AdminPagination } from './admin-v2/AdminTable';
+import FrontPagination from './components/FrontPagination';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from './components/FilterControls';
 import { displayBusinessCopy } from './display-copy.mjs';
 import { filterOperationRecords, operationRecordsCsv } from './operation-records.mjs';
@@ -21,7 +28,14 @@ const dateText = date => {
   return `${year}-${month}-${day}`;
 };
 
-export default function OperationRecords({ tenant }) {
+export default function OperationRecords({ tenant, admin }) {
+  const Banner = admin ? AdminBanner : FrontBanner;
+  const Button = admin ? AdminButton : FrontButton;
+  const DatePicker = admin ? AdminDatePicker : FrontDatePicker;
+  const Empty = admin ? AdminEmpty : FrontEmpty;
+  const Input = admin ? AdminInput : FrontInput;
+  const Pagination = admin ? AdminPagination : FrontPagination;
+  const Table = admin ? AdminTable : FrontTable;
   const data={records:tenant.organization.audit,error:tenant.error};
   const [filters, setFilters] = useState({ query: '', start: '', end: '' });
   const [page, setPage] = useState(1);
@@ -72,7 +86,7 @@ export default function OperationRecords({ tenant }) {
             {records.length > 0 && <Button theme="light" onClick={reset}>重置筛选</Button>}
           </Empty>} />
       </div>
-      <AdminPagination className="operation-pagination" total={total} currentPage={currentPage} pageSize={size} pageSizeOpts={PAGE_SIZES}
+      <Pagination className="operation-pagination" total={total} currentPage={currentPage} pageSize={size} pageSizeOpts={PAGE_SIZES}
         showSizeChanger onPageChange={setPage} onPageSizeChange={value => { setSize(value); setPage(1); }} />
     </section>
   </div>;

@@ -1,6 +1,13 @@
 import { useId, useRef, useState } from "react";
 import { CheckCircle2, Download, Plus, Trash2, Upload } from "lucide-react";
-import { Button, Checkbox, Input, Select, Steps, Table, Tabs, TextArea } from '@douyinfe/semi-ui';
+import {
+  Button as FrontButton, Checkbox as FrontCheckbox, Input as FrontInput, Select as FrontSelect,
+  Steps as FrontSteps, Table as FrontTable, Tabs as FrontTabs, TextArea as FrontTextArea,
+} from '@douyinfe/semi-ui';
+import {
+  Button as AdminButton, Checkbox as AdminCheckbox, Input as AdminInput, Select as AdminSelect,
+  Steps as AdminSteps, Table as AdminTable, Tabs as AdminTabs, TextArea as AdminTextArea,
+} from './admin-v2/xa24/HaloUI.jsx';
 import { AdminModal } from './admin-v2/AdminOverlay';
 import { departmentPath } from "./organization-data.mjs";
 import { MEMBER_IMPORT_HEADERS, MEMBER_IMPORT_LIMIT, memberCsv, memberRowsFromCells, parseMemberText, validateMemberRows } from "./organization-import.mjs";
@@ -12,7 +19,15 @@ function download(name, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function OrganizationMemberBatch({ data, initialDepartment, scoped, onClose, onApply }) {
+export default function OrganizationMemberBatch({ admin, data, initialDepartment, scoped, onClose, onApply }) {
+  const Button = admin ? AdminButton : FrontButton;
+  const Checkbox = admin ? AdminCheckbox : FrontCheckbox;
+  const Input = admin ? AdminInput : FrontInput;
+  const Select = admin ? AdminSelect : FrontSelect;
+  const Steps = admin ? AdminSteps : FrontSteps;
+  const Table = admin ? AdminTable : FrontTable;
+  const Tabs = admin ? AdminTabs : FrontTabs;
+  const TextArea = admin ? AdminTextArea : FrontTextArea;
   const departmentLabelId = useId();
   const departmentOptions = [...(scoped ? [] : [{ id: 'unassigned' }]), ...data.departments]
     .map(({id}) => ({ value: id, label: departmentPath(data.departments, id) }));

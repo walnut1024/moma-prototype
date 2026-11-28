@@ -1,5 +1,5 @@
-import { Button, Card, Tooltip, Typography } from '@douyinfe/semi-ui';
-import { IconHelpCircle } from '@douyinfe/semi-icons';
+import { Button, Card, Tooltip, Typography } from './xa24/HaloUI.jsx';
+import { IconHelpCircle } from './xa24/HaloIcons.jsx';
 
 export function AnalysisHelp({ label, children }) {
   return <Tooltip content={children} trigger="hover">

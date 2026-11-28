@@ -1,6 +1,6 @@
 import Table from './AdminTable';
-import { Button, Input } from '@douyinfe/semi-ui';
-import { IconPlus, IconDelete } from '@douyinfe/semi-icons';
+import { Button, Input } from './xa24/HaloUI.jsx';
+import { IconPlus, IconDelete } from './xa24/HaloIcons.jsx';
 import { Choice, Notice } from './ServiceUI';
 import { CommonTariffBatchButton } from './SupplierPriceFields';
 import { tariffOptions, tariffScenarioUnit, tariffScenarioUnits } from './tariff-dictionary';

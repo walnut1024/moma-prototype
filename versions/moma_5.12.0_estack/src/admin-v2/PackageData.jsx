@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
-import { Button, Card, DatePicker, Input, RadioGroup, Tag, Typography } from '@douyinfe/semi-ui';
-import { IconActivity, IconPieChart2Stroked, IconSearch } from '@douyinfe/semi-icons';
+import { Button, Card, DatePicker, Input, RadioGroup, Tag, Typography } from './xa24/HaloUI.jsx';
+import { IconActivity, IconPieChart2Stroked, IconSearch } from './xa24/HaloIcons.jsx';
 import { format } from 'date-fns';
 import { Chart } from '../components/AnalyticsCharts';
 import { AdminModal } from './AdminOverlay';

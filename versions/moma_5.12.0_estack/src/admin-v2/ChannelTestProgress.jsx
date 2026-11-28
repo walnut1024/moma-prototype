@@ -1,4 +1,4 @@
-import { Space, Spin, Typography } from '@douyinfe/semi-ui';
+import { Space, Spin, Typography } from './xa24/HaloUI.jsx';
 import { channelBatchProgress } from './channel-test-jobs';
 
 export default function ChannelTestProgress({ batch, running, children }) {

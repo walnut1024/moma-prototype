@@ -6,7 +6,7 @@ import { resolveChannelAssociationModel } from './channel-association-model';
 import { channelEnableConfirmationIssue, channelDirectEnableIssue, prepareChannelEnableConfirmation, prepareChannelDirectEnableConfirmation } from './channel-enable-confirmation';
 import { basicChannelUsageButton, channelTestUsageAuthorized } from './channel-test-authorization';
 import { cloneElement, useEffect, useRef, useState } from 'react';
-import { Banner, Button, Checkbox, Space, Table, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Checkbox, Space, Table, Typography } from './xa24/HaloUI.jsx';
 import SupplierCreationDialog from './SupplierCreationDialog';
 import { Choice, Field } from './ServiceUI';
 import { CopyId, Disclosure, GridTable, Row, Cell, Modal, Notice } from './ModelOperationsUI';

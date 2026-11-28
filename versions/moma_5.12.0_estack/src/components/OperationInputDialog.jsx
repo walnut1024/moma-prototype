@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Banner, Button, Form, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Form, Typography } from '../admin-v2/xa24/HaloUI.jsx';
 import { AdminModal as Modal } from '../admin-v2/AdminOverlay';
 
 export default function OperationInputDialog({ title, description, label, initialValue = '', numeric = false, onSubmit, onClose }) {

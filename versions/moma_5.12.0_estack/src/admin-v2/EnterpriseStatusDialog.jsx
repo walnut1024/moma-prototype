@@ -1,6 +1,6 @@
 import { useChannelText } from './channel-language';
 import { useId, useEffect, useState } from 'react';
-import { Banner, Button, Form, Input, Space, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Form, Input, Space, Typography } from './xa24/HaloUI.jsx';
 import { EnterpriseDialog, EnterpriseFacts } from './EnterpriseUI';
 import { validateDemoAdminCode } from './enterprise';
 

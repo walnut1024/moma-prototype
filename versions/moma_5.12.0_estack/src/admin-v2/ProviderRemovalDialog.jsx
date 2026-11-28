@@ -1,6 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useState } from 'react';
-import { Banner, Button, Space, Steps, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Space, Typography } from './xa24/HaloUI.jsx';
+import { Steps } from './xa24/HaloUI.jsx';
 import { AdminModal } from './AdminOverlay';
 import Table from './AdminTable';
 import { providerRemovalPlan } from './provider-removal';

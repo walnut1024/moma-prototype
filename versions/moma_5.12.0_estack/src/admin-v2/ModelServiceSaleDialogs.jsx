@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Select, Space, Tabs, Typography } from '@douyinfe/semi-ui';
+import { Button, Select, Space, Tabs, Typography } from './xa24/HaloUI.jsx';
 import AdminStatus from './AdminStatus';
 import Descriptions from './AdminDescriptions';
 import Table from './AdminTable';

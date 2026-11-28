@@ -1,6 +1,7 @@
 import { Fragment, Suspense, lazy, useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Checkbox, Collapse, Empty, Input, InputNumber, Select, Space, Switch, Tabs, TextArea, Toast, Typography } from '@douyinfe/semi-ui';
-import { IconArrowDown, IconArrowUp, IconPlus, IconRefresh, IconSearch } from '@douyinfe/semi-icons';
+import { Banner, Button, Card, Checkbox, Empty, Input, InputNumber, Select, Space, Switch, Tabs, TextArea, Toast, Typography } from './xa24/HaloUI.jsx';
+import { Collapse } from './xa24/HaloUI.jsx';
+import { IconArrowDown, IconArrowUp, IconPlus, IconRefresh, IconSearch } from './xa24/HaloIcons.jsx';
 import AdminDescriptions from './AdminDescriptions';
 import AdminCollapsePanel from './AdminCollapsePanel';
 import AdminActionMenu from './AdminActionMenu';
@@ -40,7 +41,7 @@ const ModelFileDeploymentDrawer = lazy(() => import('./DeploymentManagement').th
 
 function scrollTableWithArrowKeys(event) {
   if (event.target !== event.currentTarget || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-  const body = event.currentTarget.querySelector('.semi-table-body');
+  const body = event.currentTarget.querySelector('.xa24-table-scroll');
   if (!body || body.scrollWidth <= body.clientWidth) return;
   event.preventDefault();
   body.scrollBy({ left: event.key === 'ArrowLeft' ? -40 : 40 });

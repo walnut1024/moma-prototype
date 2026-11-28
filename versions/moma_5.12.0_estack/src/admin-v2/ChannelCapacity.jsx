@@ -1,7 +1,7 @@
 import { useChannelText } from './channel-language';
 import { useId, useState } from 'react';
-import { Button, Checkbox, Input, Popover, Space, Table, Typography } from '@douyinfe/semi-ui';
-import { IconChevronDown, IconDelete, IconPlus } from '@douyinfe/semi-icons';
+import { Button, Checkbox, Input, Popover, Space, Table, Typography } from './xa24/HaloUI.jsx';
+import { IconChevronDown, IconDelete, IconPlus } from './xa24/HaloIcons.jsx';
 import { AdminSideSheet } from './AdminOverlay';
 import { Modal, Notice } from './ModelOperationsUI';
 import { appendCapacityMetrics } from './channel-capacity-selection.js';

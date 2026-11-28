@@ -1,19 +1,29 @@
 import { useChannelText } from './channel-language';
-import { useEffect, useId, useState } from 'react';
-import { Banner, Button, Checkbox, DatePicker, Input, Popover, Space, Typography } from '@douyinfe/semi-ui';
-import { AdminModal as Modal } from './AdminOverlay';
+import { useCallback, useContext, useEffect, useId, useState } from 'react';
+import * as Semi from '@douyinfe/semi-ui';
+import { AdminModal } from './AdminOverlay';
 import { IconCalendar, IconChevronDown } from '@douyinfe/semi-icons';
+import { CalendarDays, ChevronDown } from 'lucide-react';
+import { AdminUIContext } from '../components/admin-ui-context';
+import { XaBanner, XaButton, XaCheckbox, XaInput, XaModal, XaPopover, XaSpace, XaTypography } from './xa24/HaloComponents.jsx';
+import { XaDatePicker } from './xa24/HaloDatePicker.jsx';
 import { TIME_PRESETS } from '../components/FilterControls';
 import { dayOf, validAnalyticsRange } from './analytics';
 import { usagePreset } from './usage-analysis';
 import './semi-analytics.css';
 
-const { Text, Paragraph } = Typography;
+const frontControls = { Banner: Semi.Banner, Button: Semi.Button, Checkbox: Semi.Checkbox, DatePicker: Semi.DatePicker,
+  Input: Semi.Input, Modal: AdminModal, Space: Semi.Space, Text: Semi.Typography.Text, Paragraph: Semi.Typography.Paragraph };
+const adminControls = { Banner: XaBanner, Button: XaButton, Checkbox: XaCheckbox, DatePicker: XaDatePicker,
+  Input: XaInput, Modal: XaModal, Space: XaSpace, Text: XaTypography.Text, Paragraph: XaTypography.Paragraph };
 const stamp = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export function SemiDateRange({ start, end, onChange, granularity = 'day', allowLongRange = false, label = '自定义', trigger,
   latest, rangeHint, presets = TIME_PRESETS, maxDays = allowLongRange || granularity === 'week' ? 365 : 30 }) {
   const t = useChannelText();
+  const admin = useContext(AdminUIContext);
+  const { Banner, Button, DatePicker, Modal, Space, Text, Paragraph } = admin ? adminControls : frontControls;
+  const calendar = admin ? <CalendarDays size={16} aria-hidden="true"/> : <IconCalendar aria-hidden="true"/>;
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState([start, end]);
   const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 600px)').matches);
@@ -30,7 +40,7 @@ export function SemiDateRange({ start, end, onChange, granularity = 'day', allow
   const launch = () => { setRange([start, end]); setOpen(true); };
   const disabledDate = date => stamp(date) > today;
   return <>
-    <Button theme={trigger?.props['aria-pressed'] ? 'solid' : 'light'} icon={trigger ? trigger.props.icon : <IconCalendar aria-hidden="true"/>}
+    <Button theme={trigger?.props['aria-pressed'] ? 'solid' : 'light'} icon={trigger ? trigger.props.icon : calendar}
       aria-label={trigger?.props['aria-label'] || '日期范围'} aria-pressed={trigger?.props['aria-pressed']} onClick={launch}>
       {trigger?.props.children || `${label ? label + ' · ' : ''}${start} — ${end}`}
     </Button>
@@ -61,6 +71,9 @@ export function SemiDateRange({ start, end, onChange, granularity = 'day', allow
 
 export function SemiMultiPick({ label, value, onChange, items, searchPlaceholder, compact = false, hint }) {
   const t = useChannelText();
+  const admin = useContext(AdminUIContext);
+  const { Button, Checkbox, Input, Space, Text, Paragraph } = admin ? adminControls : frontControls;
+  const arrow = admin ? <ChevronDown size={16} aria-hidden="true"/> : <IconChevronDown aria-hidden="true"/>;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [onlySelected, setOnlySelected] = useState(false);
@@ -75,12 +88,16 @@ export function SemiMultiPick({ label, value, onChange, items, searchPlaceholder
     setDraft(checked ? [...new Set([...selected, ...ids])] : [...selected].filter(id => !change.has(id)));
   };
   const display = value === null || value.length === items.length ? `全部${label}` : value.length ? `${label}（已选 ${value.length}）` : `${label}（未选择）`;
-  return <Popover trigger="click" position="bottomLeft" motion={false} visible={open} onVisibleChange={next => {
+  const changeOpen = next => {
     setOpen(next);
     if (next) { setDraft(value); setQuery(''); setOnlySelected(false); }
-  }} content={({ initialFocusRef }) => <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields" aria-label={`${label}多选`}>
+  };
+  const focusSearch = useCallback(input => {
+    if (open) input?.focus({ preventScroll: true });
+  }, [open]);
+  const panel = initialFocusRef => <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields" aria-label={`${label}多选`}>
     {hint && <Paragraph type="tertiary" size="small">{hint}</Paragraph>}
-    <Input aria-label={`搜索${label}`} placeholder={searchPlaceholder || t('搜索{label}名称或 ID').replace('{label}',label)} value={query} onChange={setQuery}/>
+    <Input ref={admin ? focusSearch : undefined} aria-label={`搜索${label}`} placeholder={searchPlaceholder || t('搜索{label}名称或 ID').replace('{label}',label)} value={query} onChange={setQuery}/>
     <Checkbox checked={allChecked} disabled={!matches.length}
       onChange={event => toggle(matches.map(item => item.id), event.target.checked)}>
       {query ? t('全选搜索结果（{count}）').replace('{count}',matches.length) : t('全选全部{label}（{count}）').replace('{label}',label).replace('{count}',items.length)}
@@ -104,8 +121,11 @@ export function SemiMultiPick({ label, value, onChange, items, searchPlaceholder
         </Button>
       </Space>
     </div>
-  </div>}>
-    <Button size={compact ? 'small' : 'default'} icon={<IconChevronDown aria-hidden="true"/>} iconPosition="right"
-      aria-label={`${label}筛选`} aria-expanded={open}>{compact ? t('{label}：{selection}').replace('{label}',label).replace('{selection}',value === null ? t('全部') : t('{count}个').replace('{count}',value.length)) : display}</Button>
-  </Popover>;
+  </div>;
+  const trigger = <Button size={compact ? 'small' : 'default'} icon={arrow} iconPosition="right"
+    aria-label={`${label}筛选`} aria-expanded={open}>{compact ? t('{label}：{selection}').replace('{label}',label).replace('{selection}',value === null ? t('全部') : t('{count}个').replace('{count}',value.length)) : display}</Button>;
+  return admin
+    ? <XaPopover open={open} onChange={changeOpen} placement="bottom-start" content={panel()}>{trigger}</XaPopover>
+    : <Semi.Popover trigger="click" position="bottomLeft" motion={false} visible={open}
+        onVisibleChange={changeOpen} content={({ initialFocusRef }) => panel(initialFocusRef)}>{trigger}</Semi.Popover>;
 }

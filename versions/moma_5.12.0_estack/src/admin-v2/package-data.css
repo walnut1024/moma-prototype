@@ -58,11 +58,11 @@
   min-width: 0;
   border: 0;
   border-radius: 16px;
-  background: var(--semi-color-bg-0);
+  background: var(--xa24-surface);
   box-shadow: none;
 }
 
-.package-report-body > .semi-card-body {
+.package-report-body > .haloe-card-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
@@ -85,7 +85,7 @@
 
 .package-report-toolbar > :first-child {
   margin-inline-end: 12px;
-  color: var(--semi-color-text-0);
+  color: var(--xa24-title);
   font-size: 14px;
 }
 
@@ -98,39 +98,39 @@
   background: var(--package-report-muted);
 }
 
-.package-report-periods .semi-radio-buttonRadioGroup {
+.package-report-periods .haloe-radio-group-button {
   padding: 0;
 }
 
-.package-report-periods .semi-radio-addon-buttonRadio {
+.package-report-periods .haloe-radio-group-button .haloe-radio-wrapper {
   padding: 4px 12px;
   border-radius: 6px;
-  color: var(--semi-color-text-0);
+  color: var(--xa24-title);
   font-size: 12px;
   font-weight: 400;
   line-height: 20px;
 }
 
-.package-report-periods .semi-radio-addon-buttonRadio-checked {
+.package-report-periods .haloe-radio-group-button .haloe-radio-wrapper-checked {
   background: white;
-  color: var(--semi-color-primary);
+  color: var(--xa24-primary);
   box-shadow: 0 3px 10px rgb(30 77 167 / 8%);
 }
 
-.package-report-periods .semi-radio:has(input:focus-visible) .semi-radio-addon-buttonRadio,
+.package-report-periods .haloe-radio-wrapper:has(input:focus-visible),
 .package-report-table:focus-visible {
-  outline: 2px solid var(--semi-color-primary);
+  outline: 2px solid var(--xa24-primary);
   outline-offset: -2px;
 }
 
 .package-report-dates {
   min-width: 0;
   max-width: 100%;
-  color: var(--semi-color-text-2);
+  color: var(--xa24-muted);
   font-size: 12px;
 }
 
-.package-report-dates .semi-datepicker {
+.package-report-dates .haloe-date-picker {
   max-width: 100%;
 }
 
@@ -152,7 +152,7 @@
   padding: 16px;
   border-radius: 8px;
   background: var(--package-report-muted);
-  color: var(--semi-color-text-1);
+  color: var(--xa24-text);
   font-size: 13px;
 }
 
@@ -171,7 +171,7 @@
 }
 
 .package-report-metric-values strong {
-  color: var(--semi-color-text-0);
+  color: var(--xa24-title);
   font-size: 24px;
   font-weight: 650;
   line-height: 30px;
@@ -179,7 +179,7 @@
 }
 
 .package-report-metric-values small {
-  color: var(--semi-color-text-2);
+  color: var(--xa24-muted);
   font-size: 12px;
 }
 
@@ -192,7 +192,7 @@
 .package-report-chart {
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--semi-color-border);
+  border: 1px solid var(--xa24-divider);
   border-radius: 8px;
 }
 
@@ -201,20 +201,20 @@
   align-items: center;
   gap: 12px;
   margin: 0;
-  color: var(--semi-color-text-0);
+  color: var(--xa24-title);
   font-size: 14px;
   font-weight: 700;
   line-height: 20px;
 }
 
-.package-report-chart-heading .semi-icon {
+.package-report-chart-heading svg {
   flex-shrink: 0;
-  color: var(--semi-color-text-2);
+  color: var(--xa24-muted);
 }
 
 .package-report-chart > p {
   margin: 6px 0 8px;
-  color: var(--semi-color-text-2);
+  color: var(--xa24-muted);
   font-size: 12px;
 }
 
@@ -243,7 +243,7 @@
   justify-content: flex-end;
 }
 
-.package-report .package-report-detail-controls > .semi-input-wrapper {
+.package-report .package-report-detail-controls > :is(.haloe-input-wrapper, span:has(> .haloe-input-wrapper)) {
   width: 224px;
   max-width: 100%;
 }
@@ -261,18 +261,18 @@
   border-radius: 8px;
 }
 
-.package-report-table .semi-table {
+.package-report-table .haloe-table {
   font-size: 14px;
 }
 
-.package-report-table .semi-table-thead > .semi-table-row > .semi-table-row-head {
+.package-report-table thead > tr > th {
   background: var(--package-report-muted);
-  color: var(--semi-color-text-1);
+  color: var(--xa24-text);
 }
 
 .package-report-footnote {
   margin: 0;
-  color: var(--semi-color-text-2);
+  color: var(--xa24-muted);
   font-size: 12px;
 }
 
@@ -281,7 +281,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .package-report-body > .semi-card-body {
+  .package-report-body > .haloe-card-body {
     padding-inline: 16px;
   }
 }

@@ -1,12 +1,12 @@
-import { Button as SemiButton, Checkbox as SemiCheckbox, Input as SemiInput, Popover as SemiPopover, Space, Table, Typography } from '@douyinfe/semi-ui';
-import { IconChevronDown, IconSetting } from '@douyinfe/semi-icons';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { XaButton, XaCheckbox, XaInput, XaPopover, XaSpace } from '../admin-v2/xa24/HaloComponents';
+import HaloTable from '../admin-v2/xa24/HaloTable';
 import { AdminUIContext } from './admin-ui-context';
 import * as echarts from 'echarts/core';
 import { LineChart, BarChart, PieChart, HeatmapChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, MarkLineComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
-import { SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, Settings, SlidersHorizontal } from 'lucide-react';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
@@ -21,13 +21,13 @@ function chartTheme(admin) {
   if (!admin) return { muted: '#64748b', primary: chartPalette[0], border: grid, text: '#263247',
     surface: '#fff', inactive: '#a1aab8', axis: '#dce4ee', fill: '#edf1f8', barText: '#34425b', danger: '#c43228', success: '#198754', tint: '#c6d7ff' };
 
-  const style = getComputedStyle(document.body);
-  const token = name => style.getPropertyValue(`--semi-color-${name}`).trim();
+  const style = getComputedStyle(document.querySelector('.xa24-admin') ?? document.body);
+  const token = name => style.getPropertyValue(`--xa24-${name}`).trim();
   return {
-    fontFamily: style.fontFamily, muted: token('text-2'), primary: token('primary'),
-    border: token('border'), text: token('text-0'), surface: token('bg-0'),
-    inactive: token('text-3'), axis: token('border'), fill: token('fill-0'), barText: token('text-1'),
-    danger: token('danger'), success: token('success'), tint: token('primary-light-active'),
+    fontFamily: style.fontFamily, muted: token('muted'), primary: token('primary'),
+    border: token('divider'), text: token('title'), surface: token('surface'),
+    inactive: token('icon-muted'), axis: token('divider'), fill: token('page-bg'), barText: token('text'),
+    danger: token('danger'), success: token('success'), tint: token('nav-selected'),
   };
 }
 const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
@@ -35,12 +35,12 @@ const safe = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&
 function ChartData({ label, headings, rows, compact = false }) {
   const [open, setOpen] = useState(false);
   return <div className="admin-chart-data-section">
-    <SemiButton size="small" theme="borderless" type="tertiary" icon={<IconChevronDown aria-hidden="true"/>}
+    <XaButton size="small" theme="borderless" type="tertiary" icon={<ChevronDown size={16} aria-hidden="true"/>}
       aria-label={`查看${label}数据`} aria-expanded={open} onClick={() => setOpen(!open)}>
       {compact ? '查看数据' : `查看${label}数据`}
-    </SemiButton>
+    </XaButton>
     {open && <section aria-label={`${label}数据区域`}>
-      <Table size="small" pagination={false} rowKey="id" scroll={{ x: 'max(100%, 400px)', y: 320 }}
+      <HaloTable size="small" pagination={false} rowKey="id" scroll={{ x: 'max(100%, 400px)', y: 320 }}
         columns={headings.map((title, index) => ({ title, key: index, render: (_, row) => row.values[index] }))}
         dataSource={rows.map((values, id) => ({ id, values }))}/>
     </section>}
@@ -72,6 +72,14 @@ export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, ti
   const theme = chartTheme(admin);
   const { muted, fontFamily } = theme;
   const [choice, setChoice] = useState(null), [query, setQuery] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const changePicker = open => {
+    if (open) setQuery('');
+    setPickerOpen(open);
+  };
+  const focusPicker = useCallback(input => {
+    if (pickerOpen) input?.focus({ preventScroll: true });
+  }, [pickerOpen]);
   const signature = series.map(item => item.label).join('\u0000');
   const selected = selectedNames ?? (choice?.signature === signature ? choice.names : defaultChartSeries(series));
   const legendNames = selectedNames ?? (choice?.signature === signature ? choice.legendNames : selected);
@@ -130,34 +138,35 @@ export function TimeSeriesChart({ labels, series, unit = '', label, axisUnit, ti
   };
   const chartType = hasRightAxis ? '柱状图与折线图' : type === 'bar' && stacked ? '堆叠柱状图' : { line: '折线图', bar: series.length > 1 ? '分组柱状图' : '柱状图', area: '面积图' }[type];
   return <div className={`unified-chart ${className}`} role="group" aria-label={`${label}（${chartType}）`}>
-    {!compact && series.length > 1 && <div className="unified-chart-tools">{admin
-      ? <Typography.Text size="small" type="tertiary">{shown}</Typography.Text>
-      : <span>{shown}</span>}{admin ? <SemiPopover trigger="click" position="bottomRight" onVisibleChange={open => { if (open) setQuery(''); }} content={({ initialFocusRef }) =>
-      <div ref={initialFocusRef} tabIndex={-1} className="admin-analytics-picker admin-analytics-fields">
-        <Typography.Text strong>显示指标／模型</Typography.Text>
-        <SemiInput aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={setQuery}/>
-        <Space>
-          <SemiButton size="small" theme="borderless" onClick={() => choose(series.map(item => item.label))}>显示全部</SemiButton>
-          <SemiButton size="small" theme="borderless" onClick={() => setChoice(null)}>恢复默认</SemiButton>
-        </Space>
+    {!compact && series.length > 1 && <div className="unified-chart-tools">
+      <span className={admin ? 'xa24-help' : undefined}>{shown}</span>
+      {admin ? <XaPopover open={pickerOpen} onChange={changePicker} content={
+      <div className="admin-analytics-picker admin-analytics-fields">
+        <strong>显示指标／模型</strong>
+        <XaInput ref={focusPicker} aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={setQuery}/>
+        <XaSpace>
+          <XaButton size="small" theme="borderless" onClick={() => choose(series.map(item => item.label))}>显示全部</XaButton>
+          <XaButton size="small" theme="borderless" onClick={() => setChoice(null)}>恢复默认</XaButton>
+        </XaSpace>
         <div className="admin-analytics-options">
-          {matches.map(item => <SemiCheckbox key={item.label} aria-label={`显示${item.label}`} checked={selected.includes(item.label)}
+          {matches.map(item => <XaCheckbox key={item.label} aria-label={`显示${item.label}`} checked={selected.includes(item.label)}
             disabled={visible.length === 1 && selected.includes(item.label)}
             onChange={event => choose(event.target.checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}>
             {item.label}
-          </SemiCheckbox>)}
-          {!matches.length && <Typography.Text type="secondary">无匹配曲线</Typography.Text>}
+          </XaCheckbox>)}
+          {!matches.length && <span className="xa24-text-secondary">无匹配曲线</span>}
         </div>
-        <Typography.Text size="small" type="tertiary">仅改变图表显示，不影响统计、筛选和导出。</Typography.Text>
+        <span className="xa24-help">仅改变图表显示，不影响统计、筛选和导出。</span>
       </div>}>
-      <SemiButton size="small" theme="borderless" type="tertiary" icon={<IconSetting aria-hidden="true"/>} aria-label={`${label}图表设置`}/>
-    </SemiPopover> : <Popover><PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={`${label}图表设置`} title="图表设置" onClick={() => setQuery('')}><SlidersHorizontal size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="unified-chart-picker"><strong>显示指标／模型</strong><Input aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={event => setQuery(event.target.value)}/><div className="unified-chart-picker-actions"><Button variant="ghost" size="sm" onClick={() => choose(series.map(item => item.label))}>显示全部</Button><Button variant="ghost" size="sm" onClick={() => setChoice(null)}>恢复默认</Button></div><div className="unified-chart-options">{matches.map(item => <label key={item.label}><Checkbox aria-label={`显示${item.label}`} checked={selected.includes(item.label)} disabled={visible.length === 1 && selected.includes(item.label)} onCheckedChange={checked => choose(checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}/><i style={{ background: seriesColor(item) }}/><span>{item.label}</span></label>)}{!matches.length && <p>无匹配曲线</p>}</div><small>仅改变图表显示，不影响统计、筛选和导出。</small></PopoverContent></Popover>}</div>}
+      <XaButton size="small" theme="borderless" type="tertiary" icon={<Settings size={16} aria-hidden="true"/>}
+        aria-label={`${label}图表设置`} aria-expanded={pickerOpen}/>
+    </XaPopover> : <Popover><PopoverTrigger asChild><Button variant="outline" size="icon" aria-label={`${label}图表设置`} title="图表设置" onClick={() => setQuery('')}><SlidersHorizontal size={15}/></Button></PopoverTrigger><PopoverContent align="end" className="unified-chart-picker"><strong>显示指标／模型</strong><Input aria-label={`${label}搜索曲线`} placeholder="搜索指标或模型名称" value={query} onChange={event => setQuery(event.target.value)}/><div className="unified-chart-picker-actions"><Button variant="ghost" size="sm" onClick={() => choose(series.map(item => item.label))}>显示全部</Button><Button variant="ghost" size="sm" onClick={() => setChoice(null)}>恢复默认</Button></div><div className="unified-chart-options">{matches.map(item => <label key={item.label}><Checkbox aria-label={`显示${item.label}`} checked={selected.includes(item.label)} disabled={visible.length === 1 && selected.includes(item.label)} onCheckedChange={checked => choose(checked ? [...selected, item.label] : selected.filter(name => name !== item.label))}/><i style={{ background: seriesColor(item) }}/><span>{item.label}</span></label>)}{!matches.length && <p>无匹配曲线</p>}</div><small>仅改变图表显示，不影响统计、筛选和导出。</small></PopoverContent></Popover>}</div>}
     <Chart option={option} height={height} label={`${label}图表`} onLegend={event => choose(Object.keys(event.selected).filter(name => event.selected[name]), legendNames)}
       onClick={onChoose && (event => { if (event.componentType === 'series') onChoose(event.dataIndex, event.seriesName); })}/>
     {admin && showData && <ChartData compact={compact} label={label} headings={['时间 / 分类', ...visible.map(item => `${item.label}${unit ? `（${unit}）` : ''}`)]} rows={labels.map((time, index) => [time, ...visible.map(item => {
       const value = item.values[index];
       if (!Number.isFinite(value)) return '—';
-      return onChoose ? <SemiButton theme="borderless" size="small" aria-label={`查看 ${time} ${item.label} 日志`} onClick={() => onChoose(index, item.label)}>{formatter(value)}</SemiButton> : formatter(value);
+      return onChoose ? <XaButton theme="borderless" size="small" aria-label={`查看 ${time} ${item.label} 日志`} onClick={() => onChoose(index, item.label)}>{formatter(value)}</XaButton> : formatter(value);
     })])}/>}
   </div>;
 }
@@ -176,7 +185,7 @@ export function HorizontalBarChart({ rows, unit = '', label, height, onChoose, s
   return <>
     <Chart option={option} height={height || Math.max(220,rows.length*32+60)} label={`${label}（横向条形图）：${rows.map(row=>`${row.name} ${chartNumber(row.value)} ${unit}`).join('；')}`} onClick={event=>{if(rows[event.dataIndex])onChoose?.(rows[event.dataIndex].id);}}/>
     {showData && <ChartData compact label={label} headings={['分类', unit || '数值']} rows={rows.map(row => [
-      onChoose ? <SemiButton theme="borderless" size="small" onClick={() => onChoose(row.id)} aria-label={`查看 ${row.name} 日志`}>{row.name}</SemiButton> : row.name,
+      onChoose ? <XaButton theme="borderless" size="small" onClick={() => onChoose(row.id)} aria-label={`查看 ${row.name} 日志`}>{row.name}</XaButton> : row.name,
       chartNumber(row.value),
     ])}/>}
   </>;
@@ -201,7 +210,7 @@ export function RankingChart({ rows, metric, unit, collection, scale, onChoose, 
     {admin && showData && <ChartData label={label} compact headings={['对象', `${metric === 'calls' ? '调用次数' : '用量'}（${unit || '次'}）`]}
       rows={rows.map((row, index) => [
         <div className="admin-table-record">
-          <SemiButton size="small" theme="borderless" onClick={() => onChoose(row.id)}>{names[index]}</SemiButton>
+          <XaButton size="small" theme="borderless" onClick={() => onChoose(row.id)}>{names[index]}</XaButton>
         </div>, chartNumber(row[metric]),
       ])}/>}
   </>;
@@ -227,8 +236,8 @@ export function DonutChart({ rows, unit = '', label, height = 200, centerValue, 
     <Chart option={option} height={height} label={`${label}：${rows.map(row => `${row.label} ${chartNumber(row.value)} ${unit}，占比 ${total ? (row.value / total * 100).toFixed(1) + '%' : '—'}`).join('；')}`} onClick={onChoose ? event=>{if(rows[event.dataIndex])onChoose(rows[event.dataIndex].id);} : undefined}/>
     <div className="unified-donut-center" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', gap: 4 }}>
       {admin ? <>
-        <Typography.Title heading={3} component="span">{centerValue}</Typography.Title>
-        <Typography.Text size="small" type="tertiary">{centerLabel}</Typography.Text>
+        <strong className="xa24-metric-value">{centerValue}</strong>
+        <span className="xa24-help">{centerLabel}</span>
       </> : <>
         <strong style={{ fontSize: 20, fontWeight: 650, color: '#202b3e' }}>{centerValue}</strong>
         <span style={{ fontSize: 12, color: theme.muted }}>{centerLabel}</span>

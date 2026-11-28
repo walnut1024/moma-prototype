@@ -1,7 +1,8 @@
 import { useChannelText } from './channel-language';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, DatePicker, Input, InputNumber, RadioGroup, Select, Space, TagInput, TextArea, Typography, Upload } from '@douyinfe/semi-ui';
-import { IconSearch, IconUpload } from '@douyinfe/semi-icons';
+import { Button, Checkbox, DatePicker, Input, InputNumber, RadioGroup, Select, Space, TextArea, Typography } from './xa24/HaloUI.jsx';
+import { TagInput, Upload } from './xa24/HaloUI.jsx';
+import { IconSearch, IconUpload } from './xa24/HaloIcons.jsx';
 import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import { CopyId, Field, Modal, Notice } from './ServiceUI';

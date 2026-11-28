@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react';
-import { Button, DatePicker, Select, Typography } from '@douyinfe/semi-ui';
-import { IconCalendar } from '@douyinfe/semi-icons';
+import { Button, DatePicker, Select, Typography } from './xa24/HaloUI.jsx';
+import { IconCalendar } from './xa24/HaloIcons.jsx';
 import { AdminModal } from './AdminOverlay';
 import { RESOURCE_MONITOR_PRESETS, resourceTimeRangeIssue } from './ops-resources';
 import './semi-inference.css';

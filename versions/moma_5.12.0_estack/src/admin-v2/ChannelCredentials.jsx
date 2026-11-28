@@ -1,4 +1,4 @@
-import { Space, Tag, Typography } from '@douyinfe/semi-ui';
+import { Space, Tag, Typography } from './xa24/HaloUI.jsx';
 import AdminStatus from './AdminStatus';
 import { Choice, Field } from './ServiceUI';
 import { useChannelText } from './channel-language';

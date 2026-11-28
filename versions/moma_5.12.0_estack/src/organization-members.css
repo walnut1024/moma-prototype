@@ -119,3 +119,61 @@
   .org-batch-steps .semi-steps-item-title-text { white-space:normal; overflow-wrap:anywhere; }
 }
 .org-directory-view .semi-button-content,.org-tree-select .semi-button-content{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
+
+.xa24-admin :is(.admin-members-workspace, .org-dialog) {
+  --primary: var(--xa24-primary);
+  --accent: var(--xa24-nav-selected);
+  --muted: var(--xa24-page-bg);
+  --muted-foreground: var(--xa24-muted);
+  --border: var(--xa24-divider);
+  --destructive: var(--xa24-danger);
+}
+.admin-members-workspace .org-department-head,
+.admin-members-workspace .org-filters { gap: 8px; }
+.admin-members-workspace .org-directory { border-radius: var(--xa24-page-radius); }
+.admin-members-workspace .org-members-panel { border-radius: var(--xa24-page-radius); }
+.admin-members-workspace .org-tree-row > .xa24-control:first-child { flex: 1; min-width: 0; }
+.admin-members-workspace .org-tree-select .xa24-button-content,
+.admin-members-workspace .org-directory-view .xa24-button-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+.admin-members-workspace .org-tree-select .xa24-button-content > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-members-workspace .org-parent .org-tree-select .xa24-button-content > span { font-weight: 600; }
+.xa24-admin .admin-members-workspace .org-member-table { min-inline-size: 0; }
+.admin-members-workspace .org-member-name.haloe-btn {
+  max-inline-size: 100%;
+  min-block-size: 32px;
+  block-size: auto;
+}
+.admin-members-workspace .org-member-name .xa24-button-content {
+  gap: 8px;
+  min-inline-size: 0;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.xa24-admin .org-field .xa24-select-host { width: 100%; }
+.xa24-admin .org-batch-settings .xa24-select-host { flex: 1; min-width: 0; }
+.xa24-admin .org-batch-table .xa24-select-host { min-width: 150px; max-width: 230px; }
+.xa24-admin .org-dialog .haloe-modal-body { max-height: calc(100dvh - 180px); overflow: auto; }
+
+.xa24-admin .operation-panel {
+  background: var(--xa24-surface);
+  border: 1px solid var(--xa24-divider);
+  border-radius: var(--xa24-page-radius);
+  overflow: hidden;
+}
+.xa24-admin .operation-filters,
+.xa24-admin .operation-dates { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.xa24-admin .operation-filters { padding: 12px 16px; border-bottom: 1px solid var(--xa24-divider); }
+.xa24-admin .operation-filters .operation-search { flex: 1 1 180px; max-width: 340px; }
+.xa24-admin .operation-dates .haloe-date-picker { width: 134px; }
+.xa24-admin .operation-pagination { padding: 12px 16px; border-top: 1px solid var(--xa24-divider); }

@@ -1,8 +1,8 @@
 import { useChannelText } from './channel-language';
 import { PROTOCOL_ENDPOINT_LABEL, protocolAndEndpoint } from './workbench-protocol';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Empty, Space, Tabs, Typography } from '@douyinfe/semi-ui';
-import { IconPlus } from '@douyinfe/semi-icons';
+import { Button, Empty, Space, Tabs, Typography } from './xa24/HaloUI.jsx';
+import { IconPlus } from './xa24/HaloIcons.jsx';
 import Table from './AdminTable';
 import { AdminModal } from './AdminOverlay';
 import { Choice, Notice } from './ServiceUI';
@@ -180,9 +180,17 @@ export default function ProviderMaterials(props) {
   const back = () => returnTo ? ops.proceed(() => { location.hash = returnTo; }) : go(listParams);
   const saved = id => go({ provider: id, view: null, edit: null, tab: view === 'new' ? null : 'profile' }, { saved: true });
   const importKind = view === 'modelImport' && provider ? 'model' : view === 'import' ? 'provider' : view === 'relations' ? 'relation' : null;
+  const conflictNotice = !importKind && ops.conflict && <div className="materials-description"><Notice error>资料已有修订，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice></div>;
+  if (!view && !providerId) return <div className="semi-materials admin-page-stack">
+    <MaterialsHeader active="provider-materials" ops={ops}>
+      {conflictNotice}
+      <ProviderList state={state} ops={ops} providers={providers}/>
+    </MaterialsHeader>
+    {ops.leaveDialog}
+  </div>;
   return <div className="semi-materials materials-page">
-    {view || (providerId && !provider) ? <AdminPageHeading title="服务商资料" className="materials-heading"/> : !provider && <MaterialsHeader active="provider-materials" ops={ops}/>}
-    {!importKind && ops.conflict && <div className="materials-description"><Notice error>资料已有修订，当前输入保留。<Button theme="borderless" onClick={ops.reload}>载入最新数据</Button></Notice></div>}
+    {(view || !provider) && <AdminPageHeading title="服务商资料" className="materials-heading"/>}
+    {conflictNotice}
     {(view || (providerId && !provider)) && <div className="materials-description">
       <Button theme="borderless" onClick={importKind && provider ? () => go({ view: null }) : back}>
         {importKind && provider ? '返回供应模型' : returnTo?.startsWith('#/admin-2/providers-reference') ? '返回模型接入' : returnTo ? '返回来源页面' : '返回服务商列表'}
@@ -203,8 +211,7 @@ export default function ProviderMaterials(props) {
           key={provider.id + (editing ? ':edit' : ':view:' + provider.updatedAt)} provider={provider}
           editing={editing} ops={ops} saved={saved} edit={() => go({ edit: '1' })} cancel={() => go({ edit: null })}/>}</Tabs.TabPane>
       </Tabs>
-    </> : providerId ? <Empty description="服务商不存在或已删除"/>
-      : <ProviderList state={state} ops={ops} providers={providers}/>}
+    </> : <Empty description="服务商不存在或已删除"/>}
     {ops.leaveDialog}
   </div>;
 }
