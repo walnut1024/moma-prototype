@@ -13,7 +13,7 @@ import { individualTransaction } from "./individual-users.js";
 import { modelTransaction } from "./model-management.js";
 import { providerTransaction } from "./provider-management.js";
 import { adminAccountTransaction } from './admin-accounts.js';
-import { deploymentTransaction } from './deployments.js';
+import { deploymentCanServe, deploymentTransaction } from './deployments.js';
 import { operationsTransaction } from './model-operations.js';
 import { lifecycleSignature, assertOrderAccess } from '../service-access.mjs';
 import { channelIdentity } from '../model-identities.mjs';
@@ -21,6 +21,26 @@ import { clusterGatherIssue, clusterRemovalIssue } from './ops-cluster-domain.js
 import { validateTopologyLayers } from './ops-resources.js';
 const now='2026-09-15T10:30:00+08:00';
 const record=(id,value)=>({id,createdAt:now,updatedAt:now,...value});
+
+export function isGatewayRouteRemoval(action) {
+  if (action.type !== 'batch' || !Array.isArray(action.changes) || action.changes.length !== 1) return false;
+  const [change] = action.changes;
+  return change?.type === 'remove' && change.collection === 'routes' &&
+    Object.keys(change).every(key => ['type', 'collection', 'id'].includes(key));
+}
+
+export function gatewayRouteRemovalIssue(state, route) {
+  if (state.fallbacks?.some(rule => rule.routeId === route.id && !rule.deletedAt)) {
+    return '该路由仍被熔断与回退规则引用，请先解除关联';
+  }
+  // Playground and benchmark route selection resolve active routes through running deployment endpoints.
+  if (route.status === '已启用' && route.targets?.some(target => target.weight > 0 &&
+    state.endpoints?.some(endpoint => endpoint.id === target.endpointId && !endpoint.deletedAt && endpoint.status === '运行中') &&
+    state.deployments?.some(deployment => deployment.endpointId === target.endpointId && deployment.modelId === route.modelId &&
+      !deployment.retiredAt && deploymentCanServe(deployment)))) {
+    return '该路由仍供运行中的模型部署使用，请先停用路由';
+  }
+}
 
 export function canMutate(role, action) {
   if (action.collection === 'artifacts' ||
@@ -45,6 +65,7 @@ export function canMutate(role, action) {
 }
 
 export function commitAdminState(state, action, actor = state.currentRole) {
+  const removingGatewayRoute = isGatewayRouteRemoval(action);
   const writingMarketCard = action.type === 'modelOperations' && ['marketCardCreate', 'marketCardEdit', 'marketCardLink', 'marketCardSetStatus', 'marketCardDelete'].includes(action.operation);
   const reorderingMarket = action.type === 'modelOperations' && action.operation === 'marketReorder';
   if (action.type === 'setRole') throw new Error('请通过后台 mock 账号切换身份');
@@ -92,7 +113,7 @@ export function commitAdminState(state, action, actor = state.currentRole) {
     }
   }
   if ((action.type === 'batch' ? action.changes : [action]).some(change => change.type === 'remove' && change.collection === 'providers' && change.id === MOMA_PROVIDER.id)) throw new Error('内置平台服务商不可删除');
-  const next = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData',...(preparingDataset?['tenants']:[])].map(key=>[key,structuredClone(state[key])])),audits:[...state.audits]} : structuredClone(state), timestamp = new Date().toISOString();
+  const next = state.cloudOperations ? {...state,...Object.fromEntries(['models','modelTemplates','providers','endpoints','modelSupplies','modelSalePrices','supplyPrices','modelVersions','validations','modelOnboardings','serviceRoutes','tariffDictionary','modelData',...(preparingDataset?['tenants']:[]),...(removingGatewayRoute?['routes']:[])].map(key=>[key,structuredClone(state[key])])),audits:[...state.audits]} : structuredClone(state), timestamp = new Date().toISOString();
   const identityChanges = action.type === 'batch' ? action.changes : [action];
   const providerChanges = new Set(identityChanges.filter(change=>change.collection==='providers').map(change=>change.id));
   const supplyChanges = new Set(identityChanges.filter(change=>change.collection==='modelSupplies').map(change=>change.id));
@@ -125,6 +146,10 @@ export function commitAdminState(state, action, actor = state.currentRole) {
           if (change.collection === 'clusters') {
             if (!canMutate(actor, change)) throw new Error(`${actor}无权删除集群`);
             const issue = clusterRemovalIssue(state, state.clusters.find(row => row.id === change.id));
+            if (issue) throw new Error(issue);
+          } else if (removingGatewayRoute) {
+            if (!canMutate(actor, change)) throw new Error(`${actor}无权删除模型路由`);
+            const issue = gatewayRouteRemovalIssue(state, next.routes[index]);
             if (issue) throw new Error(issue);
           } else if (change.collection !== 'tariffDictionary') throw new Error('不支持删除此集合');
           next[change.collection].splice(index, 1);

@@ -1,0 +1,117 @@
+.gateway-route-editor {
+  display: grid;
+  gap: 24px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #181b24;
+}
+.gateway-route-editor :is(.semi-input-wrapper, .semi-select, .xa24-input-host, .xa24-select-host, .haloe-input, .haloe-select),
+.gateway-route-mapping-form :is(.semi-input-wrapper, .semi-select, .xa24-input-host, .xa24-select-host, .haloe-input, .haloe-select) {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.gateway-route-editor :is(.semi-input-wrapper, .semi-select, .haloe-input, .haloe-select-selection),
+.gateway-route-mapping-form :is(.semi-input-wrapper, .semi-select, .haloe-input, .haloe-select-selection) {
+  min-block-size: 32px;
+  border-color: #d9e1ef;
+  background: #fff;
+}
+.gateway-route-editor :is(.semi-input-wrapper-disabled, .haloe-input-disabled) { background: #f3f3f5; }
+.gateway-route-editor .gateway-route-name-input { position: relative; }
+.gateway-route-editor .gateway-route-name-input input { padding-inline-end: 52px; }
+.gateway-route-name-input > span {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: #7d8390;
+  pointer-events: none;
+}
+.gateway-route-field {
+  display: grid;
+  min-inline-size: 0;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.gateway-route-field > legend { padding: 0; margin: 0 0 10px; }
+.gateway-route-field > legend svg, .gateway-route-target-labels svg {
+  display: inline-block;
+  vertical-align: -2px;
+}
+.gateway-route-required { color: #ff4d4f; }
+.gateway-route-path {
+  display: grid;
+  grid-template-columns: minmax(100px, 25%) minmax(0, 1fr);
+  gap: 8px;
+}
+.gateway-route-target-labels, .gateway-route-target {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(94px, .46fr);
+  gap: 8px;
+  align-items: center;
+}
+.gateway-route-target-labels { padding: 4px 8px; color: #848484; }
+.gateway-route-target {
+  padding: 12px 8px 8px;
+  min-block-size: 55px;
+  border: 1px solid #d6dae3;
+  border-radius: 6px;
+  background: #f8f8f9;
+}
+.gateway-route-mapping-input, .gateway-route-row-end {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-inline-size: 0;
+}
+.gateway-route-mapping-input > :first-child { flex: 1 1 auto; min-inline-size: 0; }
+.gateway-route-row-end > *, .gateway-route-mapping-input > :last-child { flex: none; }
+.gateway-route-pass-path { display: grid; grid-column: 1 / -1; gap: 8px; }
+.gateway-route-editor .gateway-route-add {
+  border: 1px dashed #ccd5e5;
+  color: #22252c;
+  background: #fff;
+  inline-size: 100%;
+}
+.gateway-route-extra > :is(.semi-switch, .xa24-control) { justify-self: start; }
+.gateway-route-help { margin: 0; font-size: 12px; color: #888; }
+.gateway-route-degrade, .gateway-route-header-pair, .gateway-route-mapping-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.gateway-route-header-pair { grid-template-columns: 1fr 1fr auto; }
+.gateway-route-degrade > *, .gateway-route-mapping-form > * { display: grid; align-content: start; gap: 8px; min-inline-size: 0; }
+.gateway-route-mapping-form { grid-template-columns: 1.45fr 1fr 1.45fr; }
+.gateway-route-mapping-modal:is(.semi-modal, .haloe-modal),
+.gateway-route-mapping-modal .haloe-modal {
+  max-inline-size: calc(100vw - 32px);
+  margin: 20px 0 0 max(16px, calc((100vw - 1110px) / 2));
+  inset-block-start: 0;
+}
+.gateway-route-error { margin: 0; color: #b42318; }
+.gateway-route-editor-actions { display: flex; justify-content: end; gap: 8px; }
+.gateway-route-editor-sheet, .gateway-route-editor-sheet .semi-sidesheet-inner { max-inline-size: 100vw; }
+.gateway-route-editor-sheet :is(.semi-sidesheet-inner, .haloe-drawer) {
+  inset-block-start: 50px;
+  block-size: calc(100dvh - 50px);
+  max-block-size: calc(100dvh - 50px);
+}
+.gateway-route-editor-sheet :is(.semi-sidesheet-header, .haloe-drawer-header) { padding: 12px 16px; }
+.gateway-route-editor-sheet :is(.semi-sidesheet-body, .haloe-drawer-body) { padding: 16px; }
+.gateway-route-editor-sheet .semi-sidesheet-footer { padding: 16px 24px; }
+.gateway-route-editor-sheet .haloe-drawer-content,
+.gateway-route-editor-sheet .haloe-drawer-body { display: flex; flex-direction: column; }
+.gateway-route-editor-sheet .haloe-drawer-body { flex: 1; min-block-size: 0; overflow: auto; padding-block-end: 0; }
+.gateway-route-editor-sheet .xa24-drawer-footer {
+  position: sticky;
+  bottom: 0;
+  margin-block-start: auto;
+  padding: 16px 8px 16px 0;
+  background: #fff;
+}
+@media (max-width: 680px) {
+  .gateway-route-target-labels { display: none; }
+  .gateway-route-target, .gateway-route-degrade, .gateway-route-mapping-form { grid-template-columns: 1fr; }
+}

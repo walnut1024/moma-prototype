@@ -4,23 +4,23 @@ import AdminStatus from './AdminStatus';
 import Table from './AdminTable';
 import AdminPageHeading from './AdminPageHeading';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Banner, Button, Card, Checkbox, Form, Input, Space, Toast, Typography } from '@douyinfe/semi-ui';
+import { Banner, Button, Card, Checkbox, Form, Input, Select, Space, Switch, Toast, Typography } from '@douyinfe/semi-ui';
 import { AdminModal as Modal } from './AdminOverlay';
 import { IconPlus } from '@douyinfe/semi-icons';
 import { Choice, serviceOperationsUi } from './ServiceUI';
 import { routingServices } from './service-routing.js';
+import GatewayRouteSettings from './GatewayRouteSettings.jsx';
 import './gateway-settings.css';
 
 const collection = { routes: 'routes', limits: 'limits', fallback: 'fallbacks', cache: 'caches', releases: 'releases' };
 export const gatewaySettingsPages = Object.keys(collection);
 const meta = {
-  routes: ['模型路由', '配置模型到端点的加权或优先级选路。'],
   limits: ['限流与并发', '按租户、项目、API 密钥、模型或端点设置有效上限。'],
   fallback: ['熔断与回退', '配置超时、错误率阈值和无环回退链。'],
   cache: ['缓存策略', '按权限上下文控制缓存、TTL 和命中统计。'],
   releases: ['配置版本与发布', '校验配置差异，发布或生成可追溯的回滚版本。'],
 };
-const ruleNames = { routes: '路由策略', limits: '限流规则', fallback: '熔断与回退规则', cache: '缓存策略' };
+const ruleNames = { limits: '限流规则', fallback: '熔断与回退规则', cache: '缓存策略' };
 const limitScopes = [
   { value: 'tenant', label: '租户' }, { value: 'project', label: '项目' }, { value: 'key', label: 'API 密钥' }, { value: 'model', label: '模型' },
 ];
@@ -41,10 +41,8 @@ function Editor({ pageId, state, dispatch, close }) {
   }, []);
   const options = (items, name) => items.map(item => ({ value: item.id, label: item[name] }));
   const endpointOptions = options(state.endpoints, 'endpointId');
-  const modelOptions = options(state.models, 'modelId');
   const routeOptions = options(state.routes, 'routeId');
   const initialValues = {
-    routes: { modelId: modelOptions[0]?.value, endpointA: endpointOptions[0]?.value, endpointB: endpointOptions[0]?.value, weightA: 70, weightB: 30 },
     limits: { scopeType: limitScopes[0].value, rpm: 100, tpm: 100000, concurrency: 10 },
     fallback: { routeId: routeOptions[0]?.value, primary: endpointOptions[0]?.value, secondary: endpointOptions[0]?.value, timeoutMs: 3000, errorRate: 5 },
     cache: { scope: cacheScopes[0].value, ttl: 600 },
@@ -52,19 +50,6 @@ function Editor({ pageId, state, dispatch, close }) {
   const save = async values => {
     const id = resourceId(pageId), name = values.name ?? '';
     let record;
-    if (pageId === 'routes') {
-      const { routeId, modelId, endpointA, endpointB } = values;
-      const weightA = Number(values.weightA), weightB = Number(values.weightB);
-      const targets = [{ endpointId: endpointA, weight: weightA }, { endpointId: endpointB, weight: weightB }];
-      if (!routeId || weightA + weightB !== 100 || targets.some(target => !Number.isInteger(target.weight) || target.weight < 0 || target.weight > 100)) {
-        return setError('Route ID 必填，两个端点权重之和必须为 100%');
-      }
-      if (endpointA === endpointB) return setError('两个路由端点不能重复');
-      if (targets.some(target => !state.endpoints.find(endpoint => endpoint.id === target.endpointId)?.modelIds.includes(modelId))) {
-        return setError('路由端点必须映射所选模型 ID');
-      }
-      record = { id, routeId, name, modelId, targets, mode: '加权', status: '已启用', releaseId: null };
-    }
     if (pageId === 'limits') {
       const [rpm, tpm, concurrency] = [values.rpm, values.tpm, values.concurrency].map(Number);
       if ([rpm, tpm, concurrency].some(value => !Number.isInteger(value) || value < 1)) return setError('RPM、TPM 和并发必须为正整数');
@@ -98,15 +83,6 @@ function Editor({ pageId, state, dispatch, close }) {
           const fields = new Set([...Object.keys(initial), ...Object.keys(values)]);
           setDirty([...fields].some(field => (values[field] ?? '') !== (initial[field] ?? '')));
         }}>
-          {pageId === 'routes' && <>
-            <Form.Input field="routeId" label="Route ID"/>
-            <Form.Input field="name" label="名称"/>
-            <Form.Select motion={false} field="modelId" label="模型 ID" optionList={modelOptions}/>
-            <Form.Select motion={false} field="endpointA" label="主端点" optionList={endpointOptions}/>
-            <Form.InputNumber field="weightA" label="主端点权重"/>
-            <Form.Select motion={false} field="endpointB" label="次端点" optionList={endpointOptions}/>
-            <Form.InputNumber field="weightB" label="次端点权重"/>
-          </>}
           {pageId === 'limits' && <>
             <Form.Input field="name" label="规则名称"/>
             <Form.Select motion={false} field="scopeType" label="作用层级" optionList={limitScopes}/>
@@ -218,22 +194,25 @@ function Simulator({ state, dispatch }) {
 }
 
 const listColumns = {
-  routes: ['Route ID', '名称', '模型 ID', '方式', '端点 / 权重'],
   limits: ['规则名称', '层级 / 对象', 'RPM', 'TPM', '并发'],
   fallback: ['规则名称', '路由', '超时', '错误率', '回退链'],
   cache: ['策略名称', '隔离范围', 'TTL', '排除规则', '命中率', '节省 Token'],
 };
 function rowCells(pageId, item, state) {
   const endpoint = id => state.endpoints.find(row => row.id === id)?.endpointId;
-  if (pageId === 'routes') return [item.routeId, item.name, state.models.find(row => row.id === item.modelId)?.modelId, item.mode,
-    item.targets.map(target => `${endpoint(target.endpointId)}:${target.weight}%`).join(' → ')];
   if (pageId === 'limits') return [item.name, `${item.scopeType} / ${item.scopeId}`, item.rpm, item.tpm, item.concurrency];
   if (pageId === 'fallback') return [item.name, state.routes.find(row => row.id === item.routeId)?.routeId,
     `${item.timeoutMs} ms`, `${item.errorRate}%`, item.chain.map(endpoint).join(' → ')];
   return [item.name, item.scope, `${item.ttl}s`, item.exclusions, `${item.hitRate}%`, item.savedTokens.toLocaleString()];
 }
 
-export default function GatewayPage({ pageId, state, dispatch }) {
+export default function GatewayPage(props) {
+  return props.pageId === 'routes'
+    ? <GatewayRouteSettings {...props} Button={Button} Input={Input} Select={Select} Switch={Switch}/>
+    : <GatewayRulesPage {...props}/>;
+}
+
+function GatewayRulesPage({ pageId, state, dispatch }) {
   const translateLabel = useChannelText();
   const [creating, setCreating] = useState(false);
   const [title, description] = meta[pageId];
@@ -247,7 +226,7 @@ export default function GatewayPage({ pageId, state, dispatch }) {
         {!releases && <Button icon={<IconPlus aria-hidden="true"/>} theme="solid" onClick={() => setCreating(true)}>新建{ruleNames[pageId]}</Button>}
       </AdminPageHeading>
       {releases ? <Releases state={state} dispatch={dispatch}/> : <>
-        {['routes', 'fallback', 'cache'].includes(pageId) && <Simulator state={state} dispatch={dispatch}/>}
+        {['fallback', 'cache'].includes(pageId) && <Simulator state={state} dispatch={dispatch}/>}
         <Card><Table size="small" rowKey="id" dataSource={rows} pagination={false} scroll={{ x: 'max(100%, 760px)' }} columns={[
           ...columns,
           { title: '状态', dataIndex: 'status', render: value => <AdminStatus value={value === '草稿' ? '未发布' : value}/> },

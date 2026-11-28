@@ -5,7 +5,8 @@ import { activeTenantVersion, changeTenantRoute, isTenantRouteCall, keyTenantRou
 import { initialApplicationData } from '../src/mock/application-data.js';
 import { billingPeriod } from '../src/admin-v2/mock-billing.js';
 import { tenantServiceTransaction } from '../src/admin-v2/tenant-service-settings.mjs';
-import { canMutate, commitAdminState } from '../src/admin-v2/state-transaction.js';
+import { canMutate, commitAdminState, isGatewayRouteRemoval } from '../src/admin-v2/state-transaction.js';
+import { gatewayRouteHeaderIssue } from '../src/admin-v2/gateway-route-headers.mjs';
 import { orderActivationCommand, simulateRequest, applyAdjustment } from '../src/admin-v2/domain.js';
 import { organizationManagementScope, scopedOrganization, tenantOrganizationChanges, projectRouting, projectRouteChanges } from '../src/tenant-data.mjs';
 import { activeProjectMembers, experienceKeyId, projectAccess, projectRole, PROJECT_ADMIN, tenantProjectAdmin } from '../src/project-access.mjs';
@@ -393,12 +394,23 @@ function adminAction(state, actor, action) {
   }
   if (action.type === 'activateOrder' && canMutate(actor.role, { type: 'update', collection: 'orders' })) return orderActivationCommand(state, action.id);
   const rows = action.type === 'batch' ? action.changes : [action];
+  const removingGatewayRoute = isGatewayRouteRemoval(action);
   if (!Array.isArray(rows) || !rows.length || rows.length > 200 ||
-      rows.some(row => !row || (!['add','update'].includes(row.type) && !(action.type === 'batch' && row.type === 'remove' && row.collection === 'clusters'))
+      rows.some(row => !row || (!['add','update'].includes(row.type) && !removingGatewayRoute &&
+        !(action.type === 'batch' && row.type === 'remove' && row.collection === 'clusters'))
         || !directCollections.has(row.collection) || !canMutate(actor.role,row)
         || (row.type==='add' ? !validId(row.record?.id) : !validId(row.id)
           || row.type==='update' && (!row.changes || Array.isArray(row.changes) || Object.hasOwn(row.changes,'id'))))) {
     issue(403, 'FORBIDDEN', '当前账号无权执行该操作');
+  }
+  for (const row of rows) {
+    if (row.collection !== 'routes' || row.type === 'remove') continue;
+    const headers = (row.type === 'add' ? row.record : row.changes).requestHeaders;
+    if (headers == null) continue;
+    const entries = typeof headers === 'object' && !Array.isArray(headers) && Object.keys(headers).length === 1
+      ? headers.entries : undefined;
+    const headerIssue = gatewayRouteHeaderIssue(entries);
+    if (headerIssue) issue(422, 'BUSINESS_BLOCKED', headerIssue);
   }
   return action;
 }

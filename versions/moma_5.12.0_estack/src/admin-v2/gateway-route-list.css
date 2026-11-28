@@ -1,0 +1,150 @@
+.admin-v2 .v2-content > main:has(.gateway-route-view) {
+  padding: 20px;
+  background: var(--xa24-page-bg, #f6f7fb);
+}
+
+.admin-v2 .gateway-route-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  min-width: 0;
+}
+
+.gateway-route-hero,
+.gateway-route-panel {
+  min-width: 0;
+  border-radius: 12px;
+}
+
+.gateway-route-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 92px;
+  padding: 6px 20px;
+  background: linear-gradient(108deg, #fff 26%, #f7f9ff 65%, #eef2fd);
+}
+
+.gateway-route-hero h1 {
+  margin: 0;
+  color: #031129;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 28px;
+}
+
+.gateway-route-hero p {
+  margin: 4px 0 0;
+  color: #626d81;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.gateway-route-hero img {
+  flex: none;
+  object-fit: contain;
+}
+
+.gateway-route-panel {
+  padding: 20px;
+  background: var(--xa24-surface, #fff);
+}
+
+.gateway-route-toolbar,
+.gateway-route-toolbar-actions,
+.gateway-route-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gateway-route-toolbar {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-block-end: 20px;
+}
+
+.gateway-route-search {
+  flex: 1 1 280px;
+  max-inline-size: 480px;
+}
+
+.gateway-route-search :is(.haloe-input-wrapper, .semi-input-wrapper) {
+  width: 100%;
+  min-height: 32px;
+}
+
+.gateway-route-search :is(.haloe-input, .semi-input-wrapper) {
+  border: 1px solid #e1e5ee;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.gateway-route-search :is(.haloe-input, .semi-input-wrapper):focus-within { border-color: #1a6aff; }
+.gateway-route-search input { color: #0f0f10; font-size: 13px; line-height: 20px; }
+.gateway-route-search .haloe-input-suffix { display: grid; place-items: center; }
+.gateway-route-toolbar-actions { margin-inline-start: auto; }
+.gateway-route-toolbar-actions button {
+  height: 32px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.gateway-route-toolbar-actions .gateway-route-create { min-width: 127px; padding-inline: 12px; }
+.gateway-route-toolbar-actions .gateway-route-create:enabled { border-color: transparent; background: #1a6aff; color: #fff; }
+.gateway-route-toolbar-actions .gateway-route-create:enabled:hover { background: #357bff; }
+.gateway-route-toolbar-actions .gateway-route-refresh { min-width: 32px; width: 32px; padding: 0; }
+.gateway-route-toolbar-actions .gateway-route-refresh:enabled { border-color: transparent; background: #eff1f7; color: #1f1f21; }
+.gateway-route-toolbar-actions .gateway-route-refresh:enabled:hover { background: #e5e9f2; }
+
+.gateway-route-table :is(th.semi-table-row-head, .haloe-table-header th) {
+  height: 42px;
+  background: #f6f7fb;
+  color: #1f1f21;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.gateway-route-table td {
+  height: 48px;
+  color: #0f0f10;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.gateway-route-table :is(.semi-table-row-head, .semi-table-row-cell, .haloe-table-cell) {
+  padding: 6px 18px;
+}
+
+.gateway-route-table :is(.semi-table-row-cell, .haloe-table-cell-content) { overflow-wrap: anywhere; }
+.gateway-route-actions { flex-wrap: wrap; }
+.gateway-route-actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2d8cf0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.gateway-route-actions button:hover:not(:disabled) { text-decoration: underline; }
+.gateway-route-actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.gateway-route-actions button:disabled { opacity: .48; cursor: default; }
+.gateway-route-empty { padding: 24px 18px; text-align: center; }
+
+@media (min-width: 901px) {
+  .app-shell:not(.xa24-admin) .admin-v2:has(main[data-admin-page="routes"]) > .v2-sidebar-desktop[data-collapsed="false"] { width: 180px; }
+  .app-shell:not(.xa24-admin) .v2-content:has(> main[data-admin-page="routes"]) > .admin-context-bar { display: none; }
+  .app-shell:not(.xa24-admin) .admin-v2 .v2-content > main[data-admin-page="routes"]:has(.gateway-route-view) { padding-block-start: 22px; }
+}
+
+@media (max-width: 680px) {
+  .admin-v2 .v2-content > main:has(.gateway-route-view) { padding: 12px; }
+  .gateway-route-hero { padding-inline: 16px; }
+  .gateway-route-hero img { width: 56px; height: 56px; }
+  .gateway-route-panel { padding: 16px; }
+  .gateway-route-search { max-inline-size: none; }
+}
