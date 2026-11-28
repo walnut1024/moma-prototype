@@ -1,5 +1,8 @@
 import { dayOf } from './analytics.js';
-import { usageWindow } from './usage-analysis.js';
+import { requestOutcome } from './call-observations.mjs';
+import { usageMeter, usageValue, usageWindow } from './usage-analysis.js';
+import { usageTokenValue } from './usage-distributions.js';
+import { diagnosticRequest, latestRequests } from '../request-identity.mjs';
 
 const DAY = 86400000;
 const userTypes = ['企业', '个人'];
@@ -69,4 +72,43 @@ export function userMetrics(data, range, now = Date.now()) {
   const priorDau = unique(data.logins, priorDayStart, priorEnd, allowed);
   const priorMau = unique(data.logins, priorMonthStart, priorEnd, allowed);
   return { current: measure(start, end), previous: measure(priorStart, priorEnd), labels, dau, mau, dauByType, mauByType, priorDau, priorMau, hourly };
+}
+
+export function userCallRows(state, data, range, now = Date.now()) {
+  const window = usageWindow(range, now);
+  if (!window) return [];
+  const accounts = new Map(state.users.map(user => [user.id, user]));
+  const models = new Map(state.models.map(model => [model.id, model]));
+  const users = new Map();
+  for (const user of data.users) {
+    const account = accounts.get(user.id);
+    if (!account || !Number.isFinite(user.at) || user.at >= window.end) continue;
+    users.set(user.id, { id: user.id, name: account.name || account.nickname || user.id,
+      calls: 0, input: null, output: null, total: null, pendingTokenCalls: 0, successful: 0, failed: 0 });
+  }
+  for (const request of latestRequests(state.requests)) {
+    const user = users.get(request.userId);
+    if (!user || diagnosticRequest(request)) continue;
+    const at = Date.parse(request.createdAt);
+    if (!(at >= window.start && at < window.end)) continue;
+    user.calls++;
+    const outcome = requestOutcome(request);
+    if (outcome === 'success') user.successful++;
+    if (outcome === 'failed') user.failed++;
+    const model = models.get(request.modelId) || { type: request.modelType };
+    const { unit, fields } = usageMeter(model, request);
+    if (unit !== 'Token') continue;
+    const value = request.usageConfirmed === false ? null : usageValue(request, fields);
+    const metered = { unit, modelType: model.type, value };
+    for (const metric of ['input', 'output', 'total']) {
+      const tokens = usageTokenValue(metered, metric);
+      if (tokens !== null) user[metric] = (user[metric] ?? 0) + tokens;
+      else if (metric === 'total') user.pendingTokenCalls++;
+    }
+  }
+  return [...users.values()].map(({ successful, failed, ...user }) => ({
+    ...user,
+    ...(!user.calls && { input: 0, output: 0, total: 0 }),
+    errorRate: successful + failed ? failed * 100 / (successful + failed) : null,
+  }));
 }

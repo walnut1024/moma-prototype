@@ -1,0 +1,112 @@
+.xa24-admin main[data-admin-page="user-analysis"]:has(> .user-analysis-page) {
+  padding: 0;
+  background: var(--xa24-page-bg);
+}
+
+.user-analysis-page .user-analysis-overview {
+  container: user-data / inline-size;
+}
+
+.user-analysis-overview > .haloe-card-body {
+  padding-block: 20px;
+  padding-inline: 24px;
+}
+
+.user-analysis-query {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-block-end: 20px;
+  padding-block-end: 16px;
+  border-block-end: 1px solid var(--xa24-divider);
+}
+
+.user-analysis-field,
+.user-analysis-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.user-analysis-name { inline-size: 220px; min-inline-size: 0; }
+.user-analysis-date > .xa24-control { inline-size: 320px; min-inline-size: 0; }
+
+.user-analysis-date .haloe-btn {
+  inline-size: 100%;
+  padding-inline: 8px;
+}
+
+.user-analysis-date .haloe-btn > span {
+  display: block;
+  inline-size: 100%;
+}
+
+.user-analysis-page .user-analysis-date .haloe-btn {
+  color: var(--xa24-text);
+  background: var(--xa24-surface);
+  border-color: var(--xa24-divider);
+}
+
+.user-analysis-date .xa24-button-content {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  inline-size: 100%;
+  white-space: normal;
+}
+
+.user-analysis-actions { margin-inline-start: auto; gap: 10px; }
+
+.user-analysis-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 16px;
+  border: 1px solid var(--xa24-divider);
+  border-radius: 8px;
+}
+
+.user-analysis-metric { min-inline-size: 0; min-block-size: 96px; padding: 16px 24px; }
+.user-analysis-metric:not(:last-child) { border-inline-end: 1px solid var(--xa24-divider); }
+.user-analysis-metric dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--xa24-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+.user-analysis-metric dt svg { flex: none; color: #4b79cf; }
+.user-analysis-metric dd {
+  margin: 8px 0 0;
+  color: var(--xa24-title);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+
+.user-analysis-details { display: grid; gap: var(--xa24-page-gap); padding-block-start: 12px; min-inline-size: 0; }
+.user-analysis-details .user-analysis-active { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@container user-data (width < 870px) {
+  .user-analysis-query { align-items: end; }
+  .user-analysis-actions { margin-inline-start: 0; }
+}
+
+@container user-data (width < 625px) {
+  .user-analysis-query { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .user-analysis-field { display: grid; grid-template-columns: 52px minmax(0, 1fr); }
+  .user-analysis-name, .user-analysis-date > .xa24-control { inline-size: 100%; }
+  .user-analysis-actions { justify-content: end; }
+  .user-analysis-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .user-analysis-metric { min-block-size: 82px; padding: 12px; }
+  .user-analysis-metric:nth-child(-n + 2) { border-block-end: 1px solid var(--xa24-divider); }
+  .user-analysis-metric:nth-child(even) { border-inline-end: 0; }
+}
+
+@media (max-width: 640px) {
+  .user-analysis-page .user-analysis-overview > .haloe-card-body { padding-inline: 16px; }
+  .user-analysis-details .user-analysis-active { grid-template-columns: minmax(0, 1fr); }
+}

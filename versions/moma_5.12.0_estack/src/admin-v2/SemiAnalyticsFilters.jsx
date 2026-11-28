@@ -19,13 +19,14 @@ const adminControls = { Banner: XaBanner, Button: XaButton, Checkbox: XaCheckbox
 const stamp = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export function SemiDateRange({ start, end, onChange, granularity = 'day', allowLongRange = false, label = '自定义', trigger,
-  latest, rangeHint, presets = TIME_PRESETS, maxDays = allowLongRange || granularity === 'week' ? 365 : 30 }) {
+  latest, rangeHint, presets = TIME_PRESETS, activePreset, maxDays = allowLongRange || granularity === 'week' ? 365 : 30 }) {
   const t = useChannelText();
   const admin = useContext(AdminUIContext);
   const { Banner, Button, DatePicker, Modal, Space, Text, Paragraph } = admin ? adminControls : frontControls;
   const calendar = admin ? <CalendarDays size={16} aria-hidden="true"/> : <IconCalendar aria-hidden="true"/>;
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState([start, end]);
+  const [draftPreset, setDraftPreset] = useState(activePreset);
   const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 600px)').matches);
   const dateId = useId();
   useEffect(() => {
@@ -37,27 +38,29 @@ export function SemiDateRange({ start, end, onChange, granularity = 'day', allow
   const today = dayOf(Date.now());
   const valid = range.length === 2 && range.every(Boolean) && range[1] <= today
     && validAnalyticsRange(range[0], range[1], granularity, Date.now(), maxDays);
-  const launch = () => { setRange([start, end]); setOpen(true); };
+  const launch = () => { setRange([start, end]); setDraftPreset(activePreset); setOpen(true); };
+  const setCustomRange = value => { setDraftPreset(undefined); setRange(value); };
   const disabledDate = date => stamp(date) > today;
   return <>
     <Button theme={trigger?.props['aria-pressed'] ? 'solid' : 'light'} icon={trigger ? trigger.props.icon : calendar}
+      iconPosition={trigger?.props.iconPosition}
       aria-label={trigger?.props['aria-label'] || '日期范围'} aria-pressed={trigger?.props['aria-pressed']} onClick={launch}>
       {trigger?.props.children || `${label ? label + ' · ' : ''}${start} — ${end}`}
     </Button>
     {open && <Modal visible title={t('日期范围')} width="min(560px, calc(100vw - 32px))" closeOnEsc maskClosable={false}
       okText={t('应用日期')} cancelText={t('取消')} okButtonProps={{ disabled: !valid, 'aria-label': t('应用日期') }} cancelButtonProps={{ 'aria-label': t('取消') }}
-      onOk={() => { if (valid) { onChange({ start: range[0], end: range[1] }); setOpen(false); } }} onCancel={() => setOpen(false)}>
+      onOk={() => { if (valid) { onChange({ start: range[0], end: range[1] }, draftPreset); setOpen(false); } }} onCancel={() => setOpen(false)}>
       <div className="admin-analytics-fields">
         {presets.length > 0 && <Space wrap>{presets.map(([id, name]) => <Button key={id} size="small"
-          onClick={() => { const value = usagePreset(id); setRange([value.start, value.end]); }}>{name}</Button>)}</Space>}
+          onClick={() => { const value = usagePreset(id); setDraftPreset(id); setRange([value.start, value.end]); }}>{name}</Button>)}</Space>}
         {narrow ? <div className="admin-date-pair">
           {['开始日期', '结束日期'].map((name, index) => <div key={name}>
             <Text id={`${dateId}-${index}`} type="secondary">{t(name)}</Text>
             <DatePicker aria-labelledby={`${dateId}-${index}`} type="date" onChangeWithDateFirst={false} format="yyyy-MM-dd" value={range[index] || ''}
-              onChange={value => setRange(current => index === 0 ? [value || '', current[1] || ''] : [current[0] || '', value || ''])}
+              onChange={value => setCustomRange(current => index === 0 ? [value || '', current[1] || ''] : [current[0] || '', value || ''])}
               disabledDate={disabledDate} placeholder={t(name)} zIndex={1200}/>
           </div>)}
-        </div> : <DatePicker type="dateRange" onChangeWithDateFirst={false} format="yyyy-MM-dd" value={range} onChange={value => setRange(Array.isArray(value) ? value : [])}
+        </div> : <DatePicker type="dateRange" onChangeWithDateFirst={false} format="yyyy-MM-dd" value={range} onChange={value => setCustomRange(Array.isArray(value) ? value : [])}
           disabledDate={disabledDate} placeholder={[t('开始日期'), t('结束日期')]} zIndex={1200}/>}
         <Paragraph type="secondary">{t('北京时间')} · {rangeHint || (allowLongRange ? '单日按小时，2–30 天按日，31–365 天按周'
           : granularity === 'week' ? '周粒度最多 1 年（365 天）' : `单次最多 ${maxDays} 天`)} · {t('当日从 00:00 至当前时刻')}</Paragraph>

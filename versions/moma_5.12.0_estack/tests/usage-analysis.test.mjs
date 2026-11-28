@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tokenModelTypes, usagePreset, usagePresets, operationsPeriod, usageWindow, usageValue, usageFacts, usageTotals, usageGroups, usageBuckets, usageCallBuckets, usageRates, usageFilterOptions } from '../src/admin-v2/usage-analysis.js';
 
-import { userMetrics } from '../src/admin-v2/user-analysis.js';
+import { userCallRows, userMetrics } from '../src/admin-v2/user-analysis.js';
+import { userBusinessData } from '../src/business-facts.mjs';
 
 const now = Date.parse('2026-09-24T12:30:00+08:00');
 const state = {
@@ -220,6 +221,70 @@ test('today user identity metrics exclude future events and compare yesterday at
  const selected=operationsPeriod('today',null,now),metrics=userMetrics(data,selected.range,now);
  assert.equal(metrics.current.registered,1);assert.equal(metrics.current.login,1);assert.equal(metrics.previous.login,1);assert.equal(metrics.dau.at(-1),1);assert.equal(metrics.mau.at(-1),1);
  assert.deepEqual(userMetrics(data,operationsPeriod('custom',selected.range,now).range,now),metrics);
+});
+
+test('user call rows use registered accounts, latest request revisions and explicit user IDs at the selected cutoff', () => {
+  const registeredAt = '2026-09-20T09:00:00+08:00';
+  const created = '2026-09-24T08:00:00+08:00';
+  const fixture = {
+    ...state,
+    users: [
+      { id: 'u1', name: '用户一', registeredAt },
+      { id: 'u2', nickname: '用户二', registeredAt },
+      { id: 'idle', registeredAt },
+      { id: 'later', registeredAt: '2026-09-24T13:00:00+08:00' },
+      { id: 'sample-only', registeredAt },
+    ],
+    accountUserIds: ['u1', 'u2', 'idle', 'later'],
+    tenants: [{ id: 'tenant', ownerId: 'u1', type: '个人' }],
+    apiKeys: [{ id: 'shared-key', ownerId: 'u1', createdAt: registeredAt }],
+    requests: [
+      request('revised', created, 'tenant', { input: 90, output: 90 }, { userId: 'u2' }),
+      request('revised', created, 'tenant', { input: 10, output: 2 }, { userId: 'u1', updatedAt: '2026-09-24T08:01:00+08:00' }),
+      request('revised', created, 'other-tenant', { input: 3, output: 0 }, { userId: 'u2' }),
+      request('prior', '2026-09-23T23:59:59+08:00', 'tenant', { input: 3, output: 1 }, { userId: 'u1' }),
+      request('unowned', created, 'tenant', { input: 500, output: 500 }, { keyId: 'shared-key' }),
+      request('diagnostic', created, 'tenant', { input: 200, output: 200 }, { userId: 'u1', purpose: 'trial' }),
+      request('future', '2026-09-24T12:31:00+08:00', 'tenant', { input: 400, output: 400 }, { userId: 'u1' }),
+      request('future-account', created, 'tenant', { input: 20, output: 20 }, { userId: 'later' }),
+      request('sample-only', created, 'tenant', { input: 60, output: 60 }, { userId: 'sample-only' }),
+    ],
+  };
+  const data = userBusinessData(fixture, fixture.requests);
+  assert.deepEqual(userCallRows(fixture, data, usagePreset('today', now), now), [
+    { id: 'u1', name: '用户一', calls: 1, input: 10, output: 2, total: 12, pendingTokenCalls: 0, errorRate: 0 },
+    { id: 'u2', name: '用户二', calls: 1, input: 3, output: 0, total: 3, pendingTokenCalls: 0, errorRate: 0 },
+    { id: 'idle', name: 'idle', calls: 0, input: 0, output: 0, total: 0, pendingTokenCalls: 0, errorRate: null },
+  ]);
+  assert.equal(userCallRows(fixture, data, usagePreset('yesterday', now), now)[0].total, 4);
+});
+
+test('user call rows keep known outcomes and Token quantities separate from pending and other units', () => {
+  const registeredAt = '2026-09-20T09:00:00+08:00';
+  const at = '2026-09-24T08:00:00+08:00';
+  const owned = (id, usage, extra = {}) => request(id, at, 'tenant', usage, { userId: 'u1', ...extra });
+  const fixture = {
+    ...state,
+    users: [{ id: 'u1', registeredAt }, { id: 'media', registeredAt }],
+    tenants: [],
+    apiKeys: [],
+    models: [...state.models, { id: 'embedding', type: 'embedding' }, { id: 'image', type: 'image' }],
+    requests: [
+      owned('success', { input: 20, output: 3 }),
+      owned('confirmed-failure', { input: 2, output: 6 }, { httpStatus: 503, usageStatus: 'confirmed' }),
+      owned('unconfirmed', { input: 123, output: 345 }, { usageConfirmed: false }),
+      owned('canceled', { input: 1 }, { isCanceled: true }),
+      owned('pending', { input: 300 }, { httpStatus: 102, finalStatus: 'pending' }),
+      owned('embedding', { input: 7, output: 999 }, { modelId: 'embedding' }),
+      owned('image', { images: 6 }, { modelId: 'image' }),
+      owned('unknown-image', { images: 1 }, { userId: 'media', modelId: 'image', httpStatus: 102 }),
+    ],
+  };
+  const data = userBusinessData(fixture, fixture.requests);
+  assert.deepEqual(userCallRows(fixture, data, usagePreset('today', now), now), [
+    { id: 'u1', name: 'u1', calls: 7, input: 30, output: 9, total: 38, pendingTokenCalls: 3, errorRate: 20 },
+    { id: 'media', name: 'media', calls: 1, input: null, output: null, total: null, pendingTokenCalls: 0, errorRate: null },
+  ]);
 });
 
 test('customer drill-down inherits URL dates, restores presets and bounds invalid ranges without changing the customer', async () => {
