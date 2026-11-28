@@ -3,6 +3,7 @@ import { Button, DatePicker, Input, Radio, RadioGroup, Select, Table, Tabs, Tag,
 import { AdminModal } from './AdminOverlay';
 import { callObservations, observationTime } from './call-observations.mjs';
 import ModelPerformanceChart from './ModelPerformanceChart';
+import ModelPerformanceScenes from './ModelPerformanceScenes.jsx';
 import { chartColor, formatMetric, histogramCard, lineCard, ringCard } from './model-performance-charts';
 import { defaultPerformanceFilters, maxPerformanceBuckets, modelPerformance, performanceBucketCount, performanceGrain, performanceOptions } from './model-performance-data.mjs';
 import { createModelPerformanceDemo } from './model-performance-demo.mjs';
@@ -220,6 +221,8 @@ export default function ModelPerformancePage({ state }) {
         </Tabs.TabPane>)}
       </Tabs>
     </section>
+
+    {tab === 'context' && <ModelPerformanceScenes scenes={report.distribution.scenes}/>}
 
     {errorOpen && <AdminModal visible centered closeOnEsc title="错误明细" className={popupClass} width="min(660px, calc(100vw - 32px))"
       onCancel={() => setErrorOpen(false)} footer={<Button onClick={() => setErrorOpen(false)}>关闭</Button>}>
