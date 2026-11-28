@@ -13,6 +13,7 @@ import { CopyId, SearchBox } from './ModelOperationsUI';
 import { workbenchProtocolLabel } from './workbench-protocol';
 import { channelRequestUrls, channelListPaths, channelListType, channelSourceTypeLabel } from './channel-connection-directory';
 import { demoConnectionDeploymentId } from './inference-demo-data.js';
+import { inferenceConnectionExample } from './inference-connection-example.mjs';
 import { channelKeyMode, channelKeyStrategyLabel } from './ChannelCredentials';
 import { connectionKeys } from './connection-state';
 import { CHANNEL_PROCUREMENT_BATCH_LIMIT } from './channel-change-management';
@@ -203,10 +204,13 @@ export default function ChannelManagementView({ state, connections, ops, open, f
       time: Number.isFinite(Date.parse(row.endpoint.createdAt)) ? row.endpoint.createdAt : null };
   };
   if (connectionId) {
-    const channel = connections.find(row => row.id === connectionId);
+    const saved = connections.find(row => row.id === connectionId);
+    const example = !saved && connectionId === inferenceConnectionExample.id;
+    const channel = saved ?? (example ? inferenceConnectionExample : null);
     return <div className="admin-page-stack" ref={focusTarget} tabIndex={-1} aria-label={channel?.name || '连接详情'}>
-      {channel ? <ChannelDetails state={state} channel={channel} creation={creationFor(channel)} ops={ops} open={open} modelCosts
-        keyPool={<ReferenceProviderApiKeys key={channel.id} state={state} connection={channel}
+      {channel ? <ChannelDetails state={state} channel={channel} creation={example ? undefined : creationFor(channel)}
+        ops={example ? { ...ops, can: false } : ops} open={open} modelCosts={!example}
+        keyPool={!example && <ReferenceProviderApiKeys key={channel.id} state={state} connection={channel}
           ops={ops}/>}/>
         : <Card><Empty description={t('该连接不存在或已删除')}><Button
           onClick={() => go({ connection: null, tab: null, modelQ: null, modelCost: null, keyGroup: null })}>{t('返回连接列表')}</Button></Empty></Card>}
@@ -229,6 +233,11 @@ export default function ChannelManagementView({ state, connections, ops, open, f
   if (demoIndex > 0) {
     const [demoConnection] = matches.splice(demoIndex, 1);
     matches.unshift(demoConnection);
+  }
+  const example = inferenceConnectionExample;
+  if (!filtered && example.name.toLowerCase().includes(keyword) &&
+    !connections.some(row => row.id === example.id || row.endpoint.inferenceSource?.deploymentId === demoConnectionDeploymentId)) {
+    matches.unshift(example);
   }
   const page = Math.min(Math.max(1, Number.parseInt(params.get('page'), 10) || 1), Math.ceil(matches.length / pageSize) || 1);
   const rows = matches.slice((page - 1) * pageSize, page * pageSize);
@@ -277,6 +286,7 @@ export default function ChannelManagementView({ state, connections, ops, open, f
             <Button size="small" theme="borderless" data-channel-models-id={row.id}
               aria-label={row.name + '的' + row.modelCount + '款模型'} onClick={() => view(row.id, 'models')}>{row.modelCount}{t(' 款')}</Button> },
           { title: t('操作'), width: 164, fixed: 'right', render: (_, row) => {
+            if (row === example) return <Typography.Text type="tertiary">—</Typography.Text>;
             const hasModels = row.modelCount > 0;
             const testButton = <Button size="small" theme="borderless" disabled={!ops.can || !hasModels}
               style={hasModels ? undefined : { pointerEvents: 'none' }} aria-label={t('测试连接') + ' ' + row.name}

@@ -15,6 +15,7 @@ import enUS from '@douyinfe/semi-ui/lib/es/locale/source/en_US.js';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import { adminSections, sections, pages, WORKSPACES, WORKSPACE_HOME, availableWorkspaces, pageWorkspace, canAccessPage, commercialPage, isOrganizationPage, isInfrastructurePage, pageFromHash, channelManagementListRoute } from './admin-v2/navigation.mjs';
 import { adminBreadcrumbs } from './admin-v2/breadcrumbs.mjs';
+import { inferenceConnectionExample } from './admin-v2/inference-connection-example.mjs';
 import { modelMaterial } from './admin-v2/model-library';
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from 'react-dom';
@@ -239,7 +240,11 @@ function AdminConsoleV2View({workbenchName,store,license:deploymentLicense,sideb
   };
   const page = pages[active];
   const detailProvider = active === 'provider-materials' ? state.providers.find(item => item.id === detailParams.get("provider")) : null;
-  const detailConnection = active === 'providers-reference' ? state.endpoints.find(item => item.id === detailParams.get('connection') && !item.deletedAt) : null;
+  const detailConnectionId = detailParams.get('connection');
+  const detailConnection = active === 'providers-reference'
+    ? state.endpoints.find(item => item.id === detailConnectionId && !item.deletedAt)
+      ?? (detailConnectionId === inferenceConnectionExample.id ? inferenceConnectionExample : null)
+    : null;
   const activeGroup = page.groupId;
   const activeArea = page.area;
   const activeModule = sections.find(group => group.id === page.groupId)?.items.find(item => item.id === page.area);
