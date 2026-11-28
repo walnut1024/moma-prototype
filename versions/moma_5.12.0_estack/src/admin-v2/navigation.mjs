@@ -1,4 +1,5 @@
 import { PRIVATE_SITE } from '../site-config.mjs';
+import { uiModified } from '../prototype-ui.mjs';
 
 export const sections = [
   { id: "overview", workspace: "operations", title: "首页", direct: true, items: [
@@ -31,7 +32,7 @@ export const sections = [
     { id: "enterprise", label: "租户管理", children: [["tenants", "租户管理"]] },
     { id: "projects", label: "项目管理", children: [["projects", "项目管理"]] },
   ]},
-  { id: "platform", workspace: "operations", title: "平台管理", home: "license", items: [
+  { id: "platform", workspace: "operations", title: "平台管理", home: "license", sidebar: !uiModified, items: [
     { id: "site-configuration", label: "站点配置", children: [["site-configuration", "站点配置"]] },
     { id: "announcements", label: "公告管理", children: [["announcements", "公告管理"]] },
     { id: "license", label: "授权管理", children: [["license", "授权管理"]] },
@@ -44,7 +45,7 @@ export const sections = [
   ]},
   { id: "ops-model-service", workspace: "maintenance", title: "模型推理", items: [
     { id: "clusters", label: "集群管理", children: [["clusters", "集群"], ["ops-nodes", "节点"], ["ops-gpus", "GPU"]] },
-    { id: "ops-model-library", label: "模型库", children: [["ops-model-library", "模型库"]] },
+    { id: "ops-model-library", label: "模型库", sidebar: !uiModified, children: [["ops-model-library", "模型库"]] },
     { id: "deployments", label: "模型部署", children: [["deployments", "模型部署"]] },
     { id: "ops-benchmarks", label: "基准测试", children: [["ops-benchmarks", "基准测试"]] },
     { id: "ops-inference-backends", label: "推理后端", children: [["ops-inference-backends", "推理后端"]] },
