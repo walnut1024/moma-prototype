@@ -9,6 +9,7 @@ import { readModelDetail, modelDetailLocation } from './model-detail-route.mjs';
 import { Button as SemiButton, ConfigProvider, Modal, Input as SemiInput, Select as SemiSelect, Slider, Tabs as SemiTabs, Tag, Toast, Typography as SemiTypography } from '@douyinfe/semi-ui';
 import zhCN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN.js';
 import DevelopmentNotes from './admin-v2/DevelopmentNotes';
+import PrototypeUiSwitch from './PrototypeUiSwitch';
 import { AdminSideSheet as SideSheet } from './admin-v2/AdminOverlay';
 import { AdminUIContext } from './components/admin-ui-context';
 import FrontPageHeader from "./components/FrontPageHeader";
@@ -684,6 +685,7 @@ function PrototypeApp({ version }) {
             <div className="admin-banner-controls" ref={setAdminBannerTarget}/>
           )}
           <div className="banner-version-tools">
+            <PrototypeUiSwitch admin={admin === "v2"}/>
             <DevelopmentNotes admin={admin === "v2"}/>
           </div>
           {admin === "front" && !waitingForSession && auth.route !== 'login' ? (
