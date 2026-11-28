@@ -1,0 +1,101 @@
+.model-performance .performance-scenes {
+  --scene-blue: #0d62c7;
+  --scene-light: #edf3fd;
+}
+
+.performance-scenes-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--performance-muted);
+  font-size: 12px;
+}
+
+.performance-scenes-scale {
+  width: min(112px, 24vw);
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--scene-light), var(--scene-blue));
+}
+
+.performance-scenes-scroll {
+  position: relative;
+  overflow: auto;
+  max-inline-size: 100%;
+  margin-block-start: 7px;
+}
+
+.performance-scenes-scroll:focus-visible {
+  outline: 2px solid var(--performance-accent);
+  outline-offset: 1px;
+}
+
+.performance-scenes-grid {
+  width: 100%;
+  min-width: 590px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-scenes-grid :is(th, td) { padding: 0; }
+
+.performance-scenes-grid th {
+  color: var(--performance-label);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.performance-scenes-grid thead td:first-child { width: 72px; }
+
+.performance-scenes-grid tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--performance-card);
+}
+
+.performance-scene-cell {
+  display: grid;
+  place-content: center;
+  gap: 3px;
+  min-height: 46px;
+  padding: 4px 2px;
+  border-radius: 5px;
+  background: var(--scene-fallback, var(--scene-light));
+  background: color-mix(in srgb, var(--scene-blue) var(--scene-shade), #f0f5fe);
+  color: #000;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.performance-scene-cell.is-dark {
+  --scene-fallback: var(--scene-blue);
+  color: #fff;
+}
+
+.performance-scenes-grid td:hover .performance-scene-cell {
+  outline: 1px solid var(--scene-blue);
+  outline-offset: 1px;
+}
+
+.performance-scene-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 6px;
+  font-size: 12px;
+}
+
+.performance-scenes-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

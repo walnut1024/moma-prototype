@@ -105,6 +105,36 @@ test('distributions preserve outcome categories, failure user and only observed 
   assert.deepEqual(errorUsers.map(({ userId, failures }) => [userId, failures]), [['uid', 3], ['another', 2], [null, 1]]);
 });
 
+test('input and output scenes classify paired attempts within the applied filters', () => {
+  const window = { ...filters, end: filters.start + 2 * minute, model: 'customer-model', upstream: 'upstream-channel' };
+  const measured = { at: window.start, model: window.model, channelModel: window.upstream };
+  const rows = [
+    ...[[0, 0], [200, 200], [201, 201], [1024, 1024], [4096, 4096], [131072, 4097], [131073, 0]]
+      .map(([input, output]) => ({ ...measured, input, output })),
+    { ...measured, input: 500, output: null },
+    { ...measured, input: null, output: 500 },
+    { ...measured, input: -1, output: 50 },
+    { ...measured, input: 500, output: 500, model: 'other-model' },
+    { ...measured, input: 500, output: 500, channelModel: 'other-upstream' },
+    { ...measured, input: 500, output: 500, at: window.end },
+  ];
+  const { scenes } = modelPerformance(rows, window).distribution;
+  assert.equal(scenes.sampleCount, 7);
+  assert.equal(scenes.cells.length, 9);
+  assert(scenes.cells.every(row => row.length === 5));
+  assert.equal(scenes.cells.flat().reduce((total, cell) => total + cell.calls, 0), 7);
+  assert.deepEqual(scenes.cells[0][0], { calls: 2, share: 200 / 7, tpm: 200 });
+  assert.deepEqual(scenes.cells[1][1], { calls: 2, share: 200 / 7, tpm: 1225 });
+  assert.deepEqual(scenes.cells[3][3], { calls: 1, share: 100 / 7, tpm: 4096 });
+  assert.deepEqual(scenes.cells[7][4], { calls: 1, share: 100 / 7, tpm: 67584.5 });
+  assert.deepEqual(scenes.cells[8][0], { calls: 1, share: 100 / 7, tpm: 65536.5 });
+  assert.deepEqual(scenes.cells[1][0], { calls: 0, share: 0, tpm: null });
+
+  const empty = modelPerformance([{ ...measured, input: 50, output: null }], window).distribution.scenes;
+  assert.equal(empty.sampleCount, 0);
+  assert.deepEqual(empty.cells[0][0], { calls: 0, share: null, tpm: null });
+});
+
 test('empty, invalid and overlong windows contain no points or fabricated measurements', () => {
   assert.equal(performanceBucketCount({ start: Date.parse('2026-11-24T00:00:00+08:00'), end: Date.parse('2026-11-26T00:00:00+08:00') }), 48);
   const wide = { ...filters, end: filters.start + maxPerformanceBuckets * day + minute };

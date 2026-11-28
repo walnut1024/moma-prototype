@@ -6,6 +6,17 @@ const day = 24 * hour;
 const beijingOffset = 8 * hour;
 const ranges = ['<128', '128–256', '256–512', '512–1K', '1K–2K', '2K–4K', '4K–8K', '8K–16K', '16K–32K', '32K–64K', '≥64K'];
 const limits = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, Infinity];
+export const performanceSceneAxes = {
+  input: [
+    { label: '200', limit: 200 }, { label: '1K', limit: 1024 }, { label: '2K', limit: 2048 },
+    { label: '4K', limit: 4096 }, { label: '7K', limit: 7168 }, { label: '16K', limit: 16384 },
+    { label: '40K', limit: 40960 }, { label: '128K', limit: 131072 }, { label: '>128K', limit: Infinity },
+  ],
+  output: [
+    { label: '200', limit: 200 }, { label: '1K', limit: 1024 }, { label: '2K', limit: 2048 },
+    { label: '4K', limit: 4096 }, { label: '>4K', limit: Infinity },
+  ],
+};
 
 export const maxPerformanceBuckets = 1440;
 
@@ -104,13 +115,24 @@ function outcomeIndex({ outcome, status }) {
   return 6;
 }
 
-function distributionFor(rows) {
+function distributionFor(rows, window) {
   const outcomes = Array(10).fill(0);
   const calls = [Array(ranges.length).fill(0), Array(ranges.length).fill(0)];
   const tokens = [Array(ranges.length).fill(0), Array(ranges.length).fill(0)];
   const comparable = rows.filter(row => isMeasured(row.total));
+  const { input, output } = performanceSceneAxes;
+  const scenes = input.map(() => output.map(() => ({ calls: 0, tokens: 0 })));
+  let sampleCount = 0;
   for (const row of rows) {
     outcomes[outcomeIndex(row)]++;
+    if (isMeasured(row.input) && isMeasured(row.output)) {
+      const inputIndex = input.findIndex(band => row.input <= band.limit);
+      const outputIndex = output.findIndex(band => row.output <= band.limit);
+      const cell = scenes[inputIndex][outputIndex];
+      cell.calls++;
+      cell.tokens += row.input + row.output;
+      sampleCount++;
+    }
     [row.input, row.output].forEach((value, seriesIndex) => {
       if (!isMeasured(value)) return;
       const band = limits.findIndex(limit => value < limit);
@@ -118,11 +140,20 @@ function distributionFor(rows) {
       tokens[seriesIndex][band] += value;
     });
   }
+  const minutes = (window.end - window.start) / minute;
   return {
     outcomes,
     tokens: [sumOrNull(valuesFor(comparable, 'input')), sumOrNull(valuesFor(comparable, 'output'))],
     ranges,
     histogram: { calls, tokens },
+    scenes: {
+      sampleCount,
+      cells: scenes.map(row => row.map(({ calls, tokens }) => ({
+        calls,
+        share: percent(calls, sampleCount),
+        tpm: calls ? tokens / minutes : null,
+      }))),
+    },
   };
 }
 
@@ -160,7 +191,7 @@ export function modelPerformance(attempts, filters) {
       successRate: percent(overall.successfulCalls, overall.successfulCalls + overall.failedCalls),
       latestAt: rows.length ? rows.reduce((latest, row) => Math.max(latest, row.at), start) : null,
     },
-    distribution: distributionFor(rows),
+    distribution: distributionFor(rows, window),
     errorUsers: failureUsers(rows),
   };
 }
