@@ -27,17 +27,18 @@ function ChannelModels({ channel, ops, open }) {
   const models = channel.models.filter(model => [model.association.upstreamModelId, model.modelName]
     .some(value => value?.toLowerCase().includes(keyword)));
   const canAdd = ops.can && !channel.endpoint.candidateConfiguration && !channel.endpoint.adapterDraft;
+  const showDiscovery = (channel.endpoint.channelSourceType ?? channel.provider.sourceType) !== 'selfHosted';
   return <>
     <div className="channel-management-toolbar">
       <SearchBox placeholder={t('搜索上游模型 ID、模型展示名称')} value={query}
         onChange={value => ops.go({ modelQ: value || null }, { replace: true })}/>
       <Space wrap spacing={8}>
         <Button disabled={!ops.can} onClick={event => open(event, 'test', channel.id)}>{t('批量测试')}</Button>
-        <Button disabled={!canAdd} onClick={event => open(event, 'discovery', channel.id)}>{t('获取模型列表')}</Button>
+        {showDiscovery && <Button disabled={!canAdd} onClick={event => open(event, 'discovery', channel.id)}>{t('获取模型列表')}</Button>}
         <Button theme="solid" disabled={!canAdd} onClick={event => open(event, 'quickAdd', channel.id)}>{t('手动添加')}</Button>
       </Space>
     </div>
-    <Typography.Paragraph type="tertiary">自动获取模型列表需要连接提供 OpenAI 兼容的模型列表接口（GET /models）。</Typography.Paragraph>
+    {showDiscovery && <Typography.Paragraph type="tertiary">自动获取模型列表需要连接提供 OpenAI 兼容的模型列表接口（GET /models）。</Typography.Paragraph>}
     <AdminTable aria-label={t('上游模型列表')} rowKey="key" pagination={false} dataSource={models}
       empty={keyword ? '没有匹配的模型' : '该连接尚未接入模型'}
       scroll={{ x: 'max(100%, 932px)' }} columns={[
